@@ -8,6 +8,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { rpc, invoke, errText } from "@/lib/supabase";
 import { BP_FAIL, effIndex, stepLabel, inviteStepRank, INVITE_STEPS, fmtNum, fmtDate, maskPhone, initials } from "@/components/admin/campaign/live";
+import IgImg from "@/lib/igFresh";
 
 /* Figma ke 12 steps (row ki progress bar: "Step 9/12 · Courier delivered") */
 export const JOURNEY_STEPS = ["Invited", "Registered", "Instagram connected", "Applied", "Approved", "Contract signed", "Address confirmed", "Courier sent", "In transit", "Courier delivered", "Video brief sent", "Video submitted", "Done"];
@@ -481,7 +482,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
   return (
     <div className={`jr ${open ? "is-open" : ""}`}>
       {onCheck && <input type="checkbox" className="jr-check" checked={!!checked} onChange={onCheck} aria-label={`Select ${c.name}`} />}
-      {c.pic ? <img className="jr-av jr-av--img" src={c.pic} alt="" referrerPolicy="no-referrer" /> : <span className="jr-av">{initials(c.name.replace(/^@/, ""))[0]}</span>}
+      <IgImg className="jr-av jr-av--img" handle={/^@/.test(c.name) ? c.name : c.handle} src={c.pic} fallback={<span className="jr-av">{initials(c.name.replace(/^@/, ""))[0]}</span>} />
       <div className="jr-main">
         <p className="jr-top">
           {href ? (

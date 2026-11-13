@@ -5,6 +5,7 @@ import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
 import { useCreatorsList, creatorCounts, rowOf, matchQ, CARD_FILTERS, CARD_SORTS, filterOptions, csv, CSV_COLS, errText } from "@/components/admin/creator/live";
+import IgImg from "@/lib/igFresh";
 
 /* Figma: 12 filters, sab "Any" se shuru — rules purane app ke (live.jsx) */
 const PER = 24;
@@ -110,7 +111,7 @@ export default function AdminCreatorCards({ snapshot = false }) {
           {shown.map((c) => (
             <Link key={c.id} href={`/admin/creators/${c.id}/profile`} className="cc2-c">
               <div className="cc2-c__top">
-                {c.pic ? <img className="ga-av cc2-pic" src={c.pic} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} /> : <span className="ga-av">{c.name[0]}</span>}
+                <IgImg className="ga-av cc2-pic" handle={c.raw?.ig_username} src={c.pic} fallback={<span className="ga-av">{c.name[0]}</span>} />
                 <span className="cc2-c__who">
                   <strong>{c.name}</strong>
                   <small>{c.handle}</small>

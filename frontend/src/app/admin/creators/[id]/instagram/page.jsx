@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import CreatorDrawer from "@/components/admin/creator/CreatorDrawer";
 import { useRpc } from "@/lib/supabase";
 import { kNum, fmtDay } from "@/components/admin/creator/live";
+import IgImg from "@/lib/igFresh";
 
 /* Creator profile → Instagram tab (Figma: 4 numbers, bio, 6 posts, accounts)
    Data: admin_creator_profile.instagram + creator_ig_accounts (saare connected accounts) */
@@ -40,7 +41,7 @@ export default function CreatorInstagramTab() {
           <div className="cpi-posts">
             {p.ig.media.slice(0, 6).map((m, i) => (
               <a key={i} href={m.permalink || `https://instagram.com/${p.igUser}`} target="_blank" rel="noopener noreferrer" className="cpi-post" aria-label={`Post ${i + 1}, ${m.likes || 0} likes`}>
-                <span>{m.img && <img src={m.img} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />}</span>
+                <span><IgImg handle={p.igUser} src={m.img} kind="post" permalink={m.permalink} /></span>
                 <small>
                   ❤️ {kNum(m.likes || 0)} · 💬 {kNum(m.comments || 0)}
                 </small>
@@ -51,7 +52,7 @@ export default function CreatorInstagramTab() {
           <h3 className="cpi-h">Instagram accounts</h3>
           {(accts || []).map((a) => (
             <div key={a.ig_user_id || a.username} className="cpi-acc">
-              {a.profile_picture_url ? <img className="cpi-ic" src={a.profile_picture_url} alt="" referrerPolicy="no-referrer" /> : <span className="cpi-ic">📸</span>}
+              <IgImg className="cpi-ic" handle={a.username} src={a.profile_picture_url} fallback={<span className="cpi-ic">📸</span>} />
               <div>
                 <strong>@{a.username}</strong>
                 <small>

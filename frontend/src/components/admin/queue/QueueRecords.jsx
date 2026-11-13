@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { act, errText, who, short, ago, fmtDate } from "@/components/admin/queue/live";
 import { safeUrl } from "@/lib/supabasePublic";
+import IgImg from "@/lib/igFresh";
 
 /**
  * Drawer ke andar group ke records — har creator par wahi button jo purane Approvals page par the:
@@ -54,7 +55,7 @@ export default function QueueRecords({ group, ask, toast, onDone }) {
             : [c.followers != null ? `${short(c.followers)} followers` : "", c.engagement != null ? `${c.engagement}% eng.` : "", c.city, x.due_on ? `due ${fmtDate(x.due_on)}` : "", ago(x.applied_at || x.since)].filter(Boolean).join(" · ");
           return (
             <li key={k} className="qr-row">
-              {c.profile_picture_url ? <img className="qr-pic" src={safeUrl(c.profile_picture_url)} alt="" referrerPolicy="no-referrer" /> : <span className="ga-av qr-pic">{(name.replace("@", "") || "?").slice(0, 2).toUpperCase()}</span>}
+              <IgImg className="qr-pic" handle={c.username || c.handle} src={c.profile_picture_url ? safeUrl(c.profile_picture_url) : ""} fallback={<span className="ga-av qr-pic">{(name.replace("@", "") || "?").slice(0, 2).toUpperCase()}</span>} />
               <div className="qr-main">
                 <p className="qr-name">
                   {c.username ? (

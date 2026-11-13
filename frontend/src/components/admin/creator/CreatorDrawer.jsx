@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import CreatorCards from "@/app/admin/creators/cards/page";
 import { useCreatorProfile, profileView, useMsgPause, agoTxt, uaShort } from "@/components/admin/creator/live";
 import { rpc, useRpc, errText } from "@/lib/supabase";
+import IgImg from "@/lib/igFresh";
 
 export const CP_TABS = [
   { k: "profile", label: "👤 Profile" },
@@ -137,11 +138,7 @@ function DrawerFrame({ id, tab, children }) {
             ✕
           </button>
           <div className="cdw-head">
-            {p.pic ? (
-              <img className="cdw-av cdw-av--img" src={p.pic} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
-            ) : (
-              <span className="cdw-av">{p.name[0]}</span>
-            )}
+            <IgImg className="cdw-av cdw-av--img" handle={p.igUser} src={p.pic} fallback={<span className="cdw-av">{p.name[0]}</span>} />
             <div className="cdw-who">
               <p className="cdw-eye">Creator profile</p>
               <h2>{p.name}</h2>
