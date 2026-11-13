@@ -4,33 +4,34 @@ import { useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
 import DiscoveryTabs from "@/components/brands/DiscoveryTabs";
-import { SHORTLIST, getCreator } from "@/components/brands/data";
+import { BrLoading, BrError, BrAvatar, useToast } from "@/components/brands/BrandStates";
+import { useBrand, canAct, usePicks, unpickCreator, PICK_STATUS, short, fdate, igUrl } from "@/services/brand";
 import { Trash, Layers, Send, Check, ChevronDown, Compass } from "@/components/ui/Icons";
 
-// "412K" → 412000, "₹38K" → 38000
-const num = (s) => {
-  const n = parseFloat(String(s).replace(/[^\d.]/g, "")) || 0;
-  return /M/i.test(s) ? n * 1e6 : /K/i.test(s) ? n * 1000 : n;
-};
-const short = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`);
-const inr = (n) => "₹" + Math.round(n).toLocaleString("en-IN");
-
-/** /brands/discovery/shortlist — chune hue creators + Geek ko bhejna */
+/**
+ * /brands/discovery/shortlist — purana dxPicks: api.brand_discover_picks (status: with Geek / invited / not this time),
+ * Remove (sirf "new" wale) → api.brand_discover_unpick. Shortlist pick karte hi Geek team ko pahunch jaati hai (alag "send" nahi).
+ */
 export default function DiscoveryShortlist() {
-  const [rows, setRows] = useState(SHORTLIST);
+  const b = useBrand();
+  const act = canAct(b);
+  const picks = usePicks();
+  const [toast, say] = useToast();
   const [shown, setShown] = useState(6);
-  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState("");
 
-  const list = rows.map((r) => ({ ...r, c: getCreator(r.id) }));
-  const reach = list.reduce((s, r) => s + num(r.c.followers), 0);
-  // estimated fees: har creator ki fee ka total (final price Geek confirm karta hai)
-  const fees = list.reduce((s, r) => s + num(r.c.fee), 0);
-  const eng = list.length ? list.reduce((s, r) => s + parseFloat(r.c.eng), 0) / list.length : 0;
+  const list = picks.list.map((k) => ({ ...k, s0: k.snapshot || {} }));
+  const reach = list.reduce((a, r) => a + (Number(r.s0.followers) || 0), 0);
+  const invited = list.filter((r) => r.status === "invited").length;
+  const engL = list.filter((r) => r.s0.engagement != null);
+  const eng = engL.length ? engL.reduce((a, r) => a + Number(r.s0.engagement), 0) / engL.length : 0;
 
-  const setNote = (id, note) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, note } : r)));
-  const remove = (id) => {
-    setRows((rs) => rs.filter((r) => r.id !== id));
-    setSent(false);
+  const remove = async (r) => {
+    setBusy(r.pick_id);
+    const x = await unpickCreator(r.pick_id);
+    setBusy("");
+    say(x.error ? x.error.message : `@${r.handle} removed`);
+    if (!x.error) picks.reload();
   };
 
   return (
@@ -40,50 +41,66 @@ export default function DiscoveryShortlist() {
 
       <div className="ds">
         <section className="ds-main">
-          {list.length ? (
+          {picks.loading && !list.length ? (
+            <BrLoading rows={4} />
+          ) : picks.error && !list.length ? (
+            <BrError error={picks.error} onRetry={picks.reload} />
+          ) : list.length ? (
             <div className="br-table-wrap">
               <table className="br-table">
                 <thead>
                   <tr>
                     <th>Creator</th>
                     <th>For campaign</th>
-                    <th>Fee</th>
+                    <th>Status</th>
                     <th>Your note</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {list.slice(0, shown).map(({ id, c, campaign, note }) => (
-                    <tr key={id}>
-                      <td>
-                        <Link href={`/brands/creators/${id}`} className="br-who">
-                          <span className="br-av br-av--sm" style={{ background: c.av }}>
-                            {c.initials}
-                          </span>
-                          <span>
-                            <strong>{c.name}</strong>
+                  {list.slice(0, shown).map((r) => {
+                    const st = PICK_STATUS[r.status] || [r.status, "grey"];
+                    return (
+                      <tr key={r.pick_id}>
+                        <td>
+                          <a href={igUrl(r.handle)} target="_blank" rel="noreferrer" className="br-who">
+                            <BrAvatar name={r.s0.name || r.handle} src={r.s0.profile_picture_url} cls="br-av--sm" />
+                            <span>
+                              <strong>{r.s0.name || "@" + r.handle}</strong>
+                              <small>
+                                @{r.handle}
+                                {r.s0.followers != null ? ` · ${short(r.s0.followers)}` : ""}
+                                {r.s0.city ? ` · ${r.s0.city}` : ""}
+                              </small>
+                            </span>
+                          </a>
+                        </td>
+                        <td>
+                          <span className={`br-badge br-badge--${r.campaign ? "violet" : "plain"}`}>{r.campaign || "No campaign yet"}</span>
+                        </td>
+                        <td>
+                          <span className={`br-badge br-badge--${st[1]}`}>{st[0]}</span>
+                        </td>
+                        <td className="ds-notecell">
+                          <span className="ds-notetxt">
+                            {r.note || "—"}
+                            {r.admin_note && <small>Geek team: {r.admin_note}</small>}
                             <small>
-                              {c.handle} · {c.followers}
+                              {fdate(r.added_at)}
+                              {r.by ? ` · by ${r.by}` : ""}
                             </small>
                           </span>
-                        </Link>
-                      </td>
-                      <td>
-                        <span className="br-badge br-badge--violet">{campaign}</span>
-                      </td>
-                      <td>
-                        <b>{c.fee}</b>
-                      </td>
-                      <td className="ds-notecell">
-                        <input className="ds-note" value={note} onChange={(e) => setNote(id, e.target.value)} aria-label={`Note for ${c.name}`} />
-                      </td>
-                      <td>
-                        <button type="button" className="ds-del" aria-label={`Remove ${c.name}`} onClick={() => remove(id)}>
-                          <Trash size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>
+                          {r.status === "new" && act && (
+                            <button type="button" className="ds-del" aria-label={`Remove @${r.handle}`} onClick={() => remove(r)} disabled={busy === r.pick_id}>
+                              <Trash size={14} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {shown < list.length && (
@@ -98,7 +115,7 @@ export default function DiscoveryShortlist() {
             <div className="br-card ds-empty">
               <Compass size={22} />
               <h2>Your shortlist is empty</h2>
-              <p>Star or shortlist creators in Discovery and they’ll show up here.</p>
+              <p>Shortlist creators in Discovery and they’ll show up here.</p>
               <Link href="/brands/discovery" className="br-btn br-btn--primary">
                 Find creators
               </Link>
@@ -118,8 +135,10 @@ export default function DiscoveryShortlist() {
               <dd>{short(reach)} followers</dd>
             </div>
             <div>
-              <dt>Estimated fees</dt>
-              <dd>{inr(fees)}</dd>
+              <dt>Invited by Geek</dt>
+              <dd>
+                {invited} of {list.length}
+              </dd>
             </div>
             <div>
               <dt>Avg engagement</dt>
@@ -130,22 +149,25 @@ export default function DiscoveryShortlist() {
           <Link href="/brands/discovery/compare" className={`ds-sum__compare ${list.length < 2 ? "is-off" : ""}`}>
             <Layers size={14} /> Compare side by side
           </Link>
-          {sent ? (
+          {list.length ? (
             <p className="ds-sum__sent">
-              <Check size={14} /> Sent to Geek — they’ll reply within 24 hours
+              <Check size={14} /> Already with Geek — every creator you shortlist reaches the team right away
             </p>
           ) : (
-            <button type="button" className="ds-sum__send" disabled={!list.length} onClick={() => setSent(true)}>
+            <button type="button" className="ds-sum__send" disabled>
               <Send size={14} /> Send shortlist to Geek
             </button>
           )}
         </aside>
       </div>
+      {toast}
 
       <style>{`
         .ds { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
         .ds-main td b { font-weight: 800; }
         .ds-notecell { width: 34%; }
+        .ds-notetxt { display: block; white-space: normal; font-size: 13px; color: var(--br-text); }
+        .ds-notetxt small { display: block; font-size: 11.5px; color: var(--br-muted); }
         .ds-note {
           width: 100%; min-width: 180px; height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px;
           background: transparent; font-size: 13px; color: var(--br-text); outline: none;

@@ -1,8 +1,6 @@
-import { MY_CAMPAIGNS } from "@/components/creater/data";
-
-// Har applied campaign ka tracker page build ke time ban jaata hai
+// Participation id asli (UUID) hai — sirf ek sample pehle se banta hai, baaki pehli baar khulne par (page client hai, useParams).
 export function generateStaticParams() {
-  return MY_CAMPAIGNS.map((m) => ({ id: m.id }));
+  return [{ id: "sample" }];
 }
 
 export default function TrackerLayout({ children }) {

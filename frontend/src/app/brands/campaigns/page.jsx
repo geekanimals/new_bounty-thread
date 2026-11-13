@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
-import { CAMPAIGNS, STATUS, getCreator } from "@/components/brands/data";
-import { Plus, Search, ChevronDown, Download, Check } from "@/components/ui/Icons";
+import { BrLoading, BrEmpty, BrError, useToast } from "@/components/brands/BrandStates";
+import { useBrandCampaigns, campaignPdf, bCampaignCard, bDate, bGrad, B_REQ } from "@/services/brand";
+import { Plus, Search, ChevronDown, Download } from "@/components/ui/Icons";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -13,32 +14,30 @@ const FILTERS = [
   { key: "completed", label: "Completed" },
 ];
 
-// Initials se avatar ka rang (creators list se)
-const avFor = (ini) => {
-  const c = [
-    "meera-iyer", "tanvi-shah", "rohan-kapoor", "aisha-khan", "kritika-rao", "dev-malhotra", "sana-mirza", "ishita-jain",
-  ].map(getCreator).find((x) => x && x.initials === ini);
-  return c ? c.av : "linear-gradient(135deg,#6d4aff,#a855f7)";
-};
-
-/** /brands/campaigns — Geek jo bhi campaigns chala raha hai, sab ek jagah */
+/**
+ * /brands/campaigns — brand ke saare campaigns (purana paintCampaignList: api.brand_portal campaigns + khule requests).
+ * Khule requests "In review" cards ban kar dikhte hain (Campaign requests page par khulte hain).
+ */
 export default function BrandCampaigns() {
+  const d = useBrandCampaigns();
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(4);
-  const [toast, setToast] = useState("");
+  const [toast, say] = useToast();
 
-  const count = (k) => (k === "all" ? CAMPAIGNS.length : CAMPAIGNS.filter((c) => c.status === k).length);
-  const list = CAMPAIGNS.filter((c) => (filter === "all" ? c.status !== "completed" || q : c.status === filter)).filter((c) =>
-    c.title.toLowerCase().includes(q.trim().toLowerCase())
-  );
-  // "All" mein completed neeche alag card mein dikhte hain
-  const cards = filter === "all" && !q ? list : list;
-  const completed = CAMPAIGNS.filter((c) => c.status === "completed");
+  const camps = d.list.map(bCampaignCard);
+  const reqs = d.requests
+    .filter((r) => r.status === "new" || r.status === "in_review")
+    .map((r) => ({ id: r.request_id, req: true, title: r.name, status: "review", statusLabel: B_REQ[r.status], dates: `Requested · ${bDate(r.created_at)}`, gradient: bGrad(r.request_id) }));
+  const all = [...reqs, ...camps];
+  const count = (k) => (k === "all" ? all.length : all.filter((c) => c.status === k).length);
+  const s = q.trim().toLowerCase();
+  const cards = all.filter((c) => (filter === "all" ? c.status !== "completed" || s : c.status === filter)).filter((c) => c.title.toLowerCase().includes(s));
+  const completed = camps.filter((c) => c.status === "completed");
 
-  const pdf = (c) => {
-    setToast(`PDF report for ${c.title} is downloading…`);
-    setTimeout(() => setToast(""), 2400);
+  const pdf = async (c) => {
+    const r = await campaignPdf(c.id);
+    if (r.error) say(r.error.message);
   };
 
   return (
@@ -48,140 +47,152 @@ export default function BrandCampaigns() {
       <div className="br-head">
         <div>
           <h1 className="br-h1">Campaigns</h1>
-          <p className="br-sub">Every campaign Geek runs for Nykaa — live numbers, posts and reports.</p>
+          <p className="br-sub">Every campaign Geek runs for {d.brand} — live numbers, posts and reports.</p>
         </div>
-        <Link href="/brands/campaigns/new" className="br-btn br-btn--primary">
-          <Plus size={15} /> Request a campaign
-        </Link>
+        {d.can && (
+          <Link href="/brands/campaigns/new" className="br-btn br-btn--primary">
+            <Plus size={15} /> Request a campaign
+          </Link>
+        )}
       </div>
 
-      <div className="bc-bar">
-        <div className="br-seg">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              className={filter === f.key ? "is-on" : ""}
-              onClick={() => {
-                setFilter(f.key);
-                setShown(4);
-              }}
-            >
-              {f.label} {count(f.key)}
-            </button>
-          ))}
-        </div>
-        <label className="bc-search">
-          <Search size={14} />
-          <input type="search" placeholder="Search campaigns" value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-      </div>
-
-      {cards.length === 0 ? (
-        <div className="br-card bc-empty">
-          <p>No campaigns match “{q}”.</p>
-          <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => setQ("")}>
-            Clear search
-          </button>
-        </div>
+      {d.loading ? (
+        <BrLoading cards={4} />
+      ) : d.error ? (
+        <BrError error={d.error} onRetry={d.reload} />
+      ) : !all.length ? (
+        <BrEmpty title="No campaigns yet" text="Your campaigns with Geek show up here — with every creator, video and post. Send a request to get started.">
+          {d.can && (
+            <Link href="/brands/campaigns/new" className="br-btn br-btn--primary br-btn--sm">
+              <Plus size={14} /> Request a campaign
+            </Link>
+          )}
+        </BrEmpty>
       ) : (
-        <div className="bc-grid">
-          {cards.slice(0, shown).map((c) => {
-            const st = STATUS[c.status];
-            return (
-              <article key={c.id} className="br-card bc-card">
-                <div className="bc-cover" style={{ background: c.gradient }}>
-                  <span className={`bc-pill bc-pill--${c.status}`}>{st.label}</span>
-                  <span className="bc-stack">
-                    {c.avatars.map((a) => (
-                      <span key={a} className="br-av br-av--sm" style={{ background: avFor(a) }}>
-                        {a}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-                <div className="bc-body">
-                  <h2>{c.title}</h2>
-                  <p className="bc-dates">{c.status === "review" ? c.requested : c.dates}</p>
-                  <div className="bc-nums">
-                    <span>
-                      <strong>{c.budget}</strong>
-                      <small>budget</small>
-                    </span>
-                    <span>
-                      <strong>{c.status === "review" ? "—" : c.creators}</strong>
-                      <small>creators</small>
-                    </span>
-                    <span>
-                      <strong>{c.views}</strong>
-                      <small>views</small>
-                    </span>
-                    <span>
-                      <strong>{c.eng}</strong>
-                      <small>engagement</small>
-                    </span>
-                  </div>
-                  <div className="bc-prog">
-                    <span>Posts live</span>
-                    <strong>
-                      {c.postsLive} / {c.postsPlanned}
-                    </strong>
-                  </div>
-                  <span className="br-bar">
-                    <i style={{ width: `${Math.max(3, (c.postsLive / c.postsPlanned) * 100)}%` }} />
-                  </span>
-                  <div className="bc-actions">
-                    <Link href={`/brands/campaigns/${c.id}`} className="br-btn br-btn--ghost br-btn--sm">
-                      Open campaign
-                    </Link>
-                    <Link href="/brands/reports" className="br-btn br-btn--soft br-btn--sm">
-                      Report
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-
-      {cards.length > shown && (
-        <div className="br-more">
-          <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(shown + 4)}>
-            Load more <ChevronDown size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* Completed — final reports */}
-      {filter === "all" && !q && (
-        <section className="br-card bc-done">
-          <h2 className="br-card__title">Completed</h2>
-          <p className="br-card__sub">Final reports are ready to download</p>
-          <ul>
-            {completed.map((c) => (
-              <li key={c.id}>
-                <Link href={`/brands/campaigns/${c.id}`} className="bc-done__name">
-                  <span style={{ background: c.gradient }} />
-                  {c.title}
-                </Link>
-                <span className="bc-done__date">{c.dates}</span>
-                <span className="bc-done__views">{c.views} views</span>
-                <span className="bc-done__sales">{c.sales} sales</span>
-                <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => pdf(c)}>
-                  <Download size={13} /> PDF report
+        <>
+          <div className="bc-bar">
+            <div className="br-seg">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  className={filter === f.key ? "is-on" : ""}
+                  onClick={() => {
+                    setFilter(f.key);
+                    setShown(4);
+                  }}
+                >
+                  {f.label} {count(f.key)}
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+              ))}
+            </div>
+            <label className="bc-search">
+              <Search size={14} />
+              <input type="search" placeholder="Search campaigns" value={q} onChange={(e) => setQ(e.target.value)} />
+            </label>
+          </div>
+
+          {cards.length === 0 ? (
+            <div className="br-card bc-empty">
+              <p>{s ? `No campaigns match “${q}”.` : "No campaigns here yet."}</p>
+              {s && (
+                <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => setQ("")}>
+                  Clear search
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bc-grid">
+              {cards.slice(0, shown).map((c) => (
+                <article key={c.id} className="br-card bc-card">
+                  <div className="bc-cover" style={{ background: c.gradient }}>
+                    <span className={`bc-pill bc-pill--${c.status}`}>{c.statusLabel || (c.status === "review" ? "In review" : "Live")}</span>
+                  </div>
+                  <div className="bc-body">
+                    <h2>{c.title}</h2>
+                    <p className="bc-dates">{c.dates}</p>
+                    <div className="bc-nums">
+                      <span>
+                        <strong>{c.req ? "—" : c.type || "—"}</strong>
+                        <small>type</small>
+                      </span>
+                      <span>
+                        <strong>{c.req ? "—" : c.creators}</strong>
+                        <small>creators</small>
+                      </span>
+                      <span>
+                        <strong>{c.req ? "—" : c.toApprove}</strong>
+                        <small>to approve</small>
+                      </span>
+                      <span>
+                        <strong>{c.req ? "—" : c.videoReview}</strong>
+                        <small>videos</small>
+                      </span>
+                    </div>
+                    <div className="bc-prog">
+                      <span>Posts live</span>
+                      <strong>{c.req ? "—" : `${c.posts} / ${c.planned}`}</strong>
+                    </div>
+                    <span className="br-bar">
+                      <i style={{ width: `${c.req ? 3 : Math.min(100, Math.max(3, (c.posts / c.planned) * 100))}%` }} />
+                    </span>
+                    <div className="bc-actions">
+                      {c.req ? (
+                        <Link href="/brands/approvals/requests" className="br-btn br-btn--ghost br-btn--sm">
+                          See request
+                        </Link>
+                      ) : (
+                        <>
+                          <Link href={`/brands/campaigns/${c.id}`} className="br-btn br-btn--ghost br-btn--sm">
+                            Open campaign
+                          </Link>
+                          <Link href={`/brands/campaigns/${c.id}/analytics`} className="br-btn br-btn--soft br-btn--sm">
+                            Report
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {cards.length > shown && (
+            <div className="br-more">
+              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(shown + 4)}>
+                Load more <ChevronDown size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Completed — final reports */}
+          {filter === "all" && !s && completed.length > 0 && (
+            <section className="br-card bc-done">
+              <h2 className="br-card__title">Completed</h2>
+              <p className="br-card__sub">Final reports are ready to download</p>
+              <ul>
+                {completed.map((c) => (
+                  <li key={c.id}>
+                    <Link href={`/brands/campaigns/${c.id}`} className="bc-done__name">
+                      <span style={{ background: c.gradient }} />
+                      {c.title}
+                    </Link>
+                    <span className="bc-done__date">{c.dates}</span>
+                    <span className="bc-done__views">{c.posts} posts</span>
+                    <span className="bc-done__sales">{c.posted} creators posted</span>
+                    <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => pdf(c)}>
+                      <Download size={13} /> PDF report
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
 
-      {toast && (
-        <div className="br-toast" role="status">
-          <Check size={14} /> {toast}
-        </div>
-      )}
+      {toast}
 
       <style>{`
         .bc-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }

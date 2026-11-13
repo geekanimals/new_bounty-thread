@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Wizard, { Field, useDraft } from "@/components/admin/campaign/Wizard";
-import { BRANDS } from "@/components/admin/data";
+import Wizard, { Field, useDraft, useBrands } from "@/components/admin/campaign/Wizard";
 
 const TYPES = ["Barter", "Paid", "Barter + Paid"];
 
 /* Figma: New campaign — 1 Basics */
 export default function NewCampaignBasics() {
   const { d, set } = useDraft();
+  const BRANDS = useBrands(); // Brand CRM (api.brand_list)
   const [err, setErr] = useState("");
   const next = () => {
     if (!d.name.trim() || !d.brand.trim()) {
@@ -18,7 +18,7 @@ export default function NewCampaignBasics() {
     setErr("");
   };
   return (
-    <Wizard step={0} onNext={next} error={err}>
+    <Wizard step={0} draft={{ d, set }} onNext={next} error={err}>
       <p className="nc-sec">Campaign type</p>
       <div className="ad-tabs nb-types" role="radiogroup" aria-label="Campaign type">
         {TYPES.map((t) => (
@@ -34,14 +34,25 @@ export default function NewCampaignBasics() {
           <label className="nc-label" htmlFor="nc-brand">
             Brand *
           </label>
-          <input id="nc-brand" className="ad-input nc-input nb-brand" list="nb-brands" value={d.brand} onChange={(e) => set("brand", e.target.value)} />
+          <input
+            id="nc-brand"
+            className="ad-input nc-input nb-brand"
+            list="nb-brands"
+            value={d.brand}
+            onChange={(e) => {
+              const v = e.target.value;
+              const hit = BRANDS.find((b) => String(b.name).toLowerCase() === v.trim().toLowerCase());
+              set("brand", v);
+              set("brandId", hit ? hit.brand_id : ""); // CRM ka brand mila to uska id, warna naya brand
+            }}
+          />
           <datalist id="nb-brands">
             {BRANDS.map((b) => (
-              <option key={b.id} value={b.name} />
+              <option key={b.brand_id} value={b.name} />
             ))}
           </datalist>
         </div>
-        <Field label="Objective" k="objective" d={d} set={set} options={["Awareness", "Engagement", "Sales", "UGC content", "App installs"]} />
+        <Field label="Objective" k="objective" d={d} set={set} options={["Awareness", "Engagement", "Sales / Conversions", "UGC content", "Product launch", "App installs", "Store visits"]} />
         <Field label="Target creator count" k="target" d={d} set={set} type="number" />
         <Field label="Status" k="status" d={d} set={set} options={["Draft", "Live", "Shortlist"]} />
         <Field label="Creator deadline (days)" k="deadline" d={d} set={set} type="number" />

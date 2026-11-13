@@ -4,10 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { useSession } from "@/components/creater/session";
-import { MY_CAMPAIGNS, STEPS, TYPE_LABEL, getCampaign, getSidekick } from "@/components/creater/data";
+import { useSession, useJoinGate, useMyCampaigns, useCovers, coverOf, typeKey, compLine, stepOf, groupOf, noteOf, dateOf, noShip, needsAction, DECLINED, errText } from "@/services/creator";
+import { STEPS, TYPE_LABEL, getSidekick } from "@/components/creater/data";
 import { ArrowRight } from "@/components/ui/Icons";
-import { stepPath } from "@/components/creater/TrackerSteps";
+import { currentPath } from "@/components/creater/TrackerSteps";
 
 const JOURNEY_FILTERS = ["All", "Action needed", "In progress", "Completed", "Applied", "Not selected"];
 const FILTERS = [
@@ -21,7 +21,7 @@ const FILTERS = [
 // Har stage par creator ko kya karna hai (button ka text)
 const NEXT = {
   applied: "View status",
-  selected: "Accept offer",
+  selected: "View status",
   agreement: "Sign agreement",
   address: "Confirm address",
   package: "Track package",
@@ -31,21 +31,44 @@ const NEXT = {
   paid: "View summary",
 };
 
-/** /creater/my-campaigns — jin campaigns par apply kiya: running, waiting, completed */
+/**
+ * /creater/my-campaigns — jin campaigns par apply kiya (api.get_my_campaigns): running, waiting, completed.
+ * Purane jaisa: Instagram/WhatsApp connect nahi (my_join_status) to ye page band — pehle connect.
+ * Order fixed: naya application upar (status badalne par card jagah nahi badalta). Har 20 sec chupke se refresh.
+ */
 export default function MyCampaigns() {
   const [s] = useSession();
-  const locked = !s.ig;
+  const gate = useJoinGate();
+  const locked = gate.locked;
   const sk = getSidekick(s.sidekick);
   const [f, setF] = useState("all");
-  const mine = locked ? [] : MY_CAMPAIGNS;
-  const count = (k) => (k === "all" ? mine.length : mine.filter((m) => m.group === k).length);
-  const list = f === "all" ? mine : mine.filter((m) => m.group === f);
+  const covers = useCovers();
+  const { loading, list: rows, error, reload } = useMyCampaigns({ skip: gate.loading || locked });
+  const mine = locked
+    ? []
+    : [...rows].sort(
+        (a, b) => String(b.applied_at || "").localeCompare(String(a.applied_at || "")) || String(a.participation_id).localeCompare(String(b.participation_id))
+      );
+  const count = (k) => (k === "all" ? mine.length : mine.filter((m) => groupOf(m) === k).length);
+  const list = f === "all" ? mine : mine.filter((m) => groupOf(m) === f);
+  const busy = gate.loading || (!locked && loading);
 
   return (
     <BountyShell>
       <title>My campaigns — Bounty</title>
 
-      {mine.length === 0 ? (
+      {busy ? (
+        <p className="mc-lede">Loading your campaigns…</p>
+      ) : error ? (
+        <div className="mc-empty">
+          <p>
+            Couldn&apos;t load: {errText(error)}{" "}
+            <button type="button" className="mc-retry" onClick={() => reload()}>
+              Retry
+            </button>
+          </p>
+        </div>
+      ) : mine.length === 0 ? (
         <>
           {/* Naya creator (Figma: 10 · My campaigns — empty) */}
           <p className="mc-eye">Your creator journey</p>
@@ -76,9 +99,13 @@ export default function MyCampaigns() {
         </>
       )}
 
-      {list.length === 0 ? (
+      {busy || error ? null : list.length === 0 ? (
         <div className="mc-empty">
-          {mine.length === 0 ? (
+          {locked ? (
+            <p>
+              Connect Instagram and WhatsApp to see your campaigns here. <Link href="/creater/onboarding/meta">Connect now →</Link>
+            </p>
+          ) : mine.length === 0 ? (
             <p>
               No campaigns yet. Open <Link href="/creater/discover">Campaigns</Link>, apply to one — it shows up here with every next step.
             </p>
@@ -89,27 +116,46 @@ export default function MyCampaigns() {
       ) : (
         <ul className="mc-list">
           {list.map((m) => {
-            const c = getCampaign(m.id);
-            const idx = STEPS.findIndex((x) => x.key === m.stage);
-            const pill = m.notSelected ? ["Not selected", "red"] : m.group === "done" ? ["Completed", "green"] : m.revision ? ["Revision requested", "red"] : [STEPS[idx].label, "teal"];
+            const id = m.participation_id;
+            const g = groupOf(m);
+            const step = stepOf(m);
+            const declined = DECLINED.includes(m.stage);
+            const revision = m.stage === "changes_requested";
+            const act = needsAction(m);
+            // paid / product-free campaign mein address + package nahi
+            const steps = STEPS.filter((x) => !noShip(m) || (x.key !== "address" && x.key !== "package"));
+            const idx = m.stage === "completed" ? steps.length - 1 : steps.findIndex((x) => x.key === step);
+            const label = (steps[idx] || {}).label;
+            const pill = declined
+              ? ["Not selected", "red"]
+              : g === "done"
+              ? ["Completed", "green"]
+              : revision
+              ? ["Revision requested", "red"]
+              : m.blocked_at
+              ? ["Blocked", "red"]
+              : m.stage === "invited"
+              ? ["Invited", "teal"]
+              : [label, "teal"];
+            const href = `/creater/my-campaigns/${id}`;
             return (
-              <li key={m.id} className="bx-card mc-item">
-                <Link href={`/creater/my-campaigns/${m.id}`} className="mc-img">
-                  <img src={c.img} alt="" />
-                  <span>{TYPE_LABEL[c.type]}</span>
+              <li key={id} className="bx-card mc-item">
+                <Link href={href} className="mc-img">
+                  <img src={coverOf(m, covers)} alt="" />
+                  <span>{TYPE_LABEL[typeKey(m)]}</span>
                 </Link>
                 <div className="mc-body">
                   <div className="mc-top">
-                    <p className="mc-brand">{c.brand}</p>
+                    <p className="mc-brand">{m.brand}</p>
                     <span className={`bx-tag bx-tag--${pill[1]}`}>{pill[0]}</span>
                   </div>
                   <h2>
-                    <Link href={`/creater/my-campaigns/${m.id}`}>{c.title}</Link>
+                    <Link href={href}>{m.campaign || "Campaign"}</Link>
                   </h2>
-                  <p className={`mc-note ${m.revision || m.notSelected ? "is-red" : ""}`}>{m.note}</p>
-                  {!m.notSelected && (
-                    <div className="mc-steps" aria-label={`Step ${idx + 1} of ${STEPS.length}`}>
-                      {STEPS.map((st, i) => (
+                  <p className={`mc-note ${revision || declined || m.blocked_at ? "is-red" : ""}`}>{noteOf(m)}</p>
+                  {!declined && (
+                    <div className="mc-steps" aria-label={`Step ${idx + 1} of ${steps.length}`}>
+                      {steps.map((st, i) => (
                         <span key={st.key} className={i <= idx ? "is-on" : ""} title={st.label}>
                           <i />
                           <small>{st.label}</small>
@@ -119,10 +165,10 @@ export default function MyCampaigns() {
                   )}
                   <div className="mc-foot">
                     <small>
-                      {m.date} · {c.reward}
+                      {[dateOf(m), compLine(m)].filter(Boolean).join(" · ")}
                     </small>
-                    <Link href={m.group === "running" ? stepPath(m.id, m.stage, m.revision) : `/creater/my-campaigns/${m.id}`} className={`bx-btn bx-btn--sm ${m.group === "running" ? "bx-btn--dark" : "bx-btn--ghost"}`}>
-                      {m.notSelected ? "See why" : NEXT[m.stage]} <ArrowRight size={12} />
+                    <Link href={act && !declined ? currentPath(m) : href} className={`bx-btn bx-btn--sm ${act ? "bx-btn--dark" : "bx-btn--ghost"}`}>
+                      {declined ? "See why" : m.stage === "invited" ? "Accept or pass" : revision ? "Fix your draft" : act ? NEXT[step] || "Open" : "View details"} <ArrowRight size={12} />
                     </Link>
                   </div>
                 </div>
@@ -150,6 +196,7 @@ export default function MyCampaigns() {
         .mc-empty { max-width: 680px; margin: 0 auto; padding: 14px 16px; border-radius: 14px; background: #fbf1dc; border: 1px solid #e6d5ae; text-align: left; font-size: 13px; line-height: 1.35; color: #7a6a4a; }
         .mc-empty p { margin: 0; }
         .mc-empty a { font-weight: 700; color: #7a6a4a; }
+        .mc-retry { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; color: inherit; cursor: pointer; }
         .mc-list { list-style: none; margin: 0 auto; padding: 0; max-width: 980px; display: grid; gap: 14px; }
         .mc-item { display: flex; overflow: hidden; }
         .mc-img { position: relative; width: 200px; flex-shrink: 0; }

@@ -4,47 +4,61 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
-import { TargetFields, UploadedCreators, NO_CAMP, cuLoad, cuSave } from "@/components/admin/creator/UploadParts";
+import { TargetFields, UploadedCreators, CU_FIELDS, cuRow, cuLoad, cuSave } from "@/components/admin/creator/UploadParts";
+import { rpc, errText } from "@/lib/supabase";
 
-const COLS = ["Name", "Instagram", "WhatsApp", "Email", "City", "State", "Followers", "Category"];
-const OPTS = ["Name", "Instagram", "WhatsApp", "Email", "City", "State", "Followers", "Niche", "— Skip —"];
-const AUTO = { Name: "Name", Instagram: "Instagram", WhatsApp: "WhatsApp", Email: "Email", City: "City", State: "State", Followers: "Followers", Category: "Niche" };
-const ROWS = [
-  ["Asha Rao", "@asha.creates", "+91 98765 43210", "asha@example.com", "Mumbai", "Maharashtra", "18,200", "Food"],
-  ["Meera Shah", "@meera.styles", "+91 90000 11111", "—", "Pune", "Maharashtra", "12,700", "Fashion"],
-  ["Kabir Sen", "@kabir.cooks", "+91 98300 12345", "kabir@example.com", "Kolkata", "West Bengal", "9,400", "Food"],
-  ["Rohit Jain", "—", "—", "—", "Jaipur", "Rajasthan", "—", "Travel"],
-];
-
-/* Creator upload — step 2: sheet aa gayi, columns milao, preview (Figma 072) */
+/* Creator upload — step 2: sheet aa gayi, columns milao, preview, add (Figma 072). creator_upload_v2 — purane app jaisa */
 export default function CreatorUploadMatch() {
   const router = useRouter();
-  const [brand, setBrand] = useState("Olio Pizza");
-  const [camp, setCamp] = useState("Mysore Pizzeria Launch");
-  const [file, setFile] = useState("Mysore creators.xlsx");
-  const [map, setMap] = useState(AUTO);
+  const [brand, setBrand] = useState("");
+  const [camp, setCamp] = useState("");
+  const [sheet, setSheet] = useState(null);
   const [invite, setInvite] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     const s = cuLoad();
-    if (s?.brand) {
-      setBrand(s.brand);
-      setCamp(s.camp);
-      if (s.file) setFile(s.file);
-    }
+    if (!s || !s.sheet) return router.replace("/admin/creator-upload");
+    setBrand(s.brand || "");
+    setCamp(s.camp || "");
+    setSheet(s.sheet);
+    setInvite(s.send !== false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const add = () => {
+  const map = (sheet && sheet.map) || {};
+  const R = sheet ? sheet.rows.map((r) => cuRow(map, r)) : [];
+  const has = (x) => x.phone || x.email || x.handle;
+  const ok = R.filter(has).length;
+  const setCol = (k, v) => {
+    const m = { ...map };
+    if (v === "") delete m[k];
+    else m[k] = +v;
+    const next = { ...sheet, map: m };
+    setSheet(next);
+    cuSave({ brand, camp, sheet: next, send: invite });
+  };
+
+  const add = async () => {
+    const rows = R.filter(has);
+    if (!rows.length) return;
     setBusy(true);
-    cuSave({ brand, camp, file, added: 18, invited: invite ? 18 : 0 });
-    setTimeout(() => router.push("/admin/creator-upload/done"), 500);
+    setErr("");
+    const r = await rpc("admin", "api.creator_upload_v2", { p_rows: rows, p_send: invite, p_brand: brand || null, p_campaign: camp || null });
+    setBusy(false);
+    if (r.error) return setErr(errText(r.error));
+    cuSave({ brand: "", camp: "", result: r.data || {} });
+    router.push("/admin/creator-upload/done");
   };
   const clear = () => {
     cuSave({ brand, camp });
     router.push("/admin/creator-upload");
   };
-  const notSel = camp !== NO_CAMP;
+  const notSel = !!camp;
+  const show = (k, v) => (k === "handle" ? String(v).replace(/^https?:\/\/(www\.)?instagram\.com\//i, "@").replace(/\/$/, "") : v) || "—";
+
+  if (!sheet) return <AdminShell><p className="cu2-wait">Loading sheet…</p></AdminShell>;
 
   return (
     <AdminShell>
@@ -52,7 +66,7 @@ export default function CreatorUploadMatch() {
       <section className="ad-card cu2-card">
         <div className="cu2-top">
           <h2 className="ad-h2">📥 Creator upload</h2>
-          {notSel && <span className="ad-badge ad-badge--violet">Not selected for: {camp}</span>}
+          {notSel && <span className="ad-badge ad-badge--violet">Not selected for campaign</span>}
         </div>
         <div className="cu2-fields">
           <TargetFields brand={brand} camp={camp} onBrand={setBrand} onCamp={setCamp} />
@@ -61,21 +75,25 @@ export default function CreatorUploadMatch() {
         <p className="cu2-ok">
           <span>✅</span>
           <span>
-            <b>26 rows</b>from {file} · <b>24</b>with WhatsApp / email / Instagram ·
+            <b>{sheet.rows.length} rows</b>from {sheet.src} · <b>{ok}</b>with WhatsApp / email / Instagram
+            {sheet.rows.length - ok ? " ·" : ""}
           </span>
-          <span className="ad-badge ad-badge--orange">2 without contact — skipped</span>
+          {sheet.rows.length - ok > 0 && <span className="ad-badge ad-badge--orange">{sheet.rows.length - ok} without contact — skipped</span>}
         </p>
 
         <p className="cu2-h">
           <b>Match the columns</b> — picked automatically, change any that look wrong
         </p>
         <div className="cu2-map">
-          {COLS.map((c) => (
-            <label key={c} className={`cu2-m ${["Instagram", "WhatsApp", "Followers"].includes(c) ? "cu2-m--stack" : ""}`}>
-              <span>{c}</span>
-              <select value={map[c]} onChange={(e) => setMap({ ...map, [c]: e.target.value })}>
-                {OPTS.map((o) => (
-                  <option key={o}>{o}</option>
+          {CU_FIELDS.map(([k, l]) => (
+            <label key={k} className={`cu2-m ${["handle", "phone", "followers"].includes(k) ? "cu2-m--stack" : ""}`}>
+              <span>{l}</span>
+              <select value={map[k] ?? ""} onChange={(e) => setCol(k, e.target.value)}>
+                <option value="">—</option>
+                {sheet.head.map((h, i) => (
+                  <option key={i} value={i}>
+                    {h}
+                  </option>
                 ))}
               </select>
             </label>
@@ -87,17 +105,17 @@ export default function CreatorUploadMatch() {
             <thead>
               <tr>
                 <th>#</th>
-                {COLS.map((c) => (
-                  <th key={c}>{map[c] === "— Skip —" ? <s>{c}</s> : c}</th>
+                {CU_FIELDS.map(([k, l]) => (
+                  <th key={k}>{map[k] == null ? <s>{l}</s> : l}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {ROWS.map((r, i) => (
-                <tr key={i} className={r[1] === "—" && r[2] === "—" && r[3] === "—" ? "is-skip" : ""}>
+              {R.slice(0, 200).map((x, i) => (
+                <tr key={i} className={has(x) ? "" : "is-skip"}>
                   <td>{i + 1}</td>
-                  {r.map((v, j) => (
-                    <td key={j}>{map[COLS[j]] === "— Skip —" ? "—" : v}</td>
+                  {CU_FIELDS.map(([k]) => (
+                    <td key={k}>{show(k, x[k])}</td>
                   ))}
                 </tr>
               ))}
@@ -108,19 +126,22 @@ export default function CreatorUploadMatch() {
         <div className="cu2-foot">
           <label className="cu2-chk">
             <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} />
-            Send the “not selected — explore more campaigns” invite now (WhatsApp + email)
+            Send the {notSel ? "“not selected — explore more campaigns”" : "“explore live campaigns”"} invite now (WhatsApp + email)
           </label>
-          <button type="button" className="ad-btn ad-btn--primary cu2-add" onClick={add} disabled={busy}>
-            {busy ? "Adding…" : "Add 24 creators"}
+          <button type="button" className="ad-btn ad-btn--primary cu2-add" onClick={add} disabled={busy || !ok}>
+            {busy ? "Adding…" : `Add ${ok} creator${ok === 1 ? "" : "s"}`}
           </button>
           <button type="button" className="cu2-clear" onClick={clear}>
             Clear
           </button>
         </div>
+        {err && <p className="cu2-err">{err}</p>}
       </section>
-      <UploadedCreators />
+      <UploadedCreators brand={brand} />
 
       <style>{`
+        .cu2-wait { padding: 40px 0; color: var(--ad-muted); }
+        .cu2-err { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: var(--ad-red-bg); color: var(--ad-red); font-size: 12.5px; font-weight: 700; }
         .cu2-card { padding: 25px 22px 21px; }
         .cu2-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .cu2-fields { margin-top: 15px; }

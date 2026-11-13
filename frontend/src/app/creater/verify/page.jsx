@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
-import { writeSession, readSession } from "@/components/creater/session";
+import { sendOtp, verifyOtp, afterLoginRoute } from "@/services/creator";
 
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
@@ -16,6 +16,8 @@ export default function CreaterVerify() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [expires, setExpires] = useState(600);
   const [resend, setResend] = useState(30);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const boxes = useRef([]);
 
   // Number login page se aata hai; na ho to wapas login
@@ -70,17 +72,42 @@ export default function CreaterVerify() {
   };
 
   const code = otp.join("");
-  const verify = (e) => {
-    e.preventDefault();
-    if (code.length < 6 || expires === 0) return;
-    writeSession({ phone: `+91${phone}`, alerts });
+  // wa-otp-verify → session → purane bootOS jaisa agla step (Instagram / setup / app)
+  const verify = async (e) => {
+    e?.preventDefault?.();
+    if (code.length < 6 || expires === 0 || busy) return;
+    setBusy(true);
+    setErr("");
     try {
-      window.sessionStorage.removeItem("bounty_login");
-    } catch {
-      /* ignore */
+      const c = await verifyOtp(phone, code, { alerts });
+      try {
+        window.sessionStorage.removeItem("bounty_login");
+      } catch {
+        /* ignore */
+      }
+      // OTP history mein na rahe — Back se seedha number wala page
+      router.replace(afterLoginRoute(c));
+    } catch (ex) {
+      setErr("Couldn't verify: " + (ex.message || ex));
+      setBusy(false);
     }
-    // OTP history mein na rahe — Back se seedha number wala page
-    router.replace(readSession().setupDone ? "/creater/home" : "/creater/onboarding");
+  };
+  // 6 digit bharte hi verify (purane app jaisa)
+  useEffect(() => {
+    if (code.length === 6) verify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+  const resendCode = async () => {
+    setResend(30);
+    setExpires(600);
+    setOtp(["", "", "", "", "", ""]);
+    setErr("");
+    boxes.current[0]?.focus();
+    try {
+      await sendOtp(phone);
+    } catch (ex) {
+      setErr("Couldn't send the code: " + (ex.message || ex));
+    }
   };
 
   const masked = phone ? `+91${phone.slice(0, 2)}•••• ••${phone.slice(-3)}` : "";
@@ -88,7 +115,7 @@ export default function CreaterVerify() {
   return (
     <>
       <title>Verify — Bounty</title>
-      <OnboardShell tone="dark" step={2} back="/creater/login">
+      <OnboardShell tone="dark" step={2} back="/creater/login" gate="guest">
         <form className="si" onSubmit={verify}>
           <h2 className="si-h">One last step.</h2>
           <p className="si-sub">Enter the 6-digit code sent to your WhatsApp number.</p>
@@ -113,23 +140,16 @@ export default function CreaterVerify() {
             ))}
           </div>
           <p className="si-exp">{expires > 0 ? `Code expires in ${fmt(expires)}` : "Code expired — tap Resend."}</p>
-          <button type="submit" className="bx-btn bx-btn--cream bx-btn--lg bx-btn--block si-cta si-cta--otp" disabled={code.length < 6 || expires === 0}>
-            Verify &amp; continue →
+          {err && <p className="si-err">{err}</p>}
+          <button type="submit" className="bx-btn bx-btn--cream bx-btn--lg bx-btn--block si-cta si-cta--otp" disabled={code.length < 6 || expires === 0 || busy}>
+            {busy ? "Signing in…" : <>Verify &amp; continue →</>}
           </button>
           <p className="si-resend">
             Didn&apos;t receive a code?{" "}
             {resend > 0 ? (
               <span>Resend in {resend}s</span>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setResend(30);
-                  setExpires(600);
-                  setOtp(["", "", "", "", "", ""]);
-                  boxes.current[0]?.focus();
-                }}
-              >
+              <button type="button" onClick={resendCode}>
                 Resend code
               </button>
             )}

@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { adminSignIn, adminCheck } from "@/lib/adminAuth";
 
 /**
  * /admin — Super Admin login (Figma mein login frame nahi tha, isliye admin theme mein banaya).
- * Admin ID + password. Abhi backend nahi juda, isliye demo login yahan rakha hai —
- * Supabase judne par yahi form asli auth se check karega.
+ * Admin ID (email) + password → Supabase Auth, phir database check karta hai ki ye Super Admin hai
+ * (is_platform_admin) — bilkul purane app jaisa. Admin nahi hai to login nahi hoga.
  */
-const DEMO = { id: "admin", password: "Geek@2026" };
 export default function AdminLogin() {
   const router = useRouter();
   const [adminId, setAdminId] = useState("");
@@ -16,31 +16,34 @@ export default function AdminLogin() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // pehle check: login hai to form dikhana hi nahi (Back dabane par login page flash na ho)
+  const [checking, setChecking] = useState(true);
 
   // Pehle se login hai to seedha overview
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem("geek_admin")) router.replace("/admin/overview");
-    } catch {
-      /* ignore */
-    }
+    adminCheck()
+      .then((r) => (r.ok ? router.replace("/admin/overview") : setChecking(false)))
+      .catch(() => setChecking(false));
   }, [router]);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     const id = adminId.trim().toLowerCase();
-    if (!id) return setErr("Enter your admin ID.");
+    if (!/^\S+@\S+\.\S+$/.test(id)) return setErr("Enter your admin ID (email).");
     if (!pass) return setErr("Enter your password.");
-    if (id !== DEMO.id || pass !== DEMO.password) return setErr("Admin ID or password is incorrect.");
     setErr("");
     setBusy(true);
     try {
-      window.localStorage.setItem("geek_admin", JSON.stringify({ id, name: "Mayank" }));
-    } catch {
-      /* ignore */
+      await adminSignIn(id, pass);
+      // replace: login page history mein na rahe — Back dabane par wapas login par nahi aayega
+      router.replace("/admin/overview");
+    } catch (ex) {
+      setErr(ex.message || "Something went wrong. Try again.");
+      setBusy(false);
     }
-    setTimeout(() => router.push("/admin/overview"), 450);
   };
+
+  if (checking) return <div className="al-wait" aria-busy="true" style={{ minHeight: "100vh", background: "var(--ad-bg)" }} />;
 
   return (
     <div className="al">
@@ -56,9 +59,9 @@ export default function AdminLogin() {
           <p className="al-eye">Super Admin</p>
           <h2>Every campaign, creator and brand — one control room.</h2>
           <ul>
-            <li>⚡ 82 actions waiting in your queue</li>
-            <li>◈ 5 campaigns live right now</li>
-            <li>♙ 298 creators · 169 on Instagram</li>
+            <li>⚡ Approvals, videos and signups in one queue</li>
+            <li>◈ Every campaign from brief to report</li>
+            <li>♙ Creators, brands and messaging together</li>
           </ul>
         </div>
         <p className="al-foot">© Geek Creative Agency</p>
@@ -75,9 +78,9 @@ export default function AdminLogin() {
           <p className="ad-sub">Enter your admin ID and password to continue.</p>
 
           <label className="ad-label" htmlFor="al-id">
-            Admin ID
+            Admin ID (email)
           </label>
-          <input id="al-id" className="ad-input" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Your admin ID" value={adminId} onChange={(e) => { setAdminId(e.target.value); setErr(""); }} />
+          <input id="al-id" className="ad-input" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="you@geekcreativeagency.com" value={adminId} onChange={(e) => { setAdminId(e.target.value); setErr(""); }} />
 
           <label className="ad-label" htmlFor="al-pass">
             Password

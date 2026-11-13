@@ -1,44 +1,69 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { Stats } from "@/components/admin/ui";
 import MsgHead from "@/components/admin/msg/MsgHead";
 import PTable from "@/components/admin/brand/PTable";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { fmtDate, useToast } from "@/components/admin/brand/util";
 
-const ROWS = [
-  { who: "@ananya.travels", ch: "WhatsApp", on: "10 Nov", how: "Replied STOP" },
-  { who: "@decor.daily", ch: "WhatsApp", on: "8 Nov", how: "Stop link" },
-  { who: "@thefestiveedit", ch: "Email", on: "5 Nov", how: "Unsubscribe link" },
-];
-
-/** /admin/messaging/opted-out — Opted out (Figma 076) */
+/** /admin/messaging/opted-out — Opted out (Figma 076) · public.admin_optouts · Resume: public.admin_optout_clear */
 export default function OptedOut() {
-  const [rows, setRows] = useState(ROWS);
-  const [toast, setToast] = useState("");
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const { data, error, loading, reload } = useRpc("admin", "admin_optouts");
+  const all = Array.isArray(data) ? data : [];
+  const [ask, setAsk] = useState(null);
+  const [toast, say] = useToast();
+  const wa = all.filter((x) => x.channel === "whatsapp").length;
+  const em = all.length - wa;
+  const held = all.reduce((a, x) => a + (Number(x.skipped) || 0), 0);
+  const who = (x) => (x.handle ? `@${x.handle}` : x.name || x.to || "—");
 
-  const gone = ROWS.length - rows.length;
-  const total = 8 - gone;
+  const resume = async (x) => {
+    setAsk(null);
+    const r = await rpc("admin", "admin_optout_clear", { p_channel: x.channel, p_to: x.to });
+    if (r.error) return say(errText(r.error));
+    say(`${who(x)} will get ${x.channel === "whatsapp" ? "WhatsApp" : "email"} updates again`);
+    reload(true);
+  };
 
   return (
     <AdminShell>
       <MsgHead />
       <Stats
         items={[
-          { value: total, label: "Everyone who stopped" },
-          { value: total - rows.filter((r) => r.ch === "Email").length, label: "WhatsApp stopped", note: "Replied STOP / stop link" },
-          { value: rows.filter((r) => r.ch === "Email").length, label: "Email stopped", note: "Unsubscribed" },
-          { value: Math.max(0, 6 - gone), label: "Messages held back", note: "Login codes still go" },
+          { value: loading ? "—" : all.length, label: "Everyone who stopped" },
+          { value: loading ? "—" : wa, label: "WhatsApp stopped", note: "Replied STOP / stop link" },
+          { value: loading ? "—" : em, label: "Email stopped", note: "Unsubscribed" },
+          { value: loading ? "—" : held, label: "Messages held back", note: "Login codes still go" },
         ]}
       />
       <section className="ad-card mo-card">
-        <h2 className="ad-h2">Opted out · {total}</h2>
+        <h2 className="ad-h2">Opted out · {loading ? "…" : all.length}</h2>
         <p className="mo-sub">They get no more campaign updates on that channel. Login codes still go.</p>
+        {ask && (
+          <div className="mo-ask">
+            <p>
+              Turn {ask.channel === "whatsapp" ? "WhatsApp" : "email"} updates back on for {who(ask)}? Only do this if they asked for it.
+            </p>
+            <div className="mo-ask__b">
+              <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" onClick={() => resume(ask)}>
+                Yes, resume
+              </button>
+              <button type="button" className="pt-link" onClick={() => setAsk(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {error ? (
+          <p className="mo-state">
+            Couldn’t load: {errText(error)}{" "}
+            <button type="button" onClick={() => reload()}>
+              Retry
+            </button>
+          </p>
+        ) : (
         <PTable
           minW={680}
           rowH={64}
@@ -49,23 +74,32 @@ export default function OptedOut() {
             { label: "How", w: "25%" },
             { label: "", w: "17.1%" },
           ]}
-          rows={rows.map((r) => [
-            <b key="w">{r.who}</b>,
-            r.ch,
-            r.on,
-            r.how,
-            <button key="r" type="button" className="pt-link mo-r" onClick={() => (setRows(rows.filter((x) => x !== r)), setToast(`${r.who} will get ${r.ch} updates again`))}>
+          rows={all.map((x, i) => [
+            <b key="w" title={[x.name, x.to, x.campaign].filter(Boolean).join(" · ")}>
+              {who(x)}
+            </b>,
+            x.channel === "whatsapp" ? "WhatsApp" : "Email",
+            fmtDate(x.at),
+            <span key="h" title={x.via}>
+              {x.via || "—"}
+            </span>,
+            <button key={`r${i}`} type="button" className="pt-link mo-r" onClick={() => setAsk(x)}>
               Resume
             </button>,
           ])}
-          empty="Nobody has opted out."
+          empty={loading ? "Loading…" : "Nobody has opted out."}
         />
+        )}
       </section>
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ad-toast">{toast}</div>}
       <style>{`
         .mo-card { padding: 24px 22px 14px; }
         .mo-sub { margin: 9px 0 26px; font-size: 12px; color: var(--ad-muted); }
         .mo-r { color: #6657e9; }
+        .mo-ask { margin: -10px 0 16px; padding: 12px 14px; border-radius: 13px; background: var(--ad-soft-2); border: 1px solid var(--ad-line); font-size: 13px; }
+        .mo-ask__b { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+        .mo-state { padding: 14px 11px; font-size: 13px; color: var(--ad-red); }
+        .mo-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
         @media (max-width: 640px) { .mo-card { padding: 18px 16px; } .mo-sub { margin-bottom: 14px; } }
       `}</style>
     </AdminShell>

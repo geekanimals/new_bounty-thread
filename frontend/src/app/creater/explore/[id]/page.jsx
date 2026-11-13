@@ -1,15 +1,14 @@
+"use client";
+
+import { useMemo } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Logo from "@/components/creater/Logo";
 import GuestNav from "@/components/creater/GuestNav";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { CAMPAIGNS, getCampaign, BRIEF, TYPE_LABEL } from "@/components/creater/data";
+import { TYPE_LABEL } from "@/components/creater/data";
+import { useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, rememberApply, safeLink } from "@/services/creator";
 import { Gift, Film, Users, Calendar, ShieldCheck, Sparkle, Lock, ChevronDown } from "@/components/ui/Icons";
-
-// Har campaign ka guest brief build ke time ban jaata hai
-export function generateStaticParams() {
-  return CAMPAIGNS.map((c) => ({ id: c.id }));
-}
 
 const JOURNEY = [
   { icon: "✎", label: "Apply" },
@@ -19,11 +18,62 @@ const JOURNEY = [
   { icon: "📊", label: "Your analytics" },
 ];
 
-/** /creater/explore/[id] — guest campaign brief (apply ke liye WhatsApp verify) */
-export default async function GuestBrief({ params }) {
-  const { id } = await params;
-  const c = getCampaign(id);
-  if (!c) notFound();
+/**
+ * /creater/explore/[id] — guest campaign brief (public.explore_campaigns).
+ * Apply → WhatsApp verify (login); login ke baad yahi campaign khulta hai (purana localStorage "geek_apply").
+ */
+export default function GuestBrief() {
+  const { id } = useParams();
+  const router = useRouter();
+  const covers = useCovers();
+  const { loading, list } = useOpenCampaigns({ publicList: true });
+  const x = useMemo(() => list.find((r) => String(r.campaign_id) === String(id)), [list, id]);
+  const apply = (e) => {
+    e.preventDefault();
+    rememberApply(id);
+    router.push("/creater/login");
+  };
+
+  if (loading || !x)
+    return (
+      <div className="gb">
+        <main className="gb-main">
+          <Link href="/creater/explore" className="bx-back">
+            ← Back to campaigns
+          </Link>
+          <p style={{ textAlign: "center", margin: "40px 0", fontSize: 14 }}>{loading ? "Loading brief…" : "This campaign isn't open any more."}</p>
+        </main>
+      </div>
+    );
+
+  const k = kindOf(x);
+  const noProd = k === "paid";
+  const t = x.terms || {};
+  const b = x.video_brief || {};
+  const who = whoList(x);
+  const tags = [].concat(x.hashtags || [], (x.mentions || []).map((m) => (String(m).charAt(0) === "@" ? m : "@" + m)));
+  const c = {
+    title: x.name || "Campaign",
+    brand: x.brand || "",
+    img: coverOf(x, covers),
+    type: typeKey(x),
+    rewardKit: compLine(x),
+    rewardNote: compSub(x),
+    deliver: delivLine(x),
+    who: who.length ? who.join(" • ") : "Open to every creator",
+    deadline: t.content_days ? `${t.content_days} days after ${noProd ? "the brief" : "delivery"}` : x.ends_on ? `Till ${fdate(x.ends_on)}` : "Shown in your agreement",
+    usage: t.ad_rights_months ? `${t.ad_rights_months} month${t.ad_rights_months > 1 ? "s" : ""}` : "None",
+    collab: t.collab_rights ? "Required" : "Not required",
+    excl: t.exclusivity || "None",
+    city: (x.cities || []).join(", "),
+  };
+  const line = (label, v) =>
+    v ? (
+      <>
+        <h3>{label}</h3>
+        <p style={{ whiteSpace: "pre-wrap" }}>{v}</p>
+      </>
+    ) : null;
 
   return (
     <div className="gb">
@@ -123,9 +173,9 @@ export default async function GuestBrief({ params }) {
           {/* Right: apply + brief */}
           <section className="gb-right">
             <div className="gb-apply">
-              <Link href="/creater/login" className="gb-apply__btn">
+              <a href="/creater/login" className="gb-apply__btn" onClick={apply}>
                 Verify WhatsApp to apply →
-              </Link>
+              </a>
               <p>You review and accept terms if selected.</p>
             </div>
 
@@ -134,27 +184,50 @@ export default async function GuestBrief({ params }) {
                 📄 Read full creative brief <ChevronDown size={14} />
               </summary>
               <div className="gb-brief__body">
+                {line("Brief", x.brief)}
+                {line("What to shoot", b.what_to_shoot)}
+                {line("Key messages", b.key_messages)}
+                {line("Do's", b.dos)}
+                {line("Don'ts", b.donts)}
+                {line("Caption to use", b.caption)}
+                {tags.length > 0 && line("Hashtags & mentions", tags.join(" "))}
                 <h3>Deliverables</h3>
-                <p>{c.deliver}</p>
-                <h3>Cities</h3>
-                <p>{c.city}</p>
+                <p style={{ whiteSpace: "pre-wrap" }}>{x.deliverables_text || c.deliver}</p>
+                {x.product_link && (
+                  <p>
+                    <a href={safeLink(x.product_link)} target="_blank" rel="noopener noreferrer">
+                      View product ↗
+                    </a>
+                  </p>
+                )}
+                {c.city && line("Cities", c.city)}
+                {(x.languages || []).length > 0 && line("Languages", x.languages.join(", "))}
+                {line("Posting note", b.posting_note)}
                 <h4>ⓘ Terms &amp; disclosure</h4>
                 <ul>
-                  <li>
-                    Post within <b>{c.deadline.split(" after")[0]}</b> of receiving the product
-                  </li>
+                  {t.content_days && (
+                    <li>
+                      Post within <b>{t.content_days} days</b> of {noProd ? "getting the video brief" : "receiving the product"}
+                    </li>
+                  )}
                   <li>
                     Submit your video in the app first — post <b>only after the brand approves it</b>
                   </li>
-                  <li>
-                    Ad rights: the brand may use your content for <b>{c.usage}</b>
-                  </li>
-                  <li>
-                    Add the brand as an Instagram <b>collaborator</b> on the post
-                  </li>
-                  <li>
-                    <b>Paid:</b> your fee is written into your own agreement
-                  </li>
+                  {t.ad_rights_months && (
+                    <li>
+                      Ad rights: the brand may use your content for <b>{c.usage}</b>
+                    </li>
+                  )}
+                  {t.collab_rights && (
+                    <li>
+                      Add the brand as an Instagram <b>collaborator</b> on the post
+                    </li>
+                  )}
+                  {k && k !== "barter" && (
+                    <li>
+                      <b>Paid:</b> your fee is written into your own agreement
+                    </li>
+                  )}
                   <li>Disclose the collaboration (Paid partnership / #ad) as per ASCI</li>
                 </ul>
               </div>

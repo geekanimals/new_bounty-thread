@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
-import { readSession, writeSession } from "@/components/creater/session";
+import { getCreator, savePrefs, setKidSeen } from "@/services/creator";
 import { SIDEKICKS, getSidekick } from "@/components/creater/data";
 
 // Figma card colours
@@ -15,16 +15,18 @@ export default function PickSidekick() {
   const [pick, setPick] = useState("rumi");
 
   useEffect(() => {
-    setPick(readSession().sidekick || "rumi");
+    setPick(getCreator().prefs?.kid || "pip");
   }, []);
 
-  const go = (save) => {
-    if (save) writeSession({ sidekick: pick });
+  // Chuna hua sidekick login par save (purana bxKid.save) → Instagram step
+  const go = async (save) => {
+    if (save) await savePrefs({ kid: pick });
+    setKidSeen(save ? pick : "later");
     router.push("/creater/onboarding/instagram");
   };
 
   return (
-    <OnboardShell tone="light" step={3} avatar>
+    <OnboardShell tone="light" step={3} avatar gate="member">
       <title>Pick your sidekick — Bounty</title>
       <div className="sk">
         <h2 className="sk-h">Pick your sidekick.</h2>

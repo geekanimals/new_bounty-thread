@@ -1,59 +1,82 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Stats } from "@/components/admin/ui";
-import { campaignById } from "@/components/admin/data";
+import { useRpc, errText } from "@/lib/supabase";
+import { useCampaign, useToast, fmtDate } from "@/components/admin/campaign/live";
 
-const SHIP = [
-  { id: "aarav-shah", who: "Aarav Shah", camp: "Beardo Detan Express Kit", product: "Detan Express Kit", status: "To send", courier: "—", at: "Awaiting pickup" },
-  { id: "nisha-rao", who: "Nisha Rao", camp: "Circle Diwali Declutter", product: "Declutter kit", status: "In transit", courier: "Courier assigned", at: "Today" },
-  { id: "ritika-sen", who: "Ritika Sen", camp: "Snuggles Barter", product: "PR box", status: "No address", courier: "—", at: "Needs verification" },
-  { id: "kabir-mehta", who: "Kabir Mehta", camp: "Beardo Festive Essential Kit", product: "Festive kit", status: "Received", courier: "Delivered", at: "Yesterday" },
-  { id: "meera-patel", who: "Meera Patel", camp: "Vaaree Biggest Diwali Sale", product: "Home set", status: "In transit", courier: "Tracking available", at: "Yesterday" },
-];
 const STATUSES = ["All statuses", "To send", "In transit", "Received", "No address"];
+const SHIP_STAGES = ["contract_signed", "address_confirmed", "product_sent", "product_delivered", "content_created", "content_submitted", "changes_requested", "content_approved", "published", "completed"];
 
-/* Figma: Campaign workspace — Fulfilment */
+/* barter_tracker creator → shipment row */
+function partRow(x, camp) {
+  const sh = x.shipment || null;
+  const cr = x.creator || {};
+  const status = sh ? (sh.status === "delivered" ? "Received" : "In transit") : x.has_address || x.stage === "address_confirmed" ? "To send" : "No address";
+  return {
+    id: "p-" + x.participation_id,
+    href: `/admin/logistics/${x.participation_id}`,
+    who: cr.name || (cr.username ? "@" + cr.username : "Creator"),
+    camp,
+    product: (sh && sh.product) || x.contract?.product || "—",
+    status,
+    courier: sh ? [sh.courier, sh.tracking_ref].filter(Boolean).join(" · ") || "Courier assigned" : "—",
+    at: sh ? fmtDate(sh.delivered_at || sh.shipped_at) : status === "No address" ? "Needs address" : "Awaiting pickup",
+  };
+}
+/* sheet invite (bulk) → shipment row */
+function invRow(i, camp, idCamp) {
+  const st = i.status;
+  const status = ["courier_delivered", "video_brief_sent", "video_submitted", "client_approved", "posted"].includes(st) ? "Received" : st === "courier_sent" ? "In transit" : i.has_address ? "To send" : "No address";
+  return { id: "i-" + i.invite_id, href: `/admin/campaigns/${idCamp}/creators/i-${i.invite_id}`, who: i.name || (i.handle ? "@" + i.handle : "Creator"), camp, product: "—", status, courier: [i.courier, i.tracking].filter(Boolean).join(" · ") || "—", at: "From the sheet" };
+}
+
+/* Figma: Campaign workspace — Fulfilment (barter_tracker shipments + sheet invites) */
 export default function WorkspaceFulfilment() {
   const { id } = useParams();
-  const c = campaignById(id);
+  const router = useRouter();
+  const c = { id };
+  const { c: camp } = useCampaign(id);
+  const on = !!id && id !== "sample";
+  const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !on });
   const [q, setQ] = useState("");
   const [st, setSt] = useState(STATUSES[0]);
-  const [toast, setToast] = useState("");
-  const fileRef = useRef(null);
+  const [toast, setToast] = useToast();
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const rows = SHIP.filter((s) => st === STATUSES[0] || s.status === st).filter((s) => `${s.who} ${s.camp} ${s.product} ${s.courier}`.toLowerCase().includes(q.trim().toLowerCase()));
-
+  const name = camp?.name || bt.data?.campaign?.name || "Campaign";
+  const all = [
+    ...(bt.data?.creators || []).filter((x) => SHIP_STAGES.includes(x.stage)).map((x) => partRow(x, name)),
+    ...(people.data?.invites || []).filter((i) => ["contract_signed", "address_confirmed", "courier_sent", "courier_delivered", "video_brief_sent", "video_submitted", "client_approved", "posted"].includes(i.status)).map((i) => invRow(i, name, id)),
+  ];
+  const cnt = (s) => all.filter((r) => r.status === s).length;
+  const rows = all.filter((s) => st === STATUSES[0] || s.status === st).filter((s) => `${s.who} ${s.camp} ${s.product} ${s.courier}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const loading = bt.loading || people.loading;
+  const v = (n) => (loading ? "…" : n);
   return (
     <AdminShell>
-      <WorkspaceHead id={c.id} />
+      <WorkspaceHead id={id} campaign={camp} />
       <Stats
         items={[
-          { value: 141, label: "All shipments", note: "Reference snapshot" },
-          { value: 10, label: "To send", note: "Needs handoff" },
-          { value: 15, label: "In transit", note: "Tracking active" },
-          { value: 116, label: "Received", note: "Confirmed by creator" },
-          { value: 1, label: "No address", note: "Resolve before shipping" },
+          { value: v(all.length), label: "All shipments", note: "This campaign" },
+          { value: v(cnt("To send")), label: "To send", note: "Needs handoff" },
+          { value: v(cnt("In transit")), label: "In transit", note: "Tracking active" },
+          { value: v(cnt("Received")), label: "Received", note: "Confirmed by creator" },
+          { value: v(cnt("No address")), label: "No address", note: "Resolve before shipping" },
         ]}
       />
 
       <section className="ad-card wf">
         <div className="wf-head">
           <h2 className="ad-h2">Shipment tracker</h2>
-          <button type="button" className="ad-btn ad-btn--ghost wf-imp" onClick={() => fileRef.current?.click()}>
+          {/* courier + tracking ek saath — Bulk sheet se (purane app jaisa: sheet mein Courier / Tracking columns) */}
+          <button type="button" className="ad-btn ad-btn--ghost wf-imp" onClick={() => router.push(`/admin/campaigns/${id}/upload`)}>
             ⇧ Import tracking
           </button>
-          <input ref={fileRef} type="file" accept=".csv,.xlsx" hidden onChange={(e) => e.target.files?.[0] && setToast(`⇧ ${e.target.files[0].name} imported — tracking updated`)} />
         </div>
         <div className="wf-bar">
           <input className="ad-input wf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator, kit, courier…" aria-label="Search shipments" />
@@ -84,12 +107,12 @@ export default function WorkspaceFulfilment() {
                   <td>{s.camp}</td>
                   <td>{s.product}</td>
                   <td>
-                    <span className={`ad-badge ad-badge--${s.status === "To send" ? "orange" : "violet"}`}>{s.status}</span>
+                    <span className={`ad-badge ad-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
                   </td>
                   <td>{s.courier}</td>
                   <td>{s.at}</td>
                   <td>
-                    <Link href={`/admin/logistics/${s.id}`} className="wf-det">
+                    <Link href={s.href} className="wf-det">
                       Details →
                     </Link>
                   </td>
@@ -100,10 +123,10 @@ export default function WorkspaceFulfilment() {
         </div>
         <div className="wf-cards">
           {rows.map((s) => (
-            <Link key={s.id} href={`/admin/logistics/${s.id}`} className="wf-card">
+            <Link key={s.id} href={s.href} className="wf-card">
               <div className="wf-card__top">
                 <b>{s.who}</b>
-                <span className={`ad-badge ad-badge--${s.status === "To send" ? "orange" : "violet"}`}>{s.status}</span>
+                <span className={`ad-badge ad-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
               </div>
               <span>
                 {s.camp} · {s.product}
@@ -115,7 +138,7 @@ export default function WorkspaceFulfilment() {
             </Link>
           ))}
         </div>
-        {!rows.length && <p className="wf-empty">No shipments match.</p>}
+        {!rows.length && <p className="wf-empty">{bt.error ? errText(bt.error) : loading ? "Loading shipments…" : all.length ? "No shipments match." : "Nothing to ship yet — creators show here once they sign the contract."}</p>}
       </section>
       {toast && <div className="ad-toast">{toast}</div>}
 

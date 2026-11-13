@@ -10,6 +10,7 @@ export default function CreatorProfileTab() {
     <CreatorDrawer id={id} tab="profile">
       {(p) => (
         <div className="cpp">
+          {p.noProfile && <p className="cpp-miss">This creator hasn&apos;t started their profile yet (signed in, profile not created).</p>}
           {p.missing && <p className="cpp-miss">Still missing: {p.missing}</p>}
           {[
             ["Personal", p.personal],

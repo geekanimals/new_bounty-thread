@@ -1,57 +1,143 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
-import { SettingsTabs, Panel, Table, useToast } from "@/components/admin/settings/kit";
+import { SettingsTabs, Panel, Table, useToast, fmtDate, emptyState } from "@/components/admin/settings/kit";
+import { sbFor, rpc, errText } from "@/lib/supabase";
 
-const INTEGRATIONS = [
-  { name: "Instagram", sub: "Connected · @geekanimals" },
-  { name: "WhatsApp", sub: "Connected · Cloud API" },
-  { name: "Email", sub: "Connected · SMTP" },
+/* Purane app ke roles (invites.role) — label Figma style mein */
+const ROLES = [
+  ["manager", "Team member (manager)"],
+  ["owner", "Owner — full access"],
+  ["brand", "Brand client (view their campaigns)"],
 ];
+const ROLE_LABEL = { owner: "Owner", manager: "Manager", brand: "Brand client", creator: "Creator", admin: "Admin" };
+const slugify = (v) =>
+  String(v || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 
-/** /admin/settings (= Team) — team, pending invites, integrations, public page */
+/**
+ * /admin/settings (= Team) — purane app ka "Team & integrations":
+ *  team = members table (apne org ke), invites = invites table (pending), public page = org_profiles,
+ *  integrations = WhatsApp / Email master switch ki live halat.
+ */
 export default function SettingsTeam() {
-  const [team, setTeam] = useState([
-    { name: "Mayank", role: "Owner", since: "13 Sep 2026" },
-    { name: "Shivam", role: "Admin", since: "17 Oct 2026" },
-  ]);
+  const sb = sbFor("admin");
+  const [team, setTeam] = useState({ loading: true, rows: [], error: null });
   const [invites, setInvites] = useState([]);
+  const [sw, setSw] = useState(null);
   const [modal, setModal] = useState(null); // invite | {remove}
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Admin");
+  const [role, setRole] = useState("manager");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   const [agency, setAgency] = useState("");
   const [site, setSite] = useState("");
+  const [prof, setProf] = useState(null); // org_profiles row
   const [link, setLink] = useState("");
+  const [me, setMe] = useState(null); // members row of the logged-in admin (org_id / org_name)
   const [toast, say] = useToast();
 
-  const invite = (e) => {
+  const load = useCallback(async () => {
+    const [m, i] = await Promise.all([
+      sb.from("members").select("name,email,role,created_at").order("created_at", { ascending: true }),
+      sb.from("invites").select("*").eq("status", "pending").order("created_at", { ascending: false }),
+    ]);
+    setTeam({ loading: false, rows: m.data || [], error: m.error });
+    setInvites(i.data || []);
+  }, [sb]);
+
+  useEffect(() => {
+    load();
+    (async () => {
+      const { data: s } = await rpc("admin", "admin_messaging_switches");
+      setSw(s || {});
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (user) {
+        const { data: mm } = await sb.from("members").select("org_id,org_name").eq("id", user.id).maybeSingle();
+        setMe(mm || {});
+      }
+      const { data: op } = await sb.from("org_profiles").select("*").maybeSingle();
+      if (op) {
+        setProf(op);
+        setAgency(op.display_name || "");
+        setSite(op.website || "");
+        if (op.slug) setLink(`${window.location.host}/o/${op.slug}`);
+      }
+    })();
+  }, [load, sb]);
+
+  const invite = async (e) => {
     e.preventDefault();
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setErr("Enter a valid email.");
-    setInvites((l) => [...l, { email: email.trim(), role, sent: "Just now" }]);
-    say(`Invite sent to ${email.trim()}`);
+    const v = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(v)) return setErr("Enter a valid email.");
+    setBusy(true);
+    const row = { email: v, role, status: "pending" };
+    if (me?.org_id) {
+      row.org_id = me.org_id;
+      row.org_name = me.org_name;
+    }
+    const { error } = await sb.from("invites").insert(row);
+    setBusy(false);
+    if (error) return setErr(errText(error));
+    say(`Invite created for ${v} — copy its link below and send it`);
     setEmail("");
     setErr("");
     setModal(null);
+    load();
   };
+  const copyInvite = async (tok) => {
+    const url = `${window.location.origin}/app.html?invite=${tok}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      say("Invite link copied");
+    } catch {
+      window.prompt("Share this invite link:", url);
+    }
+  };
+  const cancelInvite = async (id) => {
+    const { error } = await sb.from("invites").delete().eq("id", id);
+    if (error) return say(errText(error), true);
+    say("Invite cancelled");
+    load();
+  };
+  // Purane app mein team member hatane ka koi function nahi tha — backend aane tak
   const remove = () => {
-    setTeam((t) => t.filter((m) => m.name !== modal.remove));
-    say(`${modal.remove} removed from the team`);
+    say("Removing a teammate isn’t available yet — coming soon", true);
     setModal(null);
   };
-  const save = () => {
-    const slug = (agency.trim() || "Geek Creative Agency").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    const url = `bountythreads.geekcreativeagency.com/a/${slug}`;
+  const save = async () => {
+    const slug = slugify(prof?.slug || agency || me?.org_name || "");
+    if (!slug) return say("Add your agency name first — it becomes your public link.", true);
+    setBusy(true);
+    const row = { slug, display_name: agency.trim() || null, website: site.trim() || null, is_public: prof ? prof.is_public !== false : true, updated_at: new Date().toISOString() };
+    if (me?.org_id) row.org_id = me.org_id;
+    const { error } = await sb.from("org_profiles").upsert(row, { onConflict: "org_id" });
+    setBusy(false);
+    if (error) return say(error.code === "23505" || /duplicate|unique/i.test(error.message) ? "That link is taken — change the agency name." : errText(error), true);
+    setProf((p) => ({ ...(p || {}), ...row }));
+    const url = `${window.location.host}/o/${slug}`;
     setLink(url);
     try {
-      navigator.clipboard?.writeText(`https://${url}`);
+      await navigator.clipboard?.writeText(`${window.location.protocol}//${url}`);
     } catch {
       /* ignore */
     }
     say("Saved — link copied");
   };
+
+  const INTEGRATIONS = [
+    { name: "Instagram", sub: "Creators connect with Instagram Login" },
+    { name: "WhatsApp", sub: sw ? (sw.wa_on === false ? "Paused · automatic messages off" : "Connected · Cloud API") : "…" },
+    { name: "Email", sub: sw ? (sw.email_on === false ? "Paused · automatic emails off" : "Connected") : "…" },
+  ];
 
   return (
     <AdminShell>
@@ -77,14 +163,15 @@ export default function SettingsTeam() {
             { label: "Since", w: 332 },
             { label: "", w: 293 },
           ]}
-          rows={team.map((m) => [
-            <b key="n">{m.name}</b>,
-            m.role,
-            m.since,
-            m.role === "Owner" ? (
+          empty={emptyState({ loading: team.loading, error: team.error, reload: load, empty: "Just you so far." })}
+          rows={team.rows.map((m) => [
+            <b key="n" title={m.email || ""}>{m.name || m.email}</b>,
+            ROLE_LABEL[m.role] || m.role || "Member",
+            fmtDate(m.created_at),
+            m.role === "owner" ? (
               ""
             ) : (
-              <button key="r" type="button" className="sk-link" onClick={() => setModal({ remove: m.name })}>
+              <button key="r" type="button" className="sk-link" onClick={() => setModal({ remove: m.name || m.email })}>
                 Remove
               </button>
             ),
@@ -103,13 +190,20 @@ export default function SettingsTeam() {
               { label: "Sent", w: 200 },
               { label: "", w: 225 },
             ]}
-            rows={invites.map((v, i) => [
+            rows={invites.map((v) => [
               <b key="e">{v.email}</b>,
-              v.role,
-              v.sent,
-              <button key="c" type="button" className="sk-link" onClick={() => setInvites((l) => l.filter((_, j) => j !== i))}>
-                Cancel invite
-              </button>,
+              ROLE_LABEL[v.role] || v.role || "Creator",
+              fmtDate(v.created_at),
+              <span key="c" className="st-acts">
+                {v.token && (
+                  <button type="button" className="sk-link" onClick={() => copyInvite(v.token)}>
+                    Copy link
+                  </button>
+                )}
+                <button type="button" className="sk-link" onClick={() => cancelInvite(v.id)}>
+                  Cancel invite
+                </button>
+              </span>,
             ])}
           />
         ) : (
@@ -132,7 +226,7 @@ export default function SettingsTeam() {
         title="Public workspace page"
         sub="Your agency page brands see when you share a link."
         action={
-          <button type="button" className="ad-btn ad-btn--primary" onClick={save}>
+          <button type="button" className="ad-btn ad-btn--primary" onClick={save} disabled={busy}>
             Save &amp; get link
           </button>
         }
@@ -143,7 +237,7 @@ export default function SettingsTeam() {
         </div>
         {link && (
           <p className="st-link">
-            🔗 <a href={`https://${link}`} target="_blank" rel="noreferrer">{link}</a>
+            🔗 <a href={`//${link}`} target="_blank" rel="noreferrer">{link}</a>
           </p>
         )}
       </Panel>
@@ -152,7 +246,7 @@ export default function SettingsTeam() {
         <div className="ad-overlay" onClick={() => setModal(null)}>
           <form className="ad-modal st-modal" onClick={(e) => e.stopPropagation()} onSubmit={invite} role="dialog" aria-label="Invite teammate">
             <h2 className="ad-h2">Invite teammate</h2>
-            <p className="st-modal__p">They get an email to join Geek OS with you.</p>
+            <p className="st-modal__p">When they sign up with this email (using the invite link), they join your workspace.</p>
             <label className="ad-label" htmlFor="st-email">
               Email
             </label>
@@ -161,17 +255,19 @@ export default function SettingsTeam() {
               Role
             </label>
             <select id="st-role" className="ad-input" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option>Admin</option>
-              <option>Campaign manager</option>
-              <option>Viewer</option>
+              {ROLES.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
             </select>
             {err && <p className="st-err">{err}</p>}
             <div className="st-modal__btns">
               <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setModal(null)}>
                 Cancel
               </button>
-              <button type="submit" className="ad-btn ad-btn--primary">
-                Send invite
+              <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+                {busy ? "Sending…" : "Send invite"}
               </button>
             </div>
           </form>
@@ -200,6 +296,7 @@ export default function SettingsTeam() {
         .st-team .sk-t th { height: 35px; }
         .st-team.sk-panel { padding-bottom: 25px; }
         .st-inv { padding-bottom: 24px; }
+        .st-acts { display: inline-flex; gap: 16px; }
         .st-empty { padding: 28px 0 8px; text-align: center; font-size: 14px; color: #8a8aa0; }
         .st-int { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
         .st-int div { display: flex; flex-direction: column; min-height: 78px; padding: 16px 16px 12px; border-radius: 14px; background: var(--ad-soft-2); }

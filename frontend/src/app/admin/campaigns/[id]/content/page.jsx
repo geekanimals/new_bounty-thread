@@ -4,39 +4,54 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { campaignById } from "@/components/admin/data";
+import { useRpc, errText } from "@/lib/supabase";
+import { useCampaign, fmtDate } from "@/components/admin/campaign/live";
 
-const ITEMS = [
-  { t: "Review submitted video drafts", s: "Beardo Detan Express Kit · 21 items", href: "/admin/action-queue/content" },
-  { t: "Review Circle campaign submissions", s: "Circle Diwali Declutter · Barter · 9 items", href: "/admin/action-queue/content" },
-];
-
-/* Figma: Campaign workspace — Content submissions */
+/* Figma: Campaign workspace — Content submissions (barter_tracker: Video submitted wale + sheet invites) */
 export default function WorkspaceContent() {
   const { id } = useParams();
-  const c = campaignById(id);
+  const c = { id };
+  const { c: camp } = useCampaign(id);
+  const on = !!id && id !== "sample";
+  const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !on });
+  const subs = (bt.data?.creators || []).filter((x) => x.stage === "content_submitted").map((x) => {
+    const cr = x.creator || {};
+    const who = cr.username ? "@" + cr.username : cr.name || "Creator";
+    return { k: "p-" + x.participation_id, t: `${who} — video draft to review`, s: `${camp?.name || "Campaign"} · submitted ${fmtDate(x.submission?.submitted_at)}${x.submission?.rounds > 1 ? ` · round ${x.submission.rounds}` : ""}`, video: x.submission?.url };
+  });
+  const sheet = (people.data?.invites || []).filter((i) => i.status === "video_submitted").map((i) => ({ k: "i-" + i.invite_id, t: `${i.handle ? "@" + i.handle : i.name || "Creator"} — video from the sheet`, s: `${camp?.name || "Campaign"} · not on Geek OS yet`, video: i.video_url }));
+  const ITEMS = [...subs, ...sheet];
   return (
     <AdminShell>
-      <WorkspaceHead id={c.id} />
+      <WorkspaceHead id={id} campaign={camp} />
       <section className="ad-card wct">
         <h2 className="ad-h2">Content submissions</h2>
         <p className="wct-sub">Review against brief, ad disclosure, rights and creator consent.</p>
         <div className="wct-list">
           {ITEMS.map((i) => (
-            <div key={i.t} className="wct-row">
+            <div key={i.k} className="wct-row">
               <span className="wct-ic">▶️</span>
               <div className="wct-main">
                 <b>{i.t}</b>
                 <span>{i.s}</span>
               </div>
-              <Link href={i.href} className="ad-btn ad-btn--ghost wct-btn">
+              {i.video && (
+                <a href={i.video} target="_blank" rel="noopener noreferrer" className="wct-watch">
+                  ▶ Watch
+                </a>
+              )}
+              <Link href={`/admin/campaigns/${id}/creators/${i.k}`} className="ad-btn ad-btn--ghost wct-btn">
                 Review →
               </Link>
             </div>
           ))}
+          {!ITEMS.length && <p className="wct-empty">{bt.error ? errText(bt.error) : bt.loading ? "Loading submissions…" : "No videos waiting for review."}</p>}
         </div>
       </section>
       <style>{`
+        .wct-watch { font-size: 13px; font-weight: 800; color: #6657e9; }
+        .wct-empty { padding: 20px 4px; font-size: 13px; color: var(--ad-muted); }
         .wct { padding: 22px 22px 30px; }
         .wct-sub { margin-top: 8px; font-size: 12px; color: var(--ad-muted); }
         .wct-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }

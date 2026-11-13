@@ -4,57 +4,31 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
 import ApprovalTabs from "@/components/brands/ApprovalTabs";
-import { getCampaign, ACCOUNT_MANAGER, USER } from "@/components/brands/data";
-import { Check, Chat, Send, Calendar, Users, Target, Film, Wallet, Sparkle, FileText } from "@/components/ui/Icons";
+import { BrLoading, BrEmpty, BrError, useToast } from "@/components/brands/BrandStates";
+import { useApprovals, useBrand, brandName, B_REQ, bDate, bHero } from "@/services/brand";
+import { Check, Chat, Send, Calendar, Target, Sparkle, Building, Plus } from "@/components/ui/Icons";
 
-// Geek ka bheja hua plan + quote (dummy)
-const SUMMARY = [
-  { icon: Target, label: "Goal", value: "Sales" },
-  { icon: Users, label: "Creators", value: "~30 · 50K–200K followers" },
-  { icon: Film, label: "Content", value: "1 Reel + 2 Stories each" },
-  { icon: Wallet, label: "Budget", value: "₹6,00,000" },
-  { icon: Calendar, label: "Dates", value: "15 Nov – 15 Dec 2026" },
-];
-const QUOTE = [
-  { item: "Creator fees — 30 creators (Reels + Stories)", amount: "₹4,20,000" },
-  { item: "Campaign management (Geek)", amount: "₹60,000" },
-  { item: "Content rights — 90 days", amount: "₹28,474" },
-];
-const PLAN = [
-  "Week 1 — Geek shortlists 40 bridal & makeup creators, you approve ~30",
-  "Week 2 — products ship, creators send videos for your OK",
-  "Weeks 3–4 — posts go live in waves around the wedding dates",
-  "Live numbers in Campaigns; final report on 18 Dec",
-];
-const START_THREAD = [
-  { me: false, text: "Hi Priya! Plan and quote for Wedding Season Looks are ready. Happy to tweak anything before we start.", time: "Yesterday, 6:40 pm" },
-];
-
-/** /brands/approvals/requests — campaign request ka Geek plan + quote approve karo */
+/**
+ * /brands/approvals/requests — brand ke bheje campaign requests aur Geek team ka jawab
+ * (purana paintCampaignList "requests": name, status RS, admin_note). Plan / quote / chat ka backend purane app mein nahi tha → "Coming soon".
+ */
 export default function CampaignRequests() {
-  const c = getCampaign("wedding-season-looks");
-  const [approved, setApproved] = useState(false);
+  const a = useApprovals();
+  const b = useBrand();
+  const me = (b.portal && b.portal.me) || {};
   const [asking, setAsking] = useState(false);
   const [text, setText] = useState("");
-  const [thread, setThread] = useState(START_THREAD);
   const chatRef = useRef(null);
+  const [toast, say] = useToast();
 
-  // Mobile par chat neeche hai — button dabane par wahan scroll
   const openAsk = () => {
     setAsking(true);
     setTimeout(() => chatRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
-
   const send = (e) => {
     e.preventDefault();
-    const t = text.trim();
-    if (!t) return;
-    const now = new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
-    setThread((m) => [...m, { me: true, text: t, time: `Today, ${now}` }]);
-    setText("");
-    setTimeout(() => {
-      setThread((m) => [...m, { me: false, text: "Got it — I’ll update the plan and reply here within 2 hours.", time: `Today, ${now}` }]);
-    }, 900);
+    if (!text.trim()) return;
+    say("Coming soon — questions here. For now, message your Geek account manager on WhatsApp.");
   };
 
   return (
@@ -62,148 +36,142 @@ export default function CampaignRequests() {
       <title>Campaign requests — Geek OS Brand</title>
       <ApprovalTabs />
 
-      <div className="rq-grid">
-        <article className="br-card rq-card">
-          <div className="rq-cover" style={{ background: c.hero }}>
-            <span className={`rq-status ${approved ? "is-ok" : ""}`}>
-              {approved ? <Check size={12} /> : <Sparkle size={12} />}
-              {approved ? "Plan approved — Geek is starting" : "Geek replied — plan & quote ready"}
-            </span>
-            <h2>{c.title}</h2>
-            <p>
-              {c.product} · requested by {USER.name}
-            </p>
+      {a.loading ? (
+        <BrLoading rows={4} />
+      ) : a.error ? (
+        <BrError error={a.error} onRetry={a.reload} />
+      ) : !a.requests.length ? (
+        <BrEmpty title="No campaign requests yet" text="Tell the Geek team about your next campaign — they turn it into a plan and a creator shortlist.">
+          {a.can && (
+            <Link href="/brands/campaigns/new" className="br-btn br-btn--primary br-btn--sm">
+              <Plus size={14} /> Request a campaign
+            </Link>
+          )}
+        </BrEmpty>
+      ) : (
+        <div className="rq-grid">
+          <div className="rq-list">
+            {a.requests.map((r) => {
+              const ok = r.status === "converted";
+              const open = r.status === "new" || r.status === "in_review";
+              return (
+                <article key={r.request_id} className="br-card rq-card">
+                  <div className="rq-cover" style={{ background: bHero(r.request_id) }}>
+                    <span className={`rq-status ${ok ? "is-ok" : r.status === "declined" ? "is-no" : ""}`}>
+                      {ok ? <Check size={12} /> : <Sparkle size={12} />}
+                      {B_REQ[r.status] || r.status}
+                    </span>
+                    <h2>{r.name}</h2>
+                    <p>
+                      {brandName(b)}
+                      {me.name ? ` · requested by ${me.name}` : ""}
+                    </p>
+                  </div>
+
+                  <div className="rq-body">
+                    <h3 className="rq-h">Your request</h3>
+                    <div className="rq-sum">
+                      <div>
+                        <span>
+                          <Target size={14} />
+                        </span>
+                        <small>Status</small>
+                        <strong>{B_REQ[r.status] || r.status}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          <Calendar size={14} />
+                        </span>
+                        <small>Sent on</small>
+                        <strong>{bDate(r.created_at)}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          <Building size={14} />
+                        </span>
+                        <small>Brand</small>
+                        <strong>{brandName(b)}</strong>
+                      </div>
+                    </div>
+
+                    <h3 className="rq-h">Geek’s reply</h3>
+                    <p className="rq-note">
+                      {r.admin_note ||
+                        (ok
+                          ? "Your campaign is set up — you’ll find it in Campaigns."
+                          : r.status === "declined"
+                            ? "The Geek team couldn’t take this one up."
+                            : "The Geek team has your request — you’ll get a plan and a creator shortlist here, on WhatsApp and by email.")}
+                    </p>
+
+                    {ok ? (
+                      <div className="rq-done">
+                        <span>
+                          <Check size={16} />
+                        </span>
+                        <div>
+                          <strong>Campaign set up</strong>
+                          <small>Geek’s creator picks show up in Approvals as they join.</small>
+                        </div>
+                        <Link href="/brands/campaigns" className="br-btn br-btn--ghost br-btn--sm">
+                          Open campaigns
+                        </Link>
+                      </div>
+                    ) : open ? (
+                      <div className="rq-actions">
+                        <button type="button" className="br-btn br-btn--ghost" onClick={openAsk}>
+                          <Chat size={14} /> Ask Geek a question
+                        </button>
+                        <button type="button" className="br-btn br-btn--primary" onClick={() => say("Coming soon — approving the plan & quote here. The Geek team confirms with you directly for now.")}>
+                          <Check size={14} /> Approve plan &amp; quote
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
-          <div className="rq-body">
-            <h3 className="rq-h">Your request</h3>
-            <div className="rq-sum">
-              {SUMMARY.map(({ icon: Icon, label, value }) => (
-                <div key={label}>
-                  <span>
-                    <Icon size={14} />
-                  </span>
-                  <small>{label}</small>
-                  <strong>{value}</strong>
-                </div>
-              ))}
+          <aside className="rq-side">
+            <div className="br-card rq-am">
+              <span className="br-av" style={{ background: "linear-gradient(135deg,#8b5cf6,#c084fc)" }}>
+                G
+              </span>
+              <span>
+                <strong>Geek team</strong>
+                <small>Your Geek account manager · replies on WhatsApp and email</small>
+              </span>
             </div>
 
-            <h3 className="rq-h">Geek’s plan</h3>
-            <ol className="rq-plan">
-              {PLAN.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ol>
-
-            <h3 className="rq-h">Quote</h3>
-            <div className="rq-quote">
-              {QUOTE.map((q) => (
-                <p key={q.item}>
-                  <span>{q.item}</span>
-                  <strong>{q.amount}</strong>
-                </p>
-              ))}
-              <p className="rq-quote__sub">
-                <span>Subtotal</span>
-                <strong>₹5,08,474</strong>
-              </p>
-              <p className="rq-quote__sub">
-                <span>GST 18%</span>
-                <strong>₹91,526</strong>
-              </p>
-              <p className="rq-quote__total">
-                <span>Total</span>
-                <strong>₹6,00,000</strong>
-              </p>
-              <small>Billed in 3 milestones — 40% at start, 40% when half the posts are live, 20% at the report.</small>
-            </div>
-
-            {approved ? (
-              <div className="rq-done">
-                <span>
-                  <Check size={16} />
-                </span>
+            <div className="br-card rq-chat" ref={chatRef}>
+              <div className="br-card__head">
                 <div>
-                  <strong>Plan & quote approved</strong>
-                  <small>Geek is shortlisting creators — they’ll show up in Approvals within 48 hours. First bill comes after you approve creators.</small>
+                  <h3 className="br-card__title">Questions</h3>
+                  <p className="br-card__sub">Replies here and on WhatsApp</p>
                 </div>
-                <Link href={`/brands/campaigns/${c.id}`} className="br-btn br-btn--ghost br-btn--sm">
-                  Open campaign
-                </Link>
               </div>
-            ) : (
-              <div className="rq-actions">
-                <button type="button" className="br-btn br-btn--ghost" onClick={openAsk}>
-                  <Chat size={14} /> Ask Geek a question
+              <div className="rq-thread">
+                <p>Hi! Ask anything about your request — dates, creators, budget.</p>
+              </div>
+              {asking ? (
+                <form className="rq-form" onSubmit={send}>
+                  <textarea className="br-input" rows={3} value={text} autoFocus onChange={(e) => setText(e.target.value)} placeholder="e.g. Can we add 5 more creators from Jaipur?" />
+                  <button type="submit" className="br-btn br-btn--primary br-btn--sm" disabled={!text.trim()}>
+                    <Send size={13} /> Send
+                  </button>
+                </form>
+              ) : (
+                <button type="button" className="br-btn br-btn--soft br-btn--block" onClick={openAsk}>
+                  Ask a question
                 </button>
-                <button type="button" className="br-btn br-btn--primary" onClick={() => setApproved(true)}>
-                  <Check size={14} /> Approve plan &amp; quote
-                </button>
-              </div>
-            )}
-          </div>
-        </article>
-
-        <aside className="rq-side">
-          <div className="br-card rq-am">
-            <span className="br-av" style={{ background: ACCOUNT_MANAGER.av }}>
-              {ACCOUNT_MANAGER.initials}
-            </span>
-            <span>
-              <strong>{ACCOUNT_MANAGER.name}</strong>
-              <small>Your Geek account manager · {ACCOUNT_MANAGER.note.toLowerCase()}</small>
-            </span>
-          </div>
-
-          <div className="br-card rq-chat" ref={chatRef}>
-            <div className="br-card__head">
-              <div>
-                <h3 className="br-card__title">Questions</h3>
-                <p className="br-card__sub">Replies here and on WhatsApp</p>
-              </div>
+              )}
             </div>
-            <div className="rq-thread">
-              {thread.map((m, i) => (
-                <p key={i} className={m.me ? "is-me" : ""}>
-                  {m.text}
-                  <small>{m.time}</small>
-                </p>
-              ))}
-            </div>
-            {(asking || thread.length > 1) && (
-              <form className="rq-form" onSubmit={send}>
-                <textarea
-                  className="br-input"
-                  rows={3}
-                  value={text}
-                  autoFocus={asking}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="e.g. Can we add 5 more creators from Jaipur?"
-                />
-                <button type="submit" className="br-btn br-btn--primary br-btn--sm" disabled={!text.trim()}>
-                  <Send size={13} /> Send
-                </button>
-              </form>
-            )}
-            {!asking && thread.length === 1 && (
-              <button type="button" className="br-btn br-btn--soft br-btn--block" onClick={openAsk}>
-                Ask a question
-              </button>
-            )}
-          </div>
+          </aside>
+        </div>
+      )}
 
-          <div className="br-card rq-files">
-            <h3 className="br-card__title">Attached by Geek</h3>
-            <p>
-              <FileText size={14} /> Wedding Season plan.pdf <small>1.8 MB</small>
-            </p>
-            <p>
-              <FileText size={14} /> Quote GEEK-Q-0217.pdf <small>220 KB</small>
-            </p>
-          </div>
-        </aside>
-      </div>
+      {toast}
 
       <style>{`
         .rq-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
@@ -261,7 +229,10 @@ export default function CampaignRequests() {
           .rq-sum { grid-template-columns: 1fr 1fr; }
           .rq-actions .br-btn { flex: 1; }
         }
-      `}</style>
+              .rq-list { display: grid; gap: 18px; min-width: 0; }
+        .rq-status.is-no { color: var(--br-muted); }
+        .rq-note { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--br-text); white-space: pre-wrap; }
+`}</style>
     </BrandShell>
   );
 }

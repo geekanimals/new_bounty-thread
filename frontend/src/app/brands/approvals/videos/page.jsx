@@ -1,13 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
 import ApprovalTabs from "@/components/brands/ApprovalTabs";
-import { VIDEOS, getCreator } from "@/components/brands/data";
-import { Play, Clock, Check, AlertTriangle, ArrowRight } from "@/components/ui/Icons";
+import { BrLoading, BrEmpty, BrError } from "@/components/brands/BrandStates";
+import { useApprovals, bWho, bGrad, bAgo } from "@/services/brand";
+import { Play, Clock, Check, ArrowRight } from "@/components/ui/Icons";
 
-/** /brands/approvals/videos — creators ke videos jo aapke OK ka wait kar rahe hain */
+/** /brands/approvals/videos — creators ke videos jo aapke OK ka wait kar rahe hain (purana paintApprovals "videos") */
 export default function VideosToReview() {
+  const a = useApprovals();
+  const [now, setNow] = useState(0);
+  useEffect(() => setNow(Date.now()), []); // "2 h ago" ke liye — render mein Date.now() nahi
+
   return (
     <BrandShell>
       <title>Videos to review — Geek OS Brand</title>
@@ -17,52 +23,53 @@ export default function VideosToReview() {
         <Clock size={14} /> Videos go live only after you approve them. Geek nudges creators if you ask for changes.
       </p>
 
-      <div className="vr-list">
-        {VIDEOS.map((v) => {
-          const c = getCreator(v.id);
-          const ok = v.checks.filter((x) => x.ok).length;
-          return (
-            <article key={v.id} className="br-card vr-card">
-              <Link href={`/brands/approvals/video/${v.id}`} className="vr-thumb" style={{ background: v.g }} aria-label={`Watch ${c.name}'s video`}>
-                <span className="vr-thumb__play">
-                  <Play size={16} />
-                </span>
-                <span className="vr-thumb__len">{v.length}</span>
-              </Link>
+      {a.loading ? (
+        <BrLoading rows={4} />
+      ) : a.error ? (
+        <BrError error={a.error} onRetry={a.reload} />
+      ) : !a.videos.length ? (
+        <BrEmpty title="No videos to review" text="When a creator sends their video, it shows up here. You approve it, or ask for changes, before anything posts." />
+      ) : (
+        <div className="vr-list">
+          {a.videos.map((v) => {
+            const c = bWho(v.creator);
+            const href = `/brands/approvals/video/${v.participation_id}`;
+            return (
+              <article key={v.participation_id} className="br-card vr-card">
+                <Link href={href} className="vr-thumb" style={{ background: bGrad(v.participation_id) }} aria-label={`Watch ${c.name}'s video`}>
+                  <span className="vr-thumb__play">
+                    <Play size={16} />
+                  </span>
+                  <span className="vr-thumb__len">Video</span>
+                </Link>
 
-              <div className="vr-body">
-                <div className="vr-head">
-                  <span className="br-av" style={{ background: c.av }}>
-                    {c.initials}
-                  </span>
-                  <span className="vr-name">
-                    <strong>{c.name}</strong>
-                    <small>
-                      {c.handle} · {v.campaign}
-                    </small>
-                  </span>
-                  <span className="br-badge br-badge--orange">{v.due}</span>
-                </div>
-                <p className="vr-cap">{v.caption}</p>
-                <div className="vr-meta">
-                  <span className="vr-check">
-                    <Check size={12} /> {ok} of {v.checks.length} brief checks pass
-                  </span>
-                  {ok < v.checks.length && (
-                    <span className="vr-warn">
-                      <AlertTriangle size={12} /> {v.checks.length - ok} to look at
+                <div className="vr-body">
+                  <div className="vr-head">
+                    <span className="br-av" style={{ background: c.av }}>
+                      {c.initials}
                     </span>
-                  )}
+                    <span className="vr-name">
+                      <strong>{c.name}</strong>
+                      <small>{[c.handle, v.campaign].filter(Boolean).join(" · ")}</small>
+                    </span>
+                    <span className="br-badge br-badge--orange">Sent {bAgo(v.submitted_at, now)}</span>
+                  </div>
+                  <p className="vr-cap">{v.note || "No note from the creator — open the video to watch it."}</p>
+                  <div className="vr-meta">
+                    <span className="vr-check">
+                      <Check size={12} /> Waiting for your OK
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <Link href={`/brands/approvals/video/${v.id}`} className="br-btn br-btn--primary vr-watch">
-                Watch &amp; review <ArrowRight size={14} />
-              </Link>
-            </article>
-          );
-        })}
-      </div>
+                <Link href={href} className="br-btn br-btn--primary vr-watch">
+                  {a.can ? "Watch & review" : "Watch"} <ArrowRight size={14} />
+                </Link>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
       <style>{`
         .vr-note { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 11px 14px; border-radius: 12px; background: var(--br-blue-bg); color: var(--br-blue); font-size: 12.5px; font-weight: 500; }

@@ -4,24 +4,24 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Download, FileText, ChevronRight, Check } from "@/components/ui/Icons";
-import { STATUS } from "@/components/brands/data";
+import { campaignCsv, campaignPdf } from "@/services/brand";
 
 /**
  * Campaign ke 5 pages (Creators, Analytics, Links & sales, Brief, Activity) ka
  * common upar wala hissa: rangeen hero + funnel + tabs.
+ * c = bCampaignHead(api.brand_campaign) — Excel / PDF purane campCsv / campPdf jaise.
  */
 export default function CampaignTop({ c }) {
   const pathname = usePathname() || "";
   const [toast, setToast] = useState("");
   const base = `/brands/campaigns/${c.id}`;
-  const st = STATUS[c.status];
 
   const tabs = [
     { label: "Creators", href: base, count: c.status === "review" ? null : c.creators },
     { label: "Analytics", href: `${base}/analytics` },
     { label: "Links & sales", href: `${base}/links` },
     { label: "Brief", href: `${base}/brief` },
-    { label: "Activity", href: `${base}/activity`, count: c.status === "review" ? null : 6 },
+    { label: "Activity", href: `${base}/activity`, count: c.status === "review" ? null : c.activity },
   ];
   const funnel = [
     { n: c.funnel.invited, label: "Invited" },
@@ -31,9 +31,16 @@ export default function CampaignTop({ c }) {
     { n: c.funnel.live, label: "Live", green: true },
   ];
 
-  const download = (what) => {
-    setToast(`${what} for ${c.title} is downloading…`);
-    setTimeout(() => setToast(""), 2400);
+  const flash = (t) => {
+    setToast(t);
+    setTimeout(() => setToast(""), 2600);
+  };
+  // purana campCsv / campPdf
+  const download = async (what) => {
+    if (!c.id) return;
+    if (what === "Excel") flash(`Excel for ${c.title} is downloading…`);
+    const r = what === "Excel" ? await campaignCsv(c.id) : await campaignPdf(c.id);
+    if (r.error) flash(r.error.message || String(r.error));
   };
 
   return (
@@ -41,7 +48,7 @@ export default function CampaignTop({ c }) {
       <section className="ct-hero" style={{ background: c.hero }}>
         <div className="ct-hero__text">
           <p className="ct-hero__meta">
-            <span className={`ct-pill ct-pill--${c.status}`}>{st.label}</span>
+            <span className={`ct-pill ct-pill--${c.status}`}>{c.statusLabel}</span>
             {c.dates}
             {c.status === "live" && c.daysLeft > 0 && ` · ${c.daysLeft} days left`}
           </p>

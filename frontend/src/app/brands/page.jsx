@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Facebook, Send, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, TrendUp, Building } from "@/components/ui/Icons";
+import { useBrand, signIn, startFacebookLogin, hasFacebookReturn, finishFacebookLogin } from "@/services/brand";
 
 const FACES = [
   { i: "MI", g: "linear-gradient(135deg,#ff8fb1,#ffc3d6)" },
@@ -12,23 +13,91 @@ const FACES = [
   { i: "AK", g: "linear-gradient(135deg,#b84dff,#e39bff)" },
 ];
 
-/** /brands — brand login (email + password ya Facebook) */
+/**
+ * /brands — brand login (purana login.js brand door):
+ *  - email + password (Supabase Auth) → sirf members.role "brand" (warna logout + message)
+ *  - "Continue with Facebook" → brand-fb-login; wapsi /app.html → /legacy → /brands?code&state → yahin login poora
+ *  - login ho chuka ho → seedha dashboard (router.replace — form flash nahi, Back se login form nahi)
+ *  - login ke baad Facebook link / Instagram search ki wapsi (?state=fbbrand:link:… / facebook:…) → settings / discovery par aage
+ */
 export default function BrandSignIn() {
   const router = useRouter();
-  const [email, setEmail] = useState("priya.menon@nykaa.com");
+  const b = useBrand();
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [fbBusy, setFbBusy] = useState(false);
+  const [fbBack, setFbBack] = useState(false); // Facebook se wapsi chal rahi hai — form mat dikhao
 
-  const submit = (e) => {
+  // Facebook login ki wapsi (state "fbbrand:login:…")
+  useEffect(() => {
+    if (!hasFacebookReturn()) return;
+    setFbBack(true);
+    finishFacebookLogin().then((m) => {
+      if (m) {
+        setErr(m);
+        setFbBack(false);
+      }
+      // m === "" → login ho gaya; neeche wala gate dashboard bhej dega
+    });
+  }, []);
+
+  // Guest gate: login hai → dashboard (ya OAuth wapsi wala page)
+  useEffect(() => {
+    if (!b.ready) return;
+    if (b.error && !b.loggedIn) setErr(b.error);
+    if (!b.loggedIn) return;
+    const q = new URLSearchParams(window.location.search);
+    const st = q.get("state") || "";
+    if (/^fbbrand:link:/.test(st)) return router.replace("/brands/settings" + window.location.search);
+    if (/^facebook:/.test(st)) return router.replace("/brands/discovery" + window.location.search);
+    if (/^fbbrand:login:/.test(st)) return; // finishFacebookLogin URL saaf karke khud aage badhega
+    router.replace("/brands/dashboard");
+  }, [b, router]);
+
+  const submit = async (e) => {
     e.preventDefault();
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setErr("Enter your work email.");
     if (!pass.trim()) return setErr("Enter your password.");
     setErr("");
     setBusy(true);
-    setTimeout(() => router.push("/brands/dashboard"), 500);
+    try {
+      await signIn(email, pass);
+      router.replace("/brands/dashboard");
+    } catch (er) {
+      setErr(er.message || String(er));
+      setBusy(false);
+    }
   };
+
+  const facebook = async () => {
+    setErr("");
+    setFbBusy(true);
+    try {
+      await startFacebookLogin();
+    } catch (er) {
+      setErr(er.message || String(er));
+      setFbBusy(false);
+    }
+  };
+
+  // Session check / Facebook wapsi / login ho chuka → form kabhi nahi dikhta
+  if (!b.ready || b.loggedIn || fbBack) {
+    return (
+      <div className="bl-wait" role="status" aria-label="Loading">
+        <span className="bl-logo__mark">g</span>
+        <i />
+        <style>{`
+          .bl-wait { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 16px; background: #fff; }
+          .bl-wait .bl-logo__mark { width: 44px; height: 44px; border-radius: 12px; background: var(--br-grad); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 22px; }
+          .bl-wait i { width: 120px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, #e7e0ff 0%, #6d4aff 50%, #e7e0ff 100%); background-size: 200% 100%; animation: blWait 1s infinite linear; }
+          @keyframes blWait { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="bl">
@@ -86,8 +155,8 @@ export default function BrandSignIn() {
           <h2>Welcome back</h2>
           <p className="bl-sub">Sign in to see your campaigns, approvals and results.</p>
 
-          <button type="button" className="bl-fb" onClick={() => router.push("/brands/dashboard")}>
-            <Facebook size={15} /> Continue with Facebook
+          <button type="button" className="bl-fb" onClick={facebook} disabled={fbBusy}>
+            <Facebook size={15} /> {fbBusy ? "Opening Facebook…" : "Continue with Facebook"}
           </button>
 
           <p className="bl-or">
@@ -182,6 +251,7 @@ export default function BrandSignIn() {
           border: 0; border-radius: 10px; background: var(--br-fb); color: #fff; font-size: 14px; font-weight: 700;
         }
         .bl-fb:hover { background: #0f68dc; }
+        .bl-fb:disabled { opacity: .75; }
         .bl-or { position: relative; margin: 20px 0 16px; text-align: center; font-size: 11.5px; color: var(--br-faint); }
         .bl-or::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--br-border); }
         .bl-or span { position: relative; padding: 0 10px; background: #fff; }

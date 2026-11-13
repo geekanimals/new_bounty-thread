@@ -3,25 +3,24 @@
 import { useMemo, useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
-import { SettingsTabs, Panel, Table } from "@/components/admin/settings/kit";
+import { SettingsTabs, Panel, Table, fmtDate, fmtNum, emptyState } from "@/components/admin/settings/kit";
+import { useRpc } from "@/lib/supabase";
 
-const WS = [
-  ["Geek Creative Agency", 3, 298, 10, 57, "13 Sep 2026"],
-  ["Beardo", 2, 0, 2, 0, "14 Sep 2026"],
-  ["Pixel Bloom Media", 1, 0, 0, 0, "12 Nov 2026"],
-  ["My Creator Space", 1, 0, 0, 0, "12 Nov 2026"],
-];
-
-/** /admin/settings/workspaces — har agency, brand, creator workspace */
+/** /admin/settings/workspaces — har agency, brand, creator workspace (admin_list_orgs) */
 export default function SettingsWorkspaces() {
+  const ws = useRpc("admin", "admin_list_orgs");
   const [q, setQ] = useState("");
-  const rows = useMemo(() => WS.filter((w) => w[0].toLowerCase().includes(q.trim().toLowerCase())), [q]);
+  const all = useMemo(() => ws.data || [], [ws.data]);
+  const rows = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return all.filter((w) => !t || String(w.org_name || "").toLowerCase().includes(t) || String(w.org_id || "").includes(t));
+  }, [all, q]);
   return (
     <AdminShell>
       <PageHead title="Settings" sub="Platform settings, team, links and system tools." />
       <SettingsTabs />
       <Panel
-        title="Workspaces · 318"
+        title={`Workspaces · ${ws.loading ? "…" : fmtNum(all.length)}`}
         sub="Every agency, brand and creator workspace."
         className="sw-panel"
         action={<input className="ad-input sw-q" placeholder="Search workspace…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search workspace" />}
@@ -29,7 +28,7 @@ export default function SettingsWorkspaces() {
         <Table
           rowH={48}
           minW={760}
-          empty={`No workspace matches “${q}”.`}
+          empty={emptyState({ loading: ws.loading, error: ws.error, reload: ws.reload, empty: q ? `No workspace matches “${q}”.` : "No workspaces yet." })}
           cols={[
             { label: "Workspace", w: 301 },
             { label: "Members", w: 143 },
@@ -38,7 +37,22 @@ export default function SettingsWorkspaces() {
             { label: "Pending", w: 136 },
             { label: "Created", w: 176 },
           ]}
-          rows={rows.map((w) => [<b key="n">{w[0]}</b>, ...w.slice(1)])}
+          rows={rows.map((w) => [
+            <b key="n" title={w.org_id}>
+              {w.org_name || "—"}
+            </b>,
+            w.members ?? 0,
+            w.creators ?? 0,
+            w.campaigns ?? 0,
+            w.pending ? (
+              <span key="p" className="ad-badge ad-badge--orange">
+                {w.pending}
+              </span>
+            ) : (
+              0
+            ),
+            fmtDate(w.created_at),
+          ])}
         />
       </Panel>
       <style>{`

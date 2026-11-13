@@ -6,7 +6,7 @@ import Wizard, { Field, useDraft } from "@/components/admin/campaign/Wizard";
 export default function NewCampaignEligibility() {
   const { d, set } = useDraft();
   return (
-    <Wizard step={3}>
+    <Wizard step={3} draft={{ d, set }}>
       <h2 className="ne-h">Eligibility</h2>
       <p className="ne-sub">Make eligibility transparent and relevant to the brief. Avoid unnecessary sensitive demographic filters.</p>
       <div className="nc-grid">

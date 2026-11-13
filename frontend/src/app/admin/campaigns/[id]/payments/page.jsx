@@ -1,84 +1,209 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { Panel, SubTabs, Note, MiniStats, TextBtn, useToast, downloadFile } from "@/components/admin/campaign2/kit";
+import { Panel, SubTabs, Note, MiniStats, TextBtn, TableState, useToast, downloadFile, readSheetFile, inr, when } from "@/components/admin/campaign2/kit";
+import { useRpc, rpc, errText } from "@/lib/supabase";
+import PayModal, { who, readyOuts, statusOf } from "@/components/admin/campaign2/PayModal";
 
-const ROWS = [
-  { id: 1, name: "Nisha Rao", handle: "@nishastories", fee: 2000, adv: "50%", paid: 1000, due: 1000, payout: "UPI ✓ verified", status: "Due now" },
-  { id: 2, name: "Kabir Mehta", handle: "@kabirfoodtrail", fee: 2000, adv: "0%", paid: 0, due: 2000, payout: "Bank ✓ verified", status: "Due now" },
-  { id: 3, name: "Ritika Sen", handle: "@ritika.daily", fee: 2000, adv: "50%", paid: 1000, due: 0, payout: "UPI · not verified", status: "Not verified" },
-  { id: 4, name: "Rohan Das", handle: "@rohanfitlife", fee: null, adv: null, paid: null, due: null, payout: null, status: "Fee not set" },
+/*
+ * 💰 Payments — purane app ka payments.js (Super Admin only).
+ * Data: api.campaign_payments · Actions: payment_set_terms, payment_verify, payment_request_details, payment_hold,
+ * payout_pay, payout_mark_paid, payout_queue (Razorpay), payout_export (bulk file), payout_import_results, payments_ping.
+ */
+
+const FILTERS = [
+  ["all", "Everyone"],
+  ["nofee", "Fee not set"],
+  ["nodetails", "No bank / UPI"],
+  ["unverified", "Not verified"],
+  ["due", "Due now"],
+  ["sent", "Being paid"],
+  ["paid", "Fully paid"],
 ];
-const FILTERS = ["Everyone", "Fee not set", "No bank / UPI", "Not verified", "Due now", "Being paid", "Fully paid"];
-const TONE = { "Due now": "violet", "Not verified": "orange", "Fee not set": "", "Being paid": "blue", "Fully paid": "green" };
-const ACTION = { "Due now": "Record payment", "Not verified": "Verify", "Fee not set": "Set fee", "Being paid": "Mark paid", "Fully paid": "Receipt" };
-const inr = (n) => (n == null ? "—" : `₹${n.toLocaleString("en-IN")}`);
+const TONE = { "Due now": "violet", "Not verified": "orange", "No bank / UPI": "orange", "Fee not set": "", "Being paid": "blue", "Fully paid": "green", "Not due yet": "", "On hold": "red" };
+const ACTION = { "Due now": "Record payment", "Not verified": "Verify", "No bank / UPI": "Ask for details", "Fee not set": "Set fee", "Being paid": "Mark paid", "Fully paid": "Details", "Not due yet": "Pay early", "On hold": "Release" };
+
+const matches = (r, f) => {
+  const p = r.payment || {},
+    po = p.payouts || [];
+  if (f === "nofee") return p.amount == null;
+  if (f === "nodetails") return !p.method;
+  if (f === "unverified") return !!p.method && p.details_status !== "verified";
+  if (f === "due") return po.some((o) => ["due", "failed"].includes(o.status));
+  if (f === "sent") return po.some((o) => ["queued", "processing"].includes(o.status));
+  if (f === "paid") return po.length > 0 && po.every((o) => o.status === "paid");
+  return true;
+};
+const payoutLine = (p) => {
+  if (!p.method) return null;
+  const where = p.method === "upi" ? "UPI" : "Bank";
+  return p.details_status === "verified" ? `${where} ✓ verified` : `${where} · ${p.details_status === "failed" ? "failed" : "not verified"}`;
+};
+const dueSum = (r) => ((r.payment || {}).payouts || []).filter((o) => ["due", "failed"].includes(o.status)).reduce((a, o) => a + (+o.amount || 0), 0);
 
 export default function CampaignPayments() {
   const { id } = useParams();
   const [toast, show] = useToast();
-  const [rows, setRows] = useState(ROWS);
-  const [filter, setFilter] = useState("Everyone");
+  const { data, error, loading, reload } = useRpc("admin", "api.campaign_payments", { p_campaign: id }, { skip: !id || id === "sample" });
+  const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
-  const [picked, setPicked] = useState([1, 2]);
-  const [modal, setModal] = useState(null); // {row, kind}
-  const [val, setVal] = useState("");
+  const [sel, setSel] = useState(() => new Set()); // payout ids
+  const [modal, setModal] = useState(null); // { row, kind }
+  const [busy, setBusy] = useState(false);
+  const impRef = useRef(null);
+
+  const rows = useMemo(() => (data && data.rows) || [], [data]);
+  const prov = (data && data.provider) || {};
+  const allOuts = rows.flatMap((r) => (r.payment || {}).payouts || []);
+  const sum = (st) => allOuts.filter((o) => st.includes(o.status)).reduce((a, o) => a + (+o.amount || 0), 0);
+  const agreed = rows.reduce((a, r) => a + (+(r.payment || {}).amount || 0), 0);
+  const withFee = rows.filter((r) => (r.payment || {}).amount != null).length;
+  const nofee = rows.filter((r) => (r.payment || {}).amount == null).length;
+  const nodet = rows.filter((r) => !(r.payment || {}).method).length;
+  const unv = rows.filter((r) => (r.payment || {}).method && (r.payment || {}).details_status !== "verified").length;
 
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (t && !`${r.name} ${r.handle} ${r.payout || ""}`.toLowerCase().includes(t)) return false;
-      if (filter === "Everyone") return true;
-      if (filter === "No bank / UPI") return !r.payout;
-      return r.status === filter;
+      const p = r.payment || {};
+      if (t && ![who(r), r.name, (r.creator || {}).name, p.upi_id, p.account_name].join(" ").toLowerCase().includes(t)) return false;
+      return matches(r, filter);
     });
   }, [rows, filter, q]);
 
-  const ready = rows.filter((r) => r.status === "Due now");
-  const sel = rows.filter((r) => picked.includes(r.id) && r.status === "Due now");
-  const selTotal = sel.reduce((s, r) => s + (r.due || 0), 0);
-  const allReady = ready.length > 0 && ready.every((r) => picked.includes(r.id));
+  const visibleReady = list.flatMap(readyOuts);
+  const selOuts = rows.flatMap(readyOuts).filter((o) => sel.has(o.payout_id));
+  const selTotal = selOuts.reduce((a, o) => a + (+o.amount || 0), 0);
+  const allPicked = visibleReady.length > 0 && visibleReady.every((o) => sel.has(o.payout_id));
 
-  const toggle = (rid) => setPicked((p) => (p.includes(rid) ? p.filter((x) => x !== rid) : [...p, rid]));
+  const toggleRow = (r) =>
+    setSel((s) => {
+      const n = new Set(s),
+        outs = readyOuts(r),
+        on = outs.every((o) => n.has(o.payout_id));
+      outs.forEach((o) => (on ? n.delete(o.payout_id) : n.add(o.payout_id)));
+      return n;
+    });
 
-  const act = (r) => {
-    const kind = ACTION[r.status];
-    if (kind === "Receipt") return show(`Receipt for ${r.name} downloaded`);
-    setVal(kind === "Set fee" ? "2000" : "");
+  const after = async (msg, err) => {
+    show(err ? errText(err) : msg);
+    if (!err) await reload(true);
+  };
+
+  const act = async (r) => {
+    const st = statusOf(r);
+    if (st === "On hold") {
+      if (!window.confirm(`Release ${who(r)}'s payment from hold?`)) return;
+      const { error: e } = await rpc("admin", "api.payment_hold", { p_participation: r.participation_id, p_hold: false, p_reason: null });
+      return after("Released ✓", e);
+    }
+    const kind = { "Fee not set": "fee", "Not verified": "verify", "No bank / UPI": "ask", "Due now": "pay", "Not due yet": "pay", "Being paid": "mark", "Fully paid": "details" }[st];
     setModal({ row: r, kind });
   };
 
-  const save = () => {
-    const r = modal.row;
-    setRows((rs) =>
-      rs.map((x) => {
-        if (x.id !== r.id) return x;
-        if (modal.kind === "Set fee") {
-          const fee = Math.max(0, parseInt(val, 10) || 0);
-          return { ...x, fee, adv: "0%", paid: 0, due: fee, payout: "UPI · not verified", status: "Not verified" };
-        }
-        if (modal.kind === "Verify") return { ...x, payout: x.payout.replace("· not verified", "✓ verified"), due: x.fee - x.paid, status: x.fee - x.paid > 0 ? "Due now" : "Fully paid" };
-        if (modal.kind === "Mark paid" || modal.kind === "Record payment") return { ...x, paid: x.fee, due: 0, status: "Fully paid" };
-        return x;
-      })
-    );
-    show(modal.kind === "Set fee" ? `Fee set for ${r.name}` : modal.kind === "Verify" ? `${r.name}'s payout details verified` : `Payment recorded for ${r.name}${val ? ` · UTR ${val}` : ""}`);
-    setModal(null);
+  const paySelected = async () => {
+    if (!selOuts.length) return show("Tick creators who are due to pay them");
+    if (!prov.connected) return show("Connect RazorpayX first — or use the RazorpayX bulk file");
+    if (!window.confirm(`Pay ${selOuts.length} creator payment${selOuts.length > 1 ? "s" : ""} — ${inr(selTotal)} — through Razorpay?\n\nMoney leaves your RazorpayX account right away (IMPS / UPI). Each creator is told with the UTR once it lands.`)) return;
+    setBusy(true);
+    const { data: d, error: e } = await rpc("admin", "api.payout_queue", { p_payouts: selOuts.map((o) => o.payout_id) });
+    setBusy(false);
+    if (e) return show(errText(e));
+    const bad = (d && d.errors) || [];
+    setSel(new Set());
+    show(`⚡ ${d?.queued ?? 0} payment${d?.queued === 1 ? "" : "s"} sent to RazorpayX (${inr(d?.total)})${bad.length ? ` · ${bad.length} skipped` : ""} ✓`);
+    if (bad.length) window.alert("Skipped:\n" + bad.map((x) => x.error).join("\n"));
+    reload(true);
   };
 
-  const paySelected = () => {
-    if (!sel.length) return show("Tick creators who are due to pay them");
-    setRows((rs) => rs.map((x) => (picked.includes(x.id) && x.status === "Due now" ? { ...x, status: "Being paid" } : x)));
-    show(`${sel.length} payment${sel.length > 1 ? "s" : ""} · ${inr(selTotal)} sent to Razorpay`);
-    setPicked([]);
+  // RazorpayX dashboard ka bulk-payout file (purane payBulkFile jaisa — bank + UPI alag files)
+  const bulkFile = async () => {
+    if (!selOuts.length) return show("Tick creators who are due to pay them");
+    if (!window.confirm(`Make the RazorpayX bulk-payout file — ${selOuts.length} payment${selOuts.length > 1 ? "s" : ""}, ${inr(selTotal)}?\n\nThey are marked “sent” here. Upload the file on RazorpayX → Payouts → Bulk, then ⬆ Import the RazorpayX report here so each creator gets their UTR.`)) return;
+    setBusy(true);
+    const { data: d, error: e } = await rpc("admin", "api.payout_export", { p_payouts: selOuts.map((o) => o.payout_id) });
+    setBusy(false);
+    if (e) return show(errText(e));
+    const out = (d && d.rows) || [],
+      stamp = new Date().toISOString().slice(0, 10);
+    const narr = (x) => ("Geek " + (x.campaign || "")).replace(/[^A-Za-z0-9 ]/g, "").slice(0, 30);
+    const ph = (x) => String(x.phone || "").replace(/\D/g, "").slice(-10);
+    const bank = out.filter((x) => x.method === "bank");
+    const upi = out.filter((x) => x.method === "upi");
+    if (bank.length)
+      downloadFile(`razorpayx-bulk-bank-${stamp}.csv`, [
+        ["Bene Name", "Bene Account number", "IFSC", "Payout Amount", "Payout Mode", "Payout Narration", "Phone number", "Email ID", "Contact reference ID", "Payout reference ID"],
+        ...bank.map((x) => [x.account_name, x.account_no, x.ifsc, Math.round(+x.amount), +x.amount > 200000 ? "NEFT" : "IMPS", narr(x), ph(x), "", x.handle ? "@" + x.handle : "", x.ref_code]),
+      ]);
+    if (upi.length)
+      setTimeout(
+        () =>
+          downloadFile(`razorpayx-bulk-upi-${stamp}.csv`, [
+            ["Bene Name", "Bene UPI ID", "Payout Amount", "Payout Mode", "Payout Narration", "Phone number", "Email ID", "Contact reference ID", "Payout reference ID"],
+            ...upi.map((x) => [x.account_name, x.upi_id, Math.round(+x.amount), "UPI", narr(x), ph(x), "", x.handle ? "@" + x.handle : "", x.ref_code]),
+          ]),
+        400
+      );
+    setSel(new Set());
+    const bad = (d && d.errors) || [];
+    show(`⬇ RazorpayX file ready — ${out.length} payment${out.length === 1 ? "" : "s"} ✓ · delete it from Downloads after uploading`);
+    if (bad.length) window.alert("Skipped:\n" + bad.map((x) => x.error).join("\n"));
+    reload(true);
+  };
+
+  // RazorpayX ka report wapas (UTR) — purane payImportModal jaisa
+  const importReport = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      const sheet = await readSheetFile(f);
+      if (!sheet || sheet.length < 2) throw new Error("No rows in that file.");
+      const hi = sheet.findIndex((r) => r.some((c) => /reference/i.test(c)));
+      if (hi < 0) throw new Error("Couldn't find a “Payout reference ID” column.");
+      const head = sheet[hi].map((h) => String(h || "").toLowerCase());
+      const col = (re) => head.findIndex((h) => re.test(h));
+      const iRef = head.findIndex((h) => /payout ?reference|reference ?id/.test(h) && !/contact/.test(h)),
+        iUtr = col(/\butr\b/),
+        iSt = col(/^status$|payout status|^status /),
+        iWhy = col(/reason|failure|status ?details|description/);
+      if (iRef < 0) throw new Error("Couldn't find the “Payout reference ID” column.");
+      const rowsIn = sheet
+        .slice(hi + 1)
+        .map((r) => ({ ref: String(r[iRef] || "").trim(), utr: iUtr >= 0 ? String(r[iUtr] || "").trim() : "", status: iSt >= 0 ? String(r[iSt] || "").trim() : "", reason: iWhy >= 0 ? String(r[iWhy] || "").trim() : "" }))
+        .filter((x) => /^GEEK[0-9A-F]{6,}$/i.test(x.ref));
+      if (!rowsIn.length) throw new Error("No GEEK… payment references in that file — is it the report of the file made here?");
+      const { data: res, error: er } = await rpc("admin", "api.payout_import_results", { p_rows: rowsIn });
+      if (er) throw er;
+      show(`✓ ${res?.paid ?? 0} paid · ${res?.failed ?? 0} failed · ${res?.not_found ?? 0} not found`);
+      reload(true);
+    } catch (ex) {
+      show(errText(ex));
+    }
   };
 
   const csv = () => {
-    downloadFile("payments.csv", [["Creator", "Handle", "Fee", "Advance", "Paid", "Due", "Payout", "Status"], ...rows.map((r) => [r.name, r.handle, r.fee ?? "", r.adv ?? "", r.paid ?? "", r.due ?? "", r.payout ?? "", r.status])]);
+    downloadFile(`payments-${new Date().toISOString().slice(0, 10)}.csv`, [
+      ["Creator", "Name", "Step", "Fee", "Advance %", "Pay days", "Terms", "Method", "Pay to", "Details", "Advance", "Advance status", "Advance UTR", "Balance", "Balance status", "Balance due", "Balance UTR", "On hold"],
+      ...rows.map((r) => {
+        const p = r.payment || {},
+          po = p.payouts || [];
+        const adv = po.find((o) => o.part === "advance") || {},
+          bal = po.find((o) => o.part === "balance" || o.part === "full") || {};
+        return [who(r), r.name || "", r.stage, p.amount ?? "", p.advance_pct ?? "", p.due_days ?? "", p.terms_note || "", p.method || "", p.method === "upi" ? p.upi_id : p.method === "bank" ? `a/c ••${p.account_last4 || ""} ${p.ifsc || ""}` : "", p.details_status || "", adv.amount ?? "", adv.status || "", adv.utr || "", bal.amount ?? "", bal.status || "", bal.due_at || "", bal.utr || "", p.on_hold ? p.hold_reason || "yes" : ""];
+      }),
+    ]);
     show("Payments CSV downloaded");
+  };
+
+  const ping = async () => {
+    const { error: e } = await rpc("admin", "api.payments_ping");
+    if (e) return show(errText(e));
+    show("Checking Razorpay… the status updates in a few seconds");
+    setTimeout(() => reload(true), 6000);
   };
 
   return (
@@ -100,36 +225,51 @@ export default function CampaignPayments() {
           <>
             <TextBtn href={`/admin/campaigns/${id}/upload`}>📥 Upload fees (sheet)</TextBtn>
             <TextBtn onClick={csv}>⬇️ CSV</TextBtn>
-            <TextBtn onClick={() => show("RazorpayX report imported · 0 new payouts")}>⬆ Import RazorpayX report</TextBtn>
+            <TextBtn onClick={() => impRef.current?.click()}>⬆ Import RazorpayX report</TextBtn>
+            <input ref={impRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={importReport} />
           </>
         }
       >
         <MiniStats
           items={[
-            { value: "₹36,000", label: "Agreed", note: "18 creators" },
-            { value: "₹12,000", label: "Paid" },
-            { value: "₹14,000", label: "Due", note: "ready to pay" },
-            { value: "₹4,000", label: "Being paid" },
-            { value: rows.filter((r) => r.status === "Fee not set").length + 1, label: "Fee not set" },
-            { value: 3, label: "No details", note: "not verified" },
+            { value: inr(agreed), label: "Agreed", note: `${withFee} creator${withFee === 1 ? "" : "s"}` },
+            { value: inr(sum(["paid"])), label: "Paid" },
+            { value: inr(sum(["due", "failed"])), label: "Due", note: "ready to pay" },
+            { value: inr(sum(["queued", "processing"])), label: "Being paid" },
+            { value: nofee, label: "Fee not set" },
+            { value: `${nodet} · ${unv}`, label: "No details", note: "not verified" },
           ]}
         />
 
         <div className="py-note">
-          <Note tone="amber" icon="⚪">
-            <b>Razorpay not connected</b>— until then: verify details by hand, pay from your bank / UPI and record it with the UTR + screenshot, or use the RazorpayX bulk file.{" "}
-            <button type="button" className="py-check" onClick={() => show("Razorpay is still not connected")}>
-              ↻ Check Razorpay
-            </button>
-          </Note>
+          {prov.connected ? (
+            <Note tone="green" icon="🟢">
+              <b>Razorpay connected</b>
+              {prov.mode === "test" ? " (test mode)" : ""}
+              {prov.account ? ` · paying from ••${prov.account}` : ""}
+              {prov.balance != null ? ` · balance ${inr(prov.balance)}` : ""} — tick creators and pay them together.{" "}
+              <button type="button" className="py-check" onClick={ping}>
+                ↻ Check Razorpay
+              </button>
+              {prov.checked_at ? ` · checked ${when(prov.checked_at)}` : ""}
+            </Note>
+          ) : (
+            <Note tone="amber" icon="⚪">
+              <b>Razorpay not connected</b>
+              {prov.error ? ` (${prov.error})` : ""}— until then: verify details by hand, pay from your bank / UPI and record it with the UTR + screenshot, or use the RazorpayX bulk file.{" "}
+              <button type="button" className="py-check" onClick={ping}>
+                ↻ Check Razorpay
+              </button>
+            </Note>
+          )}
         </div>
 
         <div className="py-bar">
           <input className="ad-input py-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="@handle, name, UPI…" aria-label="Search creators" />
           <div className="py-filters" data-scroll>
-            {FILTERS.map((f) => (
-              <button key={f} type="button" className={`ad-tab ${filter === f ? "is-on" : ""}`} onClick={() => setFilter(f)}>
-                {f}
+            {FILTERS.map(([k, l]) => (
+              <button key={k} type="button" className={`ad-tab ${filter === k ? "is-on" : ""}`} onClick={() => setFilter(k)}>
+                {l}
               </button>
             ))}
           </div>
@@ -151,84 +291,74 @@ export default function CampaignPayments() {
               </tr>
             </thead>
             <tbody>
-              {list.map((r) => (
-                <tr key={r.id}>
-                  <td className="py-ck">
-                    {r.status === "Due now" && <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.name}`} />}
-                  </td>
-                  <td>
-                    <b>{r.name}</b> · {r.handle}
-                  </td>
-                  <td>{inr(r.fee)}</td>
-                  <td>{r.adv ?? "—"}</td>
-                  <td>{inr(r.paid)}</td>
-                  <td>{inr(r.due)}</td>
-                  <td>{r.payout ?? "—"}</td>
-                  <td>
-                    <span className={`ad-badge ad-badge--${TONE[r.status]}`}>{r.status}</span>
-                  </td>
-                  <td>
-                    <button type="button" className="ad-btn ad-btn--ghost py-act" onClick={() => act(r)}>
-                      {ACTION[r.status]}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!list.length && (
-                <tr>
-                  <td colSpan={9} className="py-empty">
-                    No creators in “{filter}”{q ? ` matching “${q}”` : ""}.
-                  </td>
-                </tr>
-              )}
+              <TableState
+                cols={9}
+                loading={loading && !data}
+                error={!data && error}
+                onRetry={reload}
+                empty={!list.length && (rows.length ? `No creators in “${FILTERS.find((x) => x[0] === filter)[1]}”${q ? ` matching “${q}”` : ""}.` : "No creator is approved on this campaign yet — they appear here as soon as they are.")}
+              />
+              {list.map((r) => {
+                const p = r.payment || {},
+                  st = statusOf(r),
+                  ready = readyOuts(r),
+                  nm = r.name || (r.creator || {}).name;
+                return (
+                  <tr key={r.participation_id}>
+                    <td className="py-ck">{ready.length > 0 && <input type="checkbox" checked={ready.every((o) => sel.has(o.payout_id))} onChange={() => toggleRow(r)} aria-label={`Select ${who(r)}`} />}</td>
+                    <td>
+                      <b>{nm || who(r)}</b>
+                      {nm && who(r).startsWith("@") ? ` · ${who(r)}` : ""}
+                    </td>
+                    <td>{inr(p.amount)}</td>
+                    <td>{p.amount == null ? "—" : `${+p.advance_pct || 0}%`}</td>
+                    <td>{p.amount == null ? "—" : inr(p.paid_total || 0)}</td>
+                    <td>{p.amount == null ? "—" : inr(dueSum(r))}</td>
+                    <td>{payoutLine(p) ?? "—"}</td>
+                    <td>
+                      <span className={`ad-badge ad-badge--${TONE[st]}`} title={st === "On hold" ? p.hold_reason || "" : ""}>
+                        {st}
+                      </span>
+                    </td>
+                    <td>
+                      <button type="button" className="ad-btn ad-btn--ghost py-act" onClick={() => act(r)}>
+                        {ACTION[st]}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         <div className="py-foot">
           <label className="py-all">
-            <input type="checkbox" checked={allReady} onChange={() => setPicked(allReady ? [] : ready.map((r) => r.id))} /> Select everything ready to pay
+            <input
+              type="checkbox"
+              checked={allPicked}
+              onChange={() =>
+                setSel((s) => {
+                  if (allPicked) return new Set();
+                  const n = new Set(s);
+                  visibleReady.forEach((o) => n.add(o.payout_id));
+                  return n;
+                })
+              }
+            />{" "}
+            Select everything ready to pay
           </label>
           <b className="py-sum">
-            {sel.length} payment{sel.length === 1 ? "" : "s"} · {inr(selTotal)}
+            {selOuts.length} payment{selOuts.length === 1 ? "" : "s"} · {inr(selTotal)}
           </b>
-          <button type="button" className="ad-btn ad-btn--primary py-pay" onClick={paySelected}>
+          <button type="button" className="ad-btn ad-btn--primary py-pay" onClick={paySelected} disabled={busy}>
             ⚡ Pay selected via Razorpay
           </button>
-          <TextBtn onClick={() => show("RazorpayX bulk file downloaded")}>⬇️ RazorpayX bulk file</TextBtn>
+          <TextBtn onClick={bulkFile}>⬇️ RazorpayX bulk file</TextBtn>
         </div>
       </Panel>
 
-      {modal && (
-        <div className="ad-overlay" onClick={() => setModal(null)}>
-          <div className="ad-modal py-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={modal.kind}>
-            <h3 className="ad-h2">
-              {modal.kind} · {modal.row.name}
-            </h3>
-            {modal.kind === "Verify" ? (
-              <p className="py-mtxt">
-                Check {modal.row.name}&apos;s {modal.row.payout?.split(" ")[0]} details match their name, then mark them verified.
-              </p>
-            ) : (
-              <>
-                <label className="ad-label" htmlFor="py-val">
-                  {modal.kind === "Set fee" ? "Fee (₹)" : "UTR / reference (optional)"}
-                </label>
-                <input id="py-val" className="ad-input" value={val} onChange={(e) => setVal(e.target.value)} inputMode={modal.kind === "Set fee" ? "numeric" : "text"} placeholder={modal.kind === "Set fee" ? "2000" : "e.g. 4312XXXX0921"} autoFocus />
-                {modal.kind !== "Set fee" && <p className="ad-hint">Due {inr(modal.row.due)} — recorded as fully paid.</p>}
-              </>
-            )}
-            <div className="py-mact">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setModal(null)}>
-                Cancel
-              </button>
-              <button type="button" className="ad-btn ad-btn--primary" onClick={save}>
-                {modal.kind === "Verify" ? "Mark verified" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {modal && <PayModal modal={modal} days={data?.due_days} connected={!!prov.connected} onClose={() => setModal(null)} onDone={(m) => (setModal(null), after(m))} />}
       {toast}
 
       <style>{`
@@ -246,16 +376,11 @@ export default function CampaignPayments() {
         .py-ck { width: 40px; }
         .py-ck input, .py-all input { width: 15px; height: 15px; margin: 0; accent-color: #5f6577; }
         .py-act { height: 40px; padding: 0 15px; font-size: 13px; }
-        .py-empty { text-align: center; color: var(--ad-muted); }
         .py-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
         .py-all { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ad-ink); cursor: pointer; }
         .py-all input { accent-color: var(--ad-primary); }
         .py-sum { font-size: 12px; font-weight: 700; }
         .py-pay { height: 42px; margin-right: 18px; }
-        .py-modal { padding: 24px; }
-        .py-modal .ad-label { margin-top: 16px; }
-        .py-mtxt { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--ad-muted); }
-        .py-mact { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
         @media (max-width: 1023px) {
           .py-bar { flex-direction: column; align-items: stretch; }
           .py-search { width: 100%; }

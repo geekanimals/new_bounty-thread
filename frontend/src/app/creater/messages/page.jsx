@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
 import InboxTabs from "@/components/creater/InboxTabs";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { useSession } from "@/components/creater/session";
-import { ALERTS, getSidekick } from "@/components/creater/data";
+import { useSession, hrefOf, isAct, isMsg, iconOf, when, useNotifications, markRead, markActed, markAllRead } from "@/services/creator";
+import { getSidekick } from "@/components/creater/data";
 import { ChevronRight, Check } from "@/components/ui/Icons";
 
 const FILTERS = [
@@ -14,17 +14,39 @@ const FILTERS = [
   { key: "action", label: "Action needed" },
   { key: "update", label: "Updates" },
 ];
+const GEEK_WA = "916398566704"; // purane inbox ka "Reply" isi number par jata tha
 
-/** /creater/messages — Inbox: campaign alerts (Action needed / Updates) */
+
+/**
+ * /creater/messages — Inbox: campaign alerts (Action needed / Updates)
+ * Purane Bounty inbox jaisa: get_my_notifications · mark_notification_read · mark_notification_acted · mark_all_notifications_read
+ */
 export default function InboxAlerts() {
   const [s] = useSession();
   const sk = getSidekick(s.sidekick);
-  const fresh = !s.ig;
   const [f, setF] = useState("all");
-  const [read, setRead] = useState([]);
-  const all = fresh ? [] : ALERTS;
-  const list = f === "all" ? all : all.filter((a) => a.kind === f);
-  const isUnread = (a) => a.unread && !read.includes(a.id);
+  const notes = useNotifications({ refreshMs: 30000 });
+  const [local, setLocal] = useState({}); // id → { read, acted } (turant dikhane ke liye)
+  const [now, setNow] = useState(0);
+  useEffect(() => setNow(Date.now()), []);
+  const all = (Array.isArray(notes.data) ? notes.data : []).map((n) => ({ ...n, ...(local[n.notification_id] || {}) }));
+  const list = f === "all" ? all : all.filter((n) => (f === "action" ? isAct(n) : !isAct(n)));
+  const isUnread = (n) => !n.read;
+  const patch = (id, v) => setLocal((m) => ({ ...m, [id]: { ...(m[id] || {}), ...v } }));
+
+  const open = (n) => {
+    if (!n.read) patch(n.notification_id, { read: true });
+    if (isAct(n)) {
+      patch(n.notification_id, { read: true, acted: true });
+      markActed(n.notification_id);
+    } else if (!n.read) markRead(n.notification_id);
+  };
+  const markAll = async () => {
+    const unread = all.filter((n) => !n.read);
+    if (!unread.length) return;
+    unread.forEach((n) => patch(n.notification_id, { read: true }));
+    await markAllRead();
+  };
 
   return (
     <BountyShell>
@@ -38,38 +60,71 @@ export default function InboxAlerts() {
               {FILTERS.map((x) => (
                 <button key={x.key} type="button" className={`bx-pill ia-pill ${f === x.key ? "is-on" : ""}`} onClick={() => setF(x.key)}>
                   {x.label}
-                  {x.key === "action" && all.filter((a) => a.kind === "action" && isUnread(a)).length > 0 && <i className="ia-dot" />}
+                  {x.key === "action" && all.some((n) => isAct(n)) && <i className="ia-dot" />}
                 </button>
               ))}
             </div>
-            <button type="button" className="ia-mark" onClick={() => setRead(all.map((a) => a.id))} disabled={!all.some(isUnread)}>
+            <button type="button" className="ia-mark" onClick={markAll} disabled={!all.some(isUnread)}>
               <Check size={12} /> Mark all read
             </button>
           </div>
 
-          {list.length === 0 ? (
-            <div className="bx-card ia-empty">No alerts yet. When something needs you, it’ll show here.</div>
+          {notes.loading && !notes.data ? (
+            <div className="bx-card ia-empty">Loading your inbox…</div>
+          ) : notes.error && !notes.data ? (
+            <div className="bx-card ia-empty">
+              Couldn&apos;t load your inbox.{" "}
+              <button type="button" className="ia-retry" onClick={() => notes.reload()}>
+                Try again
+              </button>
+            </div>
+          ) : list.length === 0 ? (
+            <div className="bx-card ia-empty">
+              {f === "action" ? "Nothing needs you right now. We'll tell you the moment something does." : f === "update" ? "No updates yet." : "No alerts yet. When something needs you, it’ll show here."}
+            </div>
           ) : (
             <ul className="ia-list">
-              {list.map((a) => (
-                <li key={a.id} className={`bx-card ${isUnread(a) ? "is-unread" : ""}`}>
-                  <Link href={a.href} onClick={() => setRead((r) => [...r, a.id])}>
-                    <span className="ia-ic">{a.icon}</span>
+              {list.map((n) => {
+                const msg = isMsg(n);
+                const href = msg
+                  ? `https://wa.me/${GEEK_WA}?text=${encodeURIComponent("Hi Geek team, about: " + (n.title || "my campaign") + " — ")}`
+                  : hrefOf(n);
+                const inner = (
+                  <>
+                    <span className="ia-ic">{iconOf(n)}</span>
                     <span className="ia-txt">
                       <strong>
-                        {isUnread(a) && <i className="ia-dot" />}
-                        {a.title}
+                        {isUnread(n) && <i className="ia-dot" />}
+                        {n.title || "Update"}
                       </strong>
-                      <small>{a.text}</small>
+                      {n.body && <small>{String(n.body).replace(/[*_`]/g, "")}</small>}
                     </span>
                     <span className="ia-meta">
-                      {a.kind === "action" && <span className="bx-tag bx-tag--red">Action needed</span>}
-                      <small>{a.time}</small>
+                      {isAct(n) && <span className="bx-tag bx-tag--red">Action needed</span>}
+                      {msg && <span className="bx-tag">Reply</span>}
+                      <small>{when(n.created_at, now)}</small>
                     </span>
                     <ChevronRight size={15} />
-                  </Link>
-                </li>
-              ))}
+                  </>
+                );
+                return (
+                  <li key={n.notification_id} className={`bx-card ${isUnread(n) ? "is-unread" : ""}`}>
+                    {msg ? (
+                      <a href={href} target="_blank" rel="noopener noreferrer" onClick={() => open(n)}>
+                        {inner}
+                      </a>
+                    ) : href ? (
+                      <Link href={href} onClick={() => open(n)}>
+                        {inner}
+                      </Link>
+                    ) : (
+                      <button type="button" className="ia-row" onClick={() => open(n)}>
+                        {inner}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -87,7 +142,9 @@ export default function InboxAlerts() {
         .ia-mark:disabled { opacity: .45; cursor: default; }
         .ia-empty { padding: 14px 18px; font-size: 14px; line-height: 18px; color: #6f6250; text-align: center; }
         .ia-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-        .ia-list li a { display: flex; align-items: center; gap: 12px; padding: 12px 14px; color: var(--bx-muted); }
+        .ia-retry { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: #2a9d8f; cursor: pointer; }
+        .ia-list li .ia-row { width: 100%; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+        .ia-list li a, .ia-list li .ia-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; color: var(--bx-muted); }
         .ia-list li.is-unread { background: #f8e8c6; border-color: #e8cf98; }
         .ia-ic { width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; background: #fffaf0; display: grid; place-items: center; font-size: 17px; }
         .ia-txt { flex: 1; min-width: 0; color: var(--bx-ink); }
@@ -103,7 +160,7 @@ export default function InboxAlerts() {
         }
         @media (max-width: 767px) {
           .ia-meta .bx-tag { display: none; }
-          .ia-list li a > svg { display: none; }
+          .ia-list li a > svg, .ia-list li .ia-row > svg { display: none; }
         }
       `}</style>
     </BountyShell>

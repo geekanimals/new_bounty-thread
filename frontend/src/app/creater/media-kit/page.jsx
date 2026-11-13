@@ -1,42 +1,118 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { useSession } from "@/components/creater/session";
-import { CREATOR, ANALYTICS, KIT_POSTS, getSidekick } from "@/components/creater/data";
+import { useSession, errText, useMyIg, fmtK, fmtNum, fmtDate, engagement, useMyProfile, syncIgMedia, getCampaignWork, saveKitProfile, editsOf } from "@/services/creator";
+import { getSidekick } from "@/components/creater/data";
 import { Share, Edit, Copy, WhatsApp, Download, Close, Check, Heart, Chat, Instagram, ArrowRight } from "@/components/ui/Icons";
 
-// Dummy: portfolio + mentions (Instagram se aayenge)
-const PORTFOLIO = [
-  { brand: "Vaaree", note: "Diwali Sale · Reel · 18.4K views" },
-  { brand: "Mamaearth", note: "Monsoon Reel · 22.1K views" },
-  { brand: "Lenskart", note: "Weekend Story · 6.8K views" },
-];
-const MENTIONS = [
-  { who: "@vaaree", text: "tagged you in a Story · 30 Oct" },
-  { who: "@jaipurdiaries", text: "mentioned you in a post · 21 Oct" },
-];
+const SHOW0 = { audience: true, portfolio: true, mentions: true, showcase: true };
+const AGES = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
 
-/** /creater/media-kit — Instagram se auto-bana media kit (share, edit, PDF) */
+/* audience (gender_age / city) → Figma ki bars: Men, Women, top 2 ages, top city */
+function audienceRows(aud) {
+  aud = aud && typeof aud === "object" ? aud : {};
+  const g = { F: 0, M: 0 };
+  const ages = {};
+  let total = 0;
+  Object.entries(aud.gender_age || {}).forEach(([k, v]) => {
+    v = Number(v) || 0;
+    const m = /^\s*([A-Za-z])[^0-9]*(.*)$/.exec(String(k)) || [];
+    const gg = String(m[1] || "").toUpperCase();
+    if (g[gg] != null) g[gg] += v;
+    const a = String(m[2] || "").trim();
+    if (a) ages[a] = (ages[a] || 0) + v;
+    total += v;
+  });
+  if (!total) return [];
+  const pct = (v, t) => Math.round((100 * v) / (t || 1));
+  const rows = [];
+  if (g.M) rows.push({ label: "Men", value: pct(g.M, total) });
+  if (g.F) rows.push({ label: "Women", value: pct(g.F, total) });
+  Object.entries(ages)
+    .sort((x, y) => y[1] - x[1] || AGES.indexOf(x[0]) - AGES.indexOf(y[0]))
+    .slice(0, 2)
+    .forEach(([a, v]) => rows.push({ label: `Age ${a.replace("-", "–")}`, value: pct(v, total) }));
+  const cities = Object.entries(aud.city || {}).sort((x, y) => y[1] - x[1]);
+  const ct = cities.reduce((x, [, v]) => x + (Number(v) || 0), 0);
+  if (cities[0]) rows.push({ label: String(cities[0][0]).split(",")[0], value: pct(cities[0][1], ct) });
+  return rows;
+}
+const imgOf = (m) => (m.media_type === "VIDEO" ? m.thumbnail_url || m.media_url : m.media_url);
+
+/**
+ * /creater/media-kit — Instagram se auto-bana media kit (share, edit)
+ * Data: social_accounts (purane mkFetchAcct) · har 60 sec instagram-media-sync (purane jaisa) · get_my_campaigns (campaign work)
+ * Save: social_accounts.edits (purane "Make it yours" jaisa)
+ */
 export default function MediaKit() {
   const [s] = useSession();
   const sk = getSidekick(s.sidekick);
+  const ig = useMyIg();
+  const a = ig.acct;
   const [popup, setPopup] = useState(null); // share | edit
   const [toast, setToast] = useState("");
-  const [name, setName] = useState(CREATOR.user);
-  const [bio, setBio] = useState(CREATOR.bio);
-  const [draftName, setDraftName] = useState(name);
-  const [draftBio, setDraftBio] = useState(bio);
-  const [show, setShow] = useState({ audience: true, portfolio: true, mentions: true, showcase: true });
-  const [draftShow, setDraftShow] = useState(show);
+  const [draftName, setDraftName] = useState("");
+  const [draftBio, setDraftBio] = useState("");
+  const [draftShow, setDraftShow] = useState(SHOW0);
+  const [saving, setSaving] = useState(false);
+  const [syncedAt, setSyncedAt] = useState(0);
+  const [now, setNow] = useState(0);
+  const [work, setWork] = useState([]);
+  const [origin, setOrigin] = useState("");
 
+  const prof = useMyProfile();
+  // setup (categories wagera) abhi nahi kiya → "Continue setup" (purane bxMaybeOnboard jaisa)
+  const setupDone = ((prof.data?.professional || {}).categories || []).length > 0;
   const flash = (t) => {
     setToast(t);
     setTimeout(() => setToast(""), 2400);
   };
-  const kitUrl = `https://bounty.geekcreativeagency.com/kit/${CREATOR.user}`;
+  const E = editsOf(a);
+  const name = E.display_name || a?.name || a?.username || "";
+  const bio = E.bio || a?.biography || "";
+  const show = { ...SHOW0, ...(E.show || {}) };
+  const user = String(a?.username || "").replace(/^@/, "");
+  const kitUrl = `${origin}/kit/${encodeURIComponent(user)}`;
+
+  // Instagram se taaza posts — khulte hi + har 60 sec (server khud throttle karta hai), purane refreshMediaKit jaisa
+  const { reload } = ig;
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    if (!a) return;
+    let alive = true;
+    const sync = async (force) => {
+      const { data } = await syncIgMedia(force);
+      if (!alive) return;
+      if (data && data.ok && !data.cached) setSyncedAt(Date.now());
+      else if (data && data.cached) setSyncedAt((t) => t || Date.now() - (60000 - (data.next_in_ms || 0)));
+      reload();
+    };
+    sync(false);
+    const t = setInterval(() => document.visibilityState === "visible" && sync(false), 60000);
+    const c = setInterval(() => setNow(Date.now()), 5000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      clearInterval(c);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!a]);
+
+  // Work portfolio: Geek OS par kiye campaign posts (purane mkCampaignWork jaisa — sirf isi account ke)
+  useEffect(() => {
+    if (!a) return;
+    getCampaignWork(user).then(setWork);
+  }, [a, user]);
+
+  const openEdit = () => {
+    setDraftName(name);
+    setDraftBio(bio);
+    setDraftShow(show);
+    setPopup("edit");
+  };
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(kitUrl);
@@ -46,8 +122,30 @@ export default function MediaKit() {
     flash("Link copied");
   };
 
+  const save = async (ev) => {
+    ev.preventDefault();
+    if (!a) return;
+    setSaving(true);
+    const { error } = await saveKitProfile(a, { name: draftName, bio: draftBio, show: draftShow });
+    setSaving(false);
+    if (error) return flash(errText(error) || "Couldn't save.");
+    setPopup(null);
+    flash("✓ Saved — this is what brands see now.");
+    ig.reload();
+  };
+
+  if (ig.loading) {
+    return (
+      <BountyShell>
+        <title>Media kit — Bounty</title>
+        <h1 className="bx-title">My Media Kit</h1>
+        <p className="bx-lede">Loading your media kit…</p>
+      </BountyShell>
+    );
+  }
+
   /* ---------- Locked: Instagram connect nahi ---------- */
-  if (!s.ig) {
+  if (!a) {
     return (
       <BountyShell>
         <title>Media kit — Bounty</title>
@@ -90,19 +188,34 @@ export default function MediaKit() {
     );
   }
 
+  const media = Array.isArray(a.recent_media) ? a.recent_media : [];
+  const n = media.length;
+  const avgLikes = n ? Math.round(media.reduce((x, m) => x + (Number(m.like_count) || 0), 0) / n) : 0;
+  const eng = engagement(a);
   const stats = [
-    { v: CREATOR.followers, l: "Followers" },
-    { v: CREATOR.eng, l: "Avg. engagement" },
-    { v: CREATOR.reach, l: "Avg. reach / post" },
-    { v: CREATOR.likes, l: "Avg. likes" },
-    { v: CREATOR.posts, l: "Total posts" },
+    { v: fmtK(a.followers_count || 0), l: "Followers" },
+    { v: eng != null ? eng.toFixed(2) + "%" : "—", l: "Avg. engagement" },
+    { v: a.avg_reach ? fmtK(a.avg_reach) : "—", l: "Avg. reach / post" },
+    { v: fmtK(avgLikes), l: "Avg. likes" },
+    { v: fmtNum(a.media_count || 0), l: "Total posts" },
   ];
+  const audience = audienceRows(a.audience);
+  const pins = (Array.isArray(E.pinned) ? E.pinned.map(String) : []).filter((id) => media.some((m) => String(m.id) === id));
+  const top = [...media].sort((x, y) => (Number(y.like_count) || 0) + (Number(y.comments_count) || 0) - ((Number(x.like_count) || 0) + (Number(x.comments_count) || 0))).slice(0, 3);
+  const showcase = [...pins.map((id) => media.find((m) => String(m.id) === id)), ...media.filter((m) => !pins.includes(String(m.id)))].slice(0, 9);
+  const portfolio = [
+    ...work.map((p) => ({ brand: p.brand || "Brand", note: `${p.campaign || "Campaign"} · ${p.media_type === "story" ? "Story" : "Reel"}${p.posted_at ? " · " + fmtDate(p.posted_at) : ""}`, url: p.permalink })),
+    ...(Array.isArray(E.portfolio) ? E.portfolio : []).filter((p) => p && p.brand),
+  ];
+  const mentions = Array.isArray(a.mentions) ? a.mentions.slice(0, 6) : [];
+  const syncTxt = syncedAt && now ? `Synced with Instagram ${Math.max(0, Math.round((now - syncedAt) / 1000))}s ago · auto-refreshes every 60s` : syncedAt ? "Synced with Instagram just now · auto-refreshes every 60s" : "Syncing with Instagram…";
+  const avatar = a.profile_picture_url || "/creater/avatar.jpg";
 
   return (
     <BountyShell>
       <title>Media kit — Bounty</title>
 
-      {!s.setupDone && (
+      {prof.data && !setupDone && (
         <section className="mk-ready">
           <span>
             <strong>Your media kit is ready 🎉</strong>
@@ -119,27 +232,27 @@ export default function MediaKit() {
 
       <div className="mk-bar">
         <div className="bx-card mk-of">
-          <img src={CREATOR.avatar} alt="" />
+          <img src={avatar} alt="" referrerPolicy="no-referrer" />
           <span>
             <small>Media kit of</small>
-            <strong>{CREATOR.handle}</strong>
+            <strong>@{user}</strong>
           </span>
           <Link href="/creater/profile/instagram" className="mk-add">
             + Add account
           </Link>
         </div>
-        <p className="mk-sync">{CREATOR.synced}</p>
+        <p className="mk-sync">{syncTxt}</p>
       </div>
 
       <section className="bx-card mk-hero">
         <div className="mk-cover" />
         <div className="mk-id">
-          <img src={CREATOR.avatar} alt="" className="mk-av" />
+          <img src={avatar} alt="" className="mk-av" referrerPolicy="no-referrer" />
           <div className="mk-id__txt">
             <h2>
               {name} <span className="mk-acct">Creator Account</span>
             </h2>
-            <p className="mk-handle">{CREATOR.handle}</p>
+            <p className="mk-handle">@{user}</p>
             <p className="mk-bio">{bio}</p>
           </div>
           <div className="mk-id__btns">
@@ -149,12 +262,7 @@ export default function MediaKit() {
             <button
               type="button"
               className="mk-editbtn"
-              onClick={() => {
-                setDraftName(name);
-                setDraftBio(bio);
-                setDraftShow(show);
-                setPopup("edit");
-              }}
+              onClick={openEdit}
             >
               ✎ Edit
             </button>
@@ -175,7 +283,7 @@ export default function MediaKit() {
         <section className="bx-card mk-sec">
           <h3>Audience</h3>
           <div className="mk-aud">
-            {ANALYTICS.audience.map((a) => (
+            {audience.map((a) => (
               <div key={a.label}>
                 <span>
                   {a.label} <b>{a.value}%</b>
@@ -191,17 +299,20 @@ export default function MediaKit() {
 
       <section className="bx-card mk-sec">
         <h3>
-          Top performing posts <small>best of {KIT_POSTS.length} posts · likes + comments</small>
+          Top performing posts <small>best of {n} posts · likes + comments</small>
         </h3>
         <div className="mk-posts" data-scroll>
-          {[...KIT_POSTS].sort((a, b) => b.likes - a.likes).map((p, i) => (
-            <figure key={p.img}>
-              <img src={p.img} alt="" />
-              <figcaption>
-                #{i + 1} · <Heart size={11} /> {p.likes} · <Chat size={11} /> {p.comments}
-              </figcaption>
-            </figure>
+          {top.map((p, i) => (
+            <a key={p.id || i} href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
+              <figure>
+                <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
+                <figcaption>
+                  #{i + 1} · <Heart size={11} /> {fmtNum(p.like_count || 0)} · <Chat size={11} /> {fmtNum(p.comments_count || 0)}
+                </figcaption>
+              </figure>
+            </a>
           ))}
+          {!top.length && <p className="mk-none">Your posts show up here once Instagram has synced.</p>}
         </div>
       </section>
 
@@ -209,47 +320,60 @@ export default function MediaKit() {
         <section className="bx-card mk-sec">
           <h3>
             Work portfolio
-            <button type="button" className="mk-edit" onClick={() => setPopup("edit")}>
+            <button type="button" className="mk-edit" onClick={openEdit}>
               ✎ Edit
             </button>
           </h3>
-          <ul className="mk-port">
-            {PORTFOLIO.map((p) => (
-              <li key={p.brand}>
-                <strong>{p.brand}</strong>
-                <small>{p.note}</small>
-              </li>
-            ))}
-          </ul>
+          {portfolio.length ? (
+            <ul className="mk-port">
+              {portfolio.map((p, i) => (
+                <li key={i}>
+                  <strong>{p.url ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.brand}</a> : p.brand}</strong>
+                  <small>{p.note || "Brand collaboration"}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mk-none">Campaigns you finish on Geek show up here automatically.</p>
+          )}
         </section>
       )}
 
       {show.mentions && (
         <section className="bx-card mk-sec">
           <h3>Mentions</h3>
-          <ul className="mk-ment">
-            {MENTIONS.map((m) => (
-              <li key={m.who}>
-                <b>{m.who}</b> {m.text}
-              </li>
-            ))}
-          </ul>
+          {mentions.length ? (
+            <ul className="mk-ment">
+              {mentions.map((m, i) => (
+                <li key={m.id || i}>
+                  <b>@{m.username || "tagged"}</b>{" "}
+                  <a href={m.permalink || "#"} target="_blank" rel="noopener noreferrer">
+                    tagged you{m.timestamp ? ` · ${fmtDate(m.timestamp)}` : ""}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mk-none">No mentions yet — when accounts tag you, they show up here.</p>
+          )}
         </section>
       )}
 
       {show.showcase && (
         <section className="bx-card mk-sec">
           <h3>
-            Content showcase <small className="mk-right">{KIT_POSTS.length} posts</small>
+            Content showcase <small className="mk-right">{fmtNum(a.media_count || n)} posts</small>
           </h3>
           <div className="mk-show" data-scroll>
-            {KIT_POSTS.map((p) => (
-              <figure key={p.img}>
-                <img src={p.img} alt="" />
-                <figcaption>
-                  <Heart size={11} /> {p.likes} <Chat size={11} /> {p.comments}
-                </figcaption>
-              </figure>
+            {showcase.map((p, i) => (
+              <a key={p.id || i} href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
+                <figure>
+                  <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
+                  <figcaption>
+                    <Heart size={11} /> {fmtNum(p.like_count || 0)} <Chat size={11} /> {fmtNum(p.comments_count || 0)}
+                  </figcaption>
+                </figure>
+              </a>
             ))}
           </div>
         </section>
@@ -260,7 +384,7 @@ export default function MediaKit() {
           <strong>Work with {name}</strong>
           <small>Barters, paid campaigns &amp; brand collaborations — managed end-to-end in Geek Influencer OS.</small>
         </span>
-        <button type="button" className="bx-btn bx-btn--dark" onClick={() => flash("Media kit link added to your Instagram bio 🎉")}>
+        <button type="button" className="bx-btn bx-btn--dark" onClick={() => flash("Publishing from here is coming soon")}>
           Publish to Instagram →
         </button>
       </section>
@@ -289,7 +413,7 @@ export default function MediaKit() {
                 <a className="bx-btn bx-btn--ghost" href={`https://wa.me/?text=${encodeURIComponent("My media kit: " + kitUrl)}`} target="_blank" rel="noreferrer">
                   <WhatsApp size={15} /> WhatsApp
                 </a>
-                <button type="button" className="bx-btn bx-btn--ghost" onClick={() => flash("Media kit PDF is downloading…")}>
+                <button type="button" className="bx-btn bx-btn--ghost" onClick={() => flash("PDF download is coming soon — share the link for now")}>
                   <Download size={14} /> Download PDF
                 </button>
               </div>
@@ -306,14 +430,7 @@ export default function MediaKit() {
             onClick={(ev) => ev.stopPropagation()}
             role="dialog"
             aria-label="Edit media kit"
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              setName(draftName.trim() || CREATOR.user);
-              setBio(draftBio);
-              setShow(draftShow);
-              setPopup(null);
-              flash("Media kit saved");
-            }}
+            onSubmit={save}
           >
             <div className="bx-modal__head">
               <h2>Edit</h2>
@@ -343,8 +460,8 @@ export default function MediaKit() {
                   <button type="button" className={`bx-toggle ${draftShow[k] ? "is-on" : ""}`} onClick={() => setDraftShow({ ...draftShow, [k]: !draftShow[k] })} aria-pressed={draftShow[k]} aria-label={l} />
                 </div>
               ))}
-              <button type="submit" className="bx-btn bx-btn--dark bx-btn--block mk-gap">
-                <Check size={14} /> Save
+              <button type="submit" className="bx-btn bx-btn--dark bx-btn--block mk-gap" disabled={saving}>
+                <Check size={14} /> {saving ? "Saving…" : "Save"}
               </button>
             </div>
           </form>
@@ -368,6 +485,9 @@ export default function MediaKit() {
         .mk-of small { display: block; font-size: 11px; line-height: 12.7px; letter-spacing: .4px; text-transform: uppercase; color: #6b5a3a; }
         .mk-of strong { display: block; font-size: 14px; line-height: 16.1px; font-weight: 700; color: #14231a; }
         .mk-add { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; margin-left: 6px; border-radius: 999px; border: 1px solid #c9b38a; background: #fffaef; font-family: var(--bx-jak); font-size: 14px; font-weight: 700; color: #14231a; }
+        .mk-none { margin: 0; font-size: 13px; color: #7a6a4a; }
+        .mk-posts a, .mk-show a { display: contents; color: inherit; }
+        .mk-port a, .mk-ment a { color: inherit; }
         .mk-sync { margin: 0; font-size: 12px; color: #7a6a4a; }
         .mk-hero { overflow: hidden; border-radius: 16px; }
         .mk-cover { height: 120px; background: linear-gradient(170deg, #0f3a28 0%, #1d5a3e 38%, #8d8a46 66%, #d9a94a 100%); }

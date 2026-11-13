@@ -3,33 +3,42 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Overview from "../overview/page";
-import { campaignById } from "@/components/admin/data";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { useCampaign, useToast, fmtNum } from "@/components/admin/campaign/live";
 
-const MATCHES = [
-  { id: "smarty", name: "Smarty", handle: "@smartynikhil8", followers: "1,66,816", eng: "—", city: "Delhi", fit: "100%" },
-  { id: "nafish", name: "Nafish Alam", handle: "@royalnafish", followers: "82,183", eng: "0.8%", city: "Patna", fit: "100%" },
-  { id: "sonali", name: "Sonali Pahuja", handle: "@little_tanny03", followers: "67,674", eng: "3.4%", city: "Bengaluru", fit: "100%" },
-  { id: "ashish", name: "Ashish Giri", handle: "@ashish.giri21", followers: "38,694", eng: "3.8%", city: "Delhi", fit: "96%" },
-];
-const ALL = [
-  ...MATCHES,
-  { id: "aisha", name: "Aisha Khan", handle: "@aisha.styles", followers: "24,100", eng: "6.4%", city: "Mumbai", fit: "88%" },
-  { id: "meera", name: "Meera Iyer", handle: "@meera.makes", followers: "62,400", eng: "5.8%", city: "Bengaluru", fit: "84%" },
-  { id: "kritika", name: "Kritika Rao", handle: "@kritikarao", followers: "11,900", eng: "8.9%", city: "Hyderabad", fit: "79%" },
-];
+/* api row → table row (campaign_matches / creator_search dono) */
+const toRow = (c) => ({
+  id: c.member_id || c.username,
+  member: c.member_id,
+  handle: c.username ? "@" + c.username : "",
+  name: c.name || (c.username ? "@" + c.username : "Creator"),
+  followers: c.followers != null ? fmtNum(c.followers) : "—",
+  eng: c.engagement != null ? Math.round(c.engagement * 10) / 10 + "%" : "—",
+  city: [...new Set([c.city, c.region].filter(Boolean))].join(", ") || "—",
+  fit: c.score != null ? `${c.score}%` : "—",
+  state: c.state || "none",
+});
+const STATE_TXT = { invited: "✓ Invited", applied: "Applied", approved: "On the campaign", declined: "Declined", eligible: "Applied", sent_to_brand: "Applied" };
 
-/* Figma: Find matching creators — workspace ke upar right panel (Invite creators) */
+/* Figma: Find matching creators — workspace ke upar right panel (purana openInvitePanel) */
 export default function FindMatching() {
   const { id } = useParams();
   const router = useRouter();
-  const c = campaignById(id);
+  const { c: camp } = useCampaign(id);
+  const on = !!id && id !== "sample";
+  const m = useRpc("admin", "api.campaign_matches", { p_campaign: id, p_limit: 60 }, { skip: !on });
+  const ext = useRpc("admin", "api.list_external_invites", { p_campaign: id }, { skip: !on });
+  const disc = useRpc("admin", "api.discover_external", { p_filters: {}, p_campaign: id, p_limit: 24 }, { skip: !on });
   const [mode, setMode] = useState("match");
   const [show, setShow] = useState("Not invited yet");
   const [q, setQ] = useState("");
-  const [invited, setInvited] = useState([]);
-  const [toast, setToast] = useState("");
+  const [qq, setQq] = useState("");
+  const [search, setSearch] = useState({ rows: [], loading: false, error: null });
+  const [mine, setMine] = useState({}); // is session mein invite kiye (member → true)
+  const [busy, setBusy] = useState("");
+  const [toast, setToast] = useToast();
 
-  const close = () => router.push(`/admin/campaigns/${c.id}/overview`);
+  const close = () => router.push(`/admin/campaigns/${id}/overview`);
 
   useEffect(() => {
     const k = (e) => e.key === "Escape" && close();
@@ -40,25 +49,60 @@ export default function FindMatching() {
       document.body.style.overflow = "";
     };
   });
+  // 🔎 Search all — creator_search (platform), 350ms ruk ke
   useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2200);
+    const t = setTimeout(() => setQq(q.trim()), 350);
     return () => clearTimeout(t);
-  }, [toast]);
+  }, [q]);
+  useEffect(() => {
+    if (mode !== "all" || !on) return;
+    let alive = true;
+    setSearch((s) => ({ ...s, loading: true }));
+    rpc("admin", "api.creator_search", { p_filters: { q: qq, source: "platform" }, p_page: 1, p_size: 24, p_campaign: id }).then((r) => {
+      if (alive) setSearch({ rows: (r.data && r.data.rows) || [], loading: false, error: r.error });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [mode, qq, id, on]);
 
-  let rows = mode === "match" ? MATCHES : ALL.filter((r) => `${r.name} ${r.handle} ${r.city}`.toLowerCase().includes(q.trim().toLowerCase()));
-  if (show === "Not invited yet") rows = rows.filter((r) => !invited.includes(r.id));
-  if (show === "Invited") rows = rows.filter((r) => invited.includes(r.id));
+  const L = (Array.isArray(m.data) ? m.data : []).map(toRow);
+  const invitedN = L.filter((r) => r.state === "invited" || mine[r.member]).length;
+  const disN = (Array.isArray(disc.data) ? disc.data : []).filter((c) => !c.invited).length;
+  const extN = Array.isArray(ext.data) ? ext.data.length : 0;
+  const isInv = (r) => r.state !== "none" || mine[r.member];
 
-  const invite = (r) => {
-    setInvited((v) => (v.includes(r.id) ? v : [...v, r.id]));
-    setToast(`🎯 Invite sent to ${r.name} — in-app, WhatsApp & email`);
+  let rows = mode === "match" ? L : search.rows.map(toRow);
+  if (show === "Not invited yet") rows = rows.filter((r) => !isInv(r));
+  if (show === "Invited") rows = rows.filter((r) => isInv(r));
+
+  /* invite_creator (on platform) — purane data-inv / csInvite jaisa */
+  const invite = async (r, quiet) => {
+    if (!r.member) return false;
+    setBusy(r.id);
+    const { error } = await rpc("admin", "api.invite_creator", { p_campaign: id, p_member: r.member, p_note: null });
+    setBusy("");
+    if (error) {
+      if (!quiet) setToast(errText(error));
+      return false;
+    }
+    setMine((v) => ({ ...v, [r.member]: true }));
+    if (!quiet) setToast(`🎯 Invite sent to ${r.name} — in-app, WhatsApp & email`);
+    return true;
   };
-  const inviteAll = () => {
-    const ids = rows.map((r) => r.id);
-    setInvited((v) => [...new Set([...v, ...ids])]);
-    setToast(`🎯 ${ids.length} creators invited`);
+  const inviteAll = async () => {
+    const list = rows.filter((r) => !isInv(r) && r.member);
+    if (!list.length) return;
+    if (!window.confirm(`Invite ${list.length} creator${list.length > 1 ? "s" : ""} to this campaign? Each gets it in the app, on WhatsApp and by email.`)) return;
+    setBusy("all");
+    let ok = 0;
+    for (const r of list) if (await invite(r, true)) ok++;
+    setBusy("");
+    setToast(`🎯 ${ok} creator${ok === 1 ? "" : "s"} invited${ok < list.length ? ` · ${list.length - ok} couldn't be invited` : ""}`);
+    m.reload(true);
   };
+
+  const c = { name: camp?.name || "Campaign" };
 
   return (
     <>
@@ -74,10 +118,10 @@ export default function FindMatching() {
 
           <div className="fm-stats">
             {[
-              ["60", "Match your brief"],
-              [String(invited.length), "Invited"],
-              ["24", "New on Instagram"],
-              ["5", "Off-platform invites"],
+              [m.loading ? "…" : String(L.length), "Match your brief"],
+              [m.loading ? "…" : String(invitedN), "Invited"],
+              [disc.loading ? "…" : String(disN), "New on Instagram"],
+              [ext.loading ? "…" : String(extN), "Off-platform invites"],
             ].map(([n, l]) => (
               <div key={l}>
                 <strong>{n}</strong>
@@ -88,7 +132,7 @@ export default function FindMatching() {
 
           <div className="fm-bar">
             <button type="button" className={`ad-tab ${mode === "match" ? "is-on" : ""}`} onClick={() => setMode("match")}>
-              ✨ Matching (60)
+              ✨ Matching ({L.length})
             </button>
             <button type="button" className={`ad-tab ${mode === "all" ? "is-on" : ""}`} onClick={() => setMode("all")}>
               🔎 Search all creators
@@ -98,8 +142,8 @@ export default function FindMatching() {
               <option>Invited</option>
               <option>Everyone</option>
             </select>
-            <button type="button" className="ad-btn ad-btn--primary fm-all" onClick={inviteAll} disabled={!rows.length}>
-              Invite all shown
+            <button type="button" className="ad-btn ad-btn--primary fm-all" onClick={inviteAll} disabled={!rows.some((r) => !isInv(r) && r.member) || busy === "all"}>
+              {busy === "all" ? "Inviting…" : "Invite all shown"}
             </button>
           </div>
           {mode === "all" && <input className="ad-input fm-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, @handle or city…" aria-label="Search all creators" autoFocus />}
@@ -129,11 +173,11 @@ export default function FindMatching() {
                       <span className="ad-badge ad-badge--green">{r.fit}</span>
                     </td>
                     <td>
-                      {invited.includes(r.id) ? (
-                        <span className="fm-done">✓ Invited</span>
+                      {isInv(r) ? (
+                        <span className="fm-done">{mine[r.member] ? "✓ Invited" : STATE_TXT[r.state] || "✓ Invited"}</span>
                       ) : (
-                        <button type="button" className="ad-btn ad-btn--primary fm-inv" onClick={() => invite(r)}>
-                          🎯 Invite
+                        <button type="button" className="ad-btn ad-btn--primary fm-inv" disabled={busy === r.id || !r.member} onClick={() => invite(r)}>
+                          {busy === r.id ? "…" : "🎯 Invite"}
                         </button>
                       )}
                     </td>
@@ -141,7 +185,17 @@ export default function FindMatching() {
                 ))}
               </tbody>
             </table>
-            {!rows.length && <p className="fm-empty">Nobody here yet.</p>}
+            {!rows.length && (
+              <p className="fm-empty">
+                {(mode === "match" ? m.error : search.error)
+                  ? errText(mode === "match" ? m.error : search.error)
+                  : (mode === "match" ? m.loading : search.loading)
+                  ? "Loading creators…"
+                  : mode === "match" && !L.length
+                  ? "No creator on the platform matches this brief yet. Widen the follower range or the ideal profile on the campaign, or search all creators."
+                  : "Nobody here yet."}
+              </p>
+            )}
           </div>
         </aside>
       </div>

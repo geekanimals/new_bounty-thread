@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * Reports / Activity / Users / Settings ke common blocks (Figma):
+ * Reports / Activity / Users / Settings ke common blocks (Figma) + Supabase data ke formatters:
  *  - LinkTabs: page ke andar wale tabs (har tab apna route)
  *  - Panel: white card + title (Manrope 17) + sub + right action
  *  - Table: card ke andar table (columns ki width Figma px se)
@@ -171,22 +171,86 @@ export function Notice({ icon = "⚠", children, className = "" }) {
   );
 }
 
+/** say("Saved") → ✓ toast · say("Couldn't save", true) → error toast */
 export function useToast() {
-  const [msg, setMsg] = useState("");
+  const [t, setT] = useState(null);
   useEffect(() => {
-    if (!msg) return undefined;
-    const t = setTimeout(() => setMsg(""), 2400);
-    return () => clearTimeout(t);
-  }, [msg]);
-  const node = msg ? (
-    <div className="ad-toast" role="status">
-      ✓ {msg}
+    if (!t) return undefined;
+    const x = setTimeout(() => setT(null), t.err ? 4200 : 2600);
+    return () => clearTimeout(x);
+  }, [t]);
+  const node = t ? (
+    <div className="ad-toast" role="status" style={t.err ? { background: "var(--ad-red)" } : undefined}>
+      {t.err ? "⚠" : "✓"} {t.msg}
     </div>
   ) : null;
-  return [node, setMsg];
+  const say = (msg, err = false) => setT(msg ? { msg: String(msg), err, at: Date.now() } : null);
+  return [node, say];
 }
 
-/** browser mein file download (prototype CSV/JSON) */
+/* ---------- Supabase data ke chhote helpers (purane app ke fmtDate / fmtDateTime / ago jaise) ---------- */
+export const fmtNum = (n) => (Number(n) || 0).toLocaleString("en-IN");
+export const kfmt = (n) => {
+  n = Number(n) || 0;
+  return n >= 1e7 ? (n / 1e6).toFixed(0) + "M" : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M" : n >= 1e4 ? Math.round(n / 1e3) + "K" : n >= 1e3 ? (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K" : String(Math.round(n));
+};
+export const fmtMoney = (n) => {
+  n = Number(n) || 0;
+  if (n >= 1e7) return "₹" + (n / 1e7).toFixed(1).replace(/\.0$/, "") + "Cr";
+  if (n >= 1e5) return "₹" + (n / 1e5).toFixed(1).replace(/\.0$/, "") + "L";
+  if (n >= 1e3) return "₹" + (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+  return "₹" + n;
+};
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "13 Sep 2026" (Figma jaisa — browser ka "Sept" nahi) */
+export const fmtDate = (d) => {
+  if (!d) return "—";
+  const x = new Date(d);
+  return isNaN(x) ? String(d) : `${x.getDate()} ${MON[x.getMonth()]} ${x.getFullYear()}`;
+};
+/** "1 Nov, 11:30 am" */
+export const fmtDateTime = (d) => {
+  if (!d) return "—";
+  const x = new Date(d);
+  if (isNaN(x)) return String(d);
+  const h = x.getHours();
+  return `${x.getDate()} ${MON[x.getMonth()]}, ${h % 12 || 12}:${String(x.getMinutes()).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+};
+/** "2 min ago" — sirf effect / event ke andar ya data aane ke baad (render par Date.now theek hai kyunki ye client page hai aur data baad mein aata hai) */
+export const ago = (t) => {
+  if (!t) return "—";
+  const m = Math.round((Date.now() - new Date(t).getTime()) / 60000);
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
+};
+/** table ki empty line: loading / error (+Retry) / khali */
+export function emptyState({ loading, error, reload, empty }) {
+  if (loading) return "Loading…";
+  if (error)
+    return (
+      <span>
+        {String(error.message || error)}{" "}
+        {reload && (
+          <button type="button" className="sk-link" onClick={() => reload()}>
+            Retry
+          </button>
+        )}
+      </span>
+    );
+  return empty;
+}
+/** objects ki list → CSV (saari keys, nested JSON) — purane toCsv jaisa */
+export function objectsToCsv(rows) {
+  const keys = [];
+  rows.forEach((r) => Object.keys(r || {}).forEach((k) => !keys.includes(k) && keys.push(k)));
+  const cell = (v) => {
+    if (v == null) return "";
+    const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return [keys.join(",")].concat(rows.map((r) => keys.map((k) => cell(r[k])).join(","))).join("\n");
+}
+
+/** browser mein file download (CSV / JSON) */
 export function downloadFile(name, text, type = "text/csv") {
   try {
     const url = URL.createObjectURL(new Blob([text], { type }));

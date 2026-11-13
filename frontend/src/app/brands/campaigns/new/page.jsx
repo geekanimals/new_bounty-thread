@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
+import { BrLoading } from "@/components/brands/BrandStates";
+import { useBrandCampaigns, sendCampaignRequest } from "@/services/brand";
 import { Check, LinkIcon, Play, ImageIcon, Grid, Upload, Send, Rupee, Close } from "@/components/ui/Icons";
 
 const GOALS = ["Awareness", "Sales", "Product launch", "App installs", "Store footfall"];
@@ -24,25 +26,32 @@ const NEXT = [
 // "600000" -> "6,00,000" (Indian format)
 const inr = (n) => Number(n || 0).toLocaleString("en-IN");
 
-/** /brands/campaigns/new — naya campaign request Geek ko bhejna */
+/**
+ * /brands/campaigns/new — naya campaign request Geek ko bhejna
+ * (app.js openCampaignModal mode "request" → files campaign-files mein → api.brand_campaign_request { p: { brand_id, name, form } }).
+ * Kuch banta nahi — Geek team ko request jaati hai; Campaign requests mein dikhti hai.
+ */
 export default function NewCampaignRequest() {
+  const d = useBrandCampaigns();
   const [f, setF] = useState({
-    name: "Wedding Season Looks",
-    product: "Nykaa Bridal Glow range",
-    link: "nykaa.com/bridal-glow",
+    name: "",
+    product: "",
+    link: "",
     goal: "Sales",
-    niches: ["Makeup", "Bridal"],
+    niches: [],
     size: "50K–200K",
     city: "Metros",
     reels: 1,
-    stories: 2,
+    stories: 0,
     posts: 0,
-    budget: "600000",
-    from: "2026-11-15",
-    to: "2026-12-15",
-    brief: "Show a full bridal-guest look in under 60 sec using 3 products from the range.\nNatural light, warm tones. Mention the 25% wedding offer.",
+    budget: "",
+    from: "",
+    to: "",
+    brief: "",
   });
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState([]); // asli File objects
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
   const [tried, setTried] = useState(false);
   const [sent, setSent] = useState(false);
   const [toast, setToast] = useState("");
@@ -67,10 +76,31 @@ export default function NewCampaignRequest() {
     setToast(t);
     setTimeout(() => setToast(""), 2400);
   };
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setTried(true);
-    if (errName || errBudget || errContent) return;
+    if (errName || errBudget || errContent || busy) return;
+    setErr("");
+    setBusy("Sending…");
+    // purane campaign form ki keys (brand_campaign_request inhi se product / creators / cities / dates / budget padhta hai)
+    const row = {
+      name: f.name.trim(),
+      campaign_type: "paid",
+      objective: f.goal,
+      budget: Number(f.budget) || null,
+      product_link: f.link.trim() ? (/^https?:\/\//i.test(f.link.trim()) ? f.link.trim() : "https://" + f.link.trim()) : null,
+      platforms: "Instagram",
+      deliverables: `${content} per creator`,
+      brief: f.brief.trim(),
+      start_date: f.from || null,
+      end_date: f.to || null,
+      creators: suggested,
+      ideal_profile: { ...(f.niches.length ? { categories: f.niches } : {}), locations: [f.city], audience_notes: `Follower size ${f.size}` },
+      contract_terms: { product: f.product.trim() || null, deliverables: `${content} per creator` },
+    };
+    const r = await sendCampaignRequest(row, files, setBusy);
+    setBusy("");
+    if (r.error) return setErr(r.error.message || String(r.error));
     setSent(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -79,7 +109,9 @@ export default function NewCampaignRequest() {
     <BrandShell crumbs={[{ label: "Campaigns", href: "/brands/campaigns" }, { label: "New request" }]}>
       <title>New campaign request — Geek OS Brand</title>
 
-      {sent ? (
+      {d.loading ? (
+        <BrLoading rows={6} />
+      ) : sent ? (
         <section className="br-card nr-done">
           <span className="nr-done__ic">
             <Check size={22} />
@@ -118,18 +150,18 @@ export default function NewCampaignRequest() {
                 <label className="br-label" htmlFor="nr-name">
                   Campaign name
                 </label>
-                <input id="nr-name" className={`br-input ${tried && errName ? "is-err" : ""}`} value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Wedding Season Looks" />
+                <input id="nr-name" className={`br-input ${tried && errName ? "is-err" : ""}`} maxLength={160} value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Wedding Season Looks" />
                 {tried && errName && <p className="nr-err">Give the campaign a name.</p>}
                 <div className="nr-two">
                   <div>
                     <label className="br-label">Product or collection</label>
-                    <input className="br-input" value={f.product} onChange={(e) => set("product", e.target.value)} />
+                    <input className="br-input" maxLength={200} value={f.product} onChange={(e) => set("product", e.target.value)} placeholder="e.g. Bridal Glow range" />
                   </div>
                   <div>
                     <label className="br-label">Website / product link</label>
                     <span className="nr-icon-input">
                       <LinkIcon size={14} />
-                      <input className="br-input" value={f.link} onChange={(e) => set("link", e.target.value)} />
+                      <input className="br-input" value={f.link} onChange={(e) => set("link", e.target.value)} placeholder="yourbrand.com/product" />
                     </span>
                   </div>
                 </div>
@@ -224,7 +256,8 @@ export default function NewCampaignRequest() {
                       <input
                         className={`br-input ${tried && errBudget ? "is-err" : ""}`}
                         inputMode="numeric"
-                        value={inr(f.budget)}
+                        value={f.budget ? inr(f.budget) : ""}
+                        placeholder="e.g. 6,00,000"
                         onChange={(e) => set("budget", e.target.value.replace(/\D/g, "").slice(0, 9))}
                       />
                     </span>
@@ -247,12 +280,15 @@ export default function NewCampaignRequest() {
                   </div>
                 </div>
                 <label className="br-label nr-gap">Brief for creators</label>
-                <textarea className="br-input" rows={4} value={f.brief} onChange={(e) => set("brief", e.target.value)} />
+                <textarea className="br-input" rows={4} maxLength={6000} value={f.brief} onChange={(e) => set("brief", e.target.value)} placeholder="What should creators show and say? Anything they must avoid?" />
                 <label className="nr-upload">
                   <input
                     type="file"
                     multiple
-                    onChange={(e) => setFiles([...files, ...Array.from(e.target.files || []).map((x) => x.name)])}
+                    onChange={(e) => {
+                      setFiles([...files, ...Array.from(e.target.files || [])]);
+                      e.target.value = "";
+                    }}
                   />
                   <span className="nr-upload__ic">
                     <Upload size={15} />
@@ -265,8 +301,8 @@ export default function NewCampaignRequest() {
                 {files.length > 0 && (
                   <ul className="nr-files">
                     {files.map((n, i) => (
-                      <li key={n + i}>
-                        {n}
+                      <li key={n.name + i}>
+                        {n.name}
                         <button type="button" aria-label="Remove file" onClick={() => setFiles(files.filter((_, j) => j !== i))}>
                           <Close size={12} />
                         </button>
@@ -276,12 +312,14 @@ export default function NewCampaignRequest() {
                 )}
               </section>
 
+              {err && <p className="nr-err nr-err--box">{err}</p>}
+              {!d.loading && !d.can && <p className="nr-err nr-err--box">This login can only view — ask your team’s admin to send the request.</p>}
               <div className="nr-foot">
-                <button type="button" className="br-btn br-btn--ghost" onClick={() => flash("Draft saved — finish it any time from Campaigns")}>
+                <button type="button" className="br-btn br-btn--ghost" onClick={() => flash("Coming soon — drafts. Send the request when it’s ready.")}>
                   Save draft
                 </button>
-                <button type="submit" className="br-btn br-btn--primary">
-                  <Send size={14} /> Send request to Geek
+                <button type="submit" className="br-btn br-btn--primary" disabled={!!busy || !d.can}>
+                  <Send size={14} /> {busy || "Send request to Geek"}
                 </button>
               </div>
             </div>
@@ -434,6 +472,7 @@ export default function NewCampaignRequest() {
           .nr-done { margin: 10px 0; padding: 28px 20px; }
           .nr-done__btns .br-btn { width: 100%; }
         }
+        .nr-err--box { margin: 0 0 10px; padding: 10px 14px; border-radius: 11px; background: var(--br-red-bg); }
       `}</style>
     </BrandShell>
   );

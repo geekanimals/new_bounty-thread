@@ -2,24 +2,31 @@
 
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
-import { writeSession, clearSession } from "@/components/creater/session";
+import { signOut as creatorSignOut, setIgLater, afterLoginRoute, getCreator, track } from "@/services/creator";
 
 /** /creater/onboarding/instagram — Instagram connect karo (ya baad mein) */
 export default function ConnectInstagram() {
   const router = useRouter();
 
-  const signOut = () => {
-    clearSession();
+  const signOut = async () => {
+    await creatorSignOut();
     router.push("/creater");
   };
 
+  // "Connect Instagram" → Meta ki official window (meta page khud kholta hai)
+  const connect = () => {
+    track("ig_connect_start", { from: "onboarding" }, "activity");
+    router.push("/creater/onboarding/meta");
+  };
+
+  // "Baad mein" → purane app jaisa: is login ke liye yaad rakho, aage badho
   const later = () => {
-    writeSession({ ig: false });
-    router.push("/creater/onboarding/content");
+    setIgLater();
+    router.push(afterLoginRoute(getCreator()));
   };
 
   return (
-    <OnboardShell tone="light" step={4} avatar>
+    <OnboardShell tone="light" step={4} avatar gate="member">
       <title>Connect Instagram — Bounty</title>
       <div className="ci">
         <h2 className="ci-h">Let your work speak.</h2>
@@ -70,7 +77,7 @@ export default function ConnectInstagram() {
           </li>
         </ul>
 
-        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block ci-cta" onClick={() => router.push("/creater/onboarding/meta")}>
+        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block ci-cta" onClick={connect}>
           <span className="ci-ig" aria-hidden="true" /> Connect with Instagram →
         </button>
         <button type="button" className="ci-later" onClick={later}>

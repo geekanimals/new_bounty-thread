@@ -7,75 +7,130 @@ import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
 import Drawer from "@/components/admin/queue/Drawer";
 import DecisionPanel from "@/components/admin/queue/DecisionPanel";
-import { APPLICATIONS, applicationById } from "@/components/admin/queue/queueData";
+import { useRpc } from "@/lib/supabase";
+import { act, errText, useToast, useReason, grp, dayAgo, short, typeLabel, campId, STAGE_LABEL, StateBox } from "@/components/admin/queue/live";
 
-const KEY = "geek_app_done";
-const TYPES = [
-  { k: "All", label: "All" },
-  { k: "Paid", label: "💰 Paid 21" },
-  { k: "Barter", label: "🎁 Barter 39" },
-];
-const CAMPAIGN_LIST = [...new Set(APPLICATIONS.map((a) => a.campaign))];
+const STATUS_LABEL = { pending: "Pending", approved: "Approved", declined: "Declined", all: "All applications" };
+
+/* org_applicants (naya pipeline) + admin_applications (purani marketplace) → ek jaisi rows */
+function toRows(pipe = [], legacy = []) {
+  const a = (Array.isArray(pipe) ? pipe : []).map((p) => {
+    const c = p.creator || {};
+    return {
+      key: p.participation_id,
+      pid: p.participation_id,
+      name: c.name || (c.username ? "@" + c.username : "Creator"),
+      handle: c.username ? "@" + c.username : p.applied_profile ? "@" + p.applied_profile : "—",
+      campaign: p.campaign_name || "—",
+      cid: campId(p),
+      ctype: p.campaign_type,
+      type: typeLabel(p.campaign_type),
+      followers: c.followers != null ? short(c.followers) : "—",
+      appliedAt: p.applied_at,
+      fit: c.profile_pct >= 100 && c.followers ? "Good fit" : "Check",
+      g: grp(p.stage),
+      stage: p.stage,
+      reason: p.reason,
+      memberId: c.member_id,
+      raw: p,
+    };
+  });
+  const L = (Array.isArray(legacy) ? legacy : []).map((x) => ({
+    key: "m-" + x.id,
+    legacyId: x.id,
+    name: x.creator_name || "Creator",
+    handle: x.creator_org || "Marketplace",
+    campaign: x.campaign_name || "—",
+    cid: x.campaign_id,
+    ctype: "",
+    type: "—",
+    followers: "—",
+    appliedAt: x.created_at,
+    fit: "Check",
+    g: x.status === "Applied" ? "pending" : x.status === "Declined" ? "declined" : "approved",
+    stage: x.status,
+    reason: [x.decline_reason_code, x.decline_note].filter(Boolean).join(" — "),
+    raw: x,
+  }));
+  return [...a, ...L];
+}
+const typePass = (r, t) => t === "All" || (t === "Paid" ? ["paid", "barter_paid"].includes(r.ctype) : ["barter", "barter_paid"].includes(r.ctype));
 
 /**
  * Applications (Figma 006) + creator review drawer (Figma 005) jab openId ho.
+ * Purane Super Admin → Applications jaisa: api.org_applicants + admin_applications, har 30 sec.
+ * Upar ke number filter bhi hain (#pending / #approved / #declined / #all).
  */
 export default function ApplicationsView({ openId }) {
   const router = useRouter();
-  const [done, setDone] = useState({});
+  const pr = useRpc("admin", "api.org_applicants", { p_campaign: null, p_stage: null }, { refreshMs: 30000 });
+  const ar = useRpc("admin", "admin_applications", { p_campaign: null, p_status: null }, { refreshMs: 30000 });
   const [type, setType] = useState("All");
   const [camp, setCamp] = useState("");
   const [q, setQ] = useState("");
-  const [toast, setToast] = useState("");
+  const [status, setStatus] = useState("pending");
+  const [busy, setBusy] = useState("");
+  const [toastNode, toast] = useToast();
+  const [reasonNode, ask] = useReason();
 
+  // #approved jaisa hash = status filter
   useEffect(() => {
-    try {
-      setDone(JSON.parse(window.sessionStorage.getItem(KEY) || "{}"));
-    } catch {
-      /* ignore */
-    }
+    const read = () => {
+      const h = window.location.hash.replace("#", "");
+      if (STATUS_LABEL[h]) setStatus(h);
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
   }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2600);
-    return () => clearTimeout(t);
-  }, [toast]);
 
-  const decide = (a, how) => {
-    const next = { ...done, [a.id]: how };
-    setDone(next);
-    try {
-      window.sessionStorage.setItem(KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-    setToast(how === "approved" ? `${a.name} approved for ${a.campaign}` : `${a.name} declined — no message sent (auto messages off)`);
+  const all = useMemo(() => toRows(pr.data, ar.data), [pr.data, ar.data]);
+  const campaigns = useMemo(() => [...new Set(all.map((r) => r.campaign))].sort((a, b) => a.localeCompare(b)), [all]);
+  const t = q.trim().toLowerCase();
+  const base = all.filter((r) => typePass(r, type) && (!camp || r.campaign === camp) && (!t || [r.name, r.handle, r.campaign].join(" ").toLowerCase().includes(t)));
+  const cnt = (g) => base.filter((r) => r.g === g).length;
+  const rows = base.filter((r) => status === "all" || r.g === status);
+  const typeN = (k) => all.filter((r) => typePass(r, k) && (!camp || r.campaign === camp) && (status === "all" || r.g === status)).length;
+  const reload = () => {
+    pr.reload(true);
+    ar.reload(true);
   };
 
-  const approvedN = Object.values(done).filter((v) => v === "approved").length;
-  const declinedN = Object.values(done).filter((v) => v === "declined").length;
-  const pending = 60 - approvedN - declinedN;
-
-  const rows = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return APPLICATIONS.filter((a) => !done[a.id])
-      .filter((a) => type === "All" || a.type === type)
-      .filter((a) => !camp || a.campaign === camp)
-      .filter((a) => !t || a.name.toLowerCase().includes(t) || a.handle.toLowerCase().includes(t));
-  }, [done, type, camp, q]);
+  const approve = async (r, after) => {
+    setBusy(r.key);
+    const { error } = r.legacyId ? await act.approveLegacy(r.legacyId) : await act.approveApplicant(r.pid);
+    setBusy("");
+    if (error) return toast(errText(error), true);
+    toast(`${r.name} approved for ${r.campaign}`);
+    reload();
+    after && after();
+  };
+  const decline = async (r, after) => {
+    const pick = await ask("Why are you declining this creator?");
+    if (!pick) return;
+    setBusy(r.key);
+    const { error } = r.legacyId ? await act.declineLegacy(r.legacyId, pick) : await act.declineApplicant(r.pid, pick);
+    setBusy("");
+    if (error) return toast(errText(error), true);
+    toast(`${r.name} declined — message sent`);
+    reload();
+    after && after();
+  };
 
   const csv = () => {
-    const head = "Creator,Handle,Campaign,Type,Followers,Applied,Fit";
-    const body = rows.map((a) => [a.name, a.handle, a.campaign, a.type, a.followers, a.applied, a.fit].join(",")).join("\n");
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["Creator", "Handle", "Campaign", "Type", "Followers", "Applied", "Status"].map(esc).join(",");
+    const body = rows.map((a) => [a.name, a.handle, a.campaign, a.type, a.followers, dayAgo(a.appliedAt), STAGE_LABEL[a.stage] || a.stage].map(esc).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([head + "\n" + body], { type: "text/csv" }));
     const el = document.createElement("a");
     el.href = url;
-    el.download = "pending-applications.csv";
+    el.download = `${status}-applications.csv`;
     el.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
-  const open = openId ? applicationById(openId) : null;
+  const open = openId ? all.find((r) => r.key === decodeURIComponent(openId)) : null;
+  const loading = pr.loading && !pr.data;
 
   return (
     <AdminShell>
@@ -83,32 +138,43 @@ export default function ApplicationsView({ openId }) {
 
       <Stats
         items={[
-          { value: pending, label: "Pending", note: "Waiting for you", href: "/admin/applications/screening" },
-          { value: 151 + approvedN, label: "Approved", note: "Selected creators" },
-          { value: 17 + declinedN, label: "Declined", note: "Not selected" },
-          { value: 228, label: "All applications", note: "Everything" },
+          { value: cnt("pending"), label: "Pending", note: "Waiting for you", href: "/admin/applications/screening" },
+          { value: cnt("approved"), label: "Approved", note: "Selected creators", href: "#approved" },
+          { value: cnt("declined"), label: "Declined", note: "Not selected", href: "#declined" },
+          { value: base.length, label: "All applications", note: "Everything", href: "#all" },
         ]}
       />
 
       <section className="ad-card apl">
         <div className="apl-head">
-          <h2 className="ad-h2">Pending · {pending}</h2>
-          <button type="button" className="apl-csv" onClick={csv}>
+          <h2 className="ad-h2">
+            {STATUS_LABEL[status]} · {rows.length}
+            {status !== "pending" && (
+              <a href="#pending" className="apl-back">
+                Show pending
+              </a>
+            )}
+          </h2>
+          <button type="button" className="apl-csv" onClick={csv} disabled={!rows.length}>
             ⬇️ CSV
           </button>
         </div>
 
         <div className="apl-filters">
           <div className="ad-tabs apl-tabs" role="tablist">
-            {TYPES.map((t) => (
-              <button key={t.k} type="button" role="tab" aria-selected={type === t.k} className={`ad-tab ${type === t.k ? "is-on" : ""}`} onClick={() => setType(t.k)}>
-                {t.label}
+            {[
+              ["All", "All"],
+              ["Paid", `💰 Paid ${typeN("Paid")}`],
+              ["Barter", `🎁 Barter ${typeN("Barter")}`],
+            ].map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={type === k} className={`ad-tab ${type === k ? "is-on" : ""}`} onClick={() => setType(k)}>
+                {label}
               </button>
             ))}
           </div>
           <select className="ad-input apl-select" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
             <option value="">All campaigns</option>
-            {CAMPAIGN_LIST.map((c) => (
+            {campaigns.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
@@ -116,115 +182,123 @@ export default function ApplicationsView({ openId }) {
         </div>
 
         <div className="apl-wrap" data-scroll>
-          <table className="apl-table">
-            <thead>
-              <tr>
-                <th>Creator</th>
-                <th>Campaign</th>
-                <th>Type</th>
-                <th>Followers</th>
-                <th>Applied</th>
-                <th>Fit</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((a) => (
-                <tr key={a.id} onClick={() => router.push(`/admin/applications/${a.id}`)}>
-                  <td>
-                    <Link href={`/admin/applications/${a.id}`} className="apl-name" onClick={(e) => e.stopPropagation()}>
-                      {a.name}
-                    </Link>
-                    <span className="apl-handle">{a.handle}</span>
-                  </td>
-                  <td>{a.campaign}</td>
-                  <td>
-                    <span className={`ad-badge ad-badge--${a.type === "Paid" ? "violet" : "orange"}`}>{a.type}</span>
-                  </td>
-                  <td>{a.followers}</td>
-                  <td>{a.applied}</td>
-                  <td>
-                    <span className={`ad-badge ad-badge--${a.fit === "Good fit" ? "green" : "orange"}`}>{a.fit}</span>
-                  </td>
-                  <td className="apl-act" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="apl-decline" onClick={() => decide(a, "declined")}>
-                      Decline
-                    </button>
-                    <button type="button" className="ad-btn ad-btn--primary apl-approve" onClick={() => decide(a, "approved")}>
-                      Approve
-                    </button>
-                  </td>
+          <StateBox loading={loading} error={!pr.data && pr.error} onRetry={reload} />
+          {!loading && !(!pr.data && pr.error) && (
+            <table className="apl-table">
+              <thead>
+                <tr>
+                  <th>Creator</th>
+                  <th>Campaign</th>
+                  <th>Type</th>
+                  <th>Followers</th>
+                  <th>Applied</th>
+                  <th>Fit</th>
+                  <th aria-label="Actions" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {!rows.length && <p className="apl-empty">No pending applications match these filters.</p>}
+              </thead>
+              <tbody>
+                {rows.map((a) => (
+                  <tr key={a.key} onClick={() => router.push(`/admin/applications/${encodeURIComponent(a.key)}`)}>
+                    <td>
+                      <Link href={`/admin/applications/${encodeURIComponent(a.key)}`} className="apl-name" onClick={(e) => e.stopPropagation()}>
+                        {a.name}
+                      </Link>
+                      <span className="apl-handle">{a.handle}</span>
+                    </td>
+                    <td>{a.campaign}</td>
+                    <td>{a.type !== "—" ? <span className={`ad-badge ad-badge--${a.ctype === "barter" ? "orange" : "violet"}`}>{a.type}</span> : "—"}</td>
+                    <td>{a.followers}</td>
+                    <td>{dayAgo(a.appliedAt)}</td>
+                    <td>
+                      <span className={`ad-badge ad-badge--${a.fit === "Good fit" ? "green" : "orange"}`}>{a.fit}</span>
+                    </td>
+                    <td className="apl-act" onClick={(e) => e.stopPropagation()}>
+                      {a.g === "pending" ? (
+                        <>
+                          <button type="button" className="apl-decline" disabled={busy === a.key} onClick={() => decline(a)}>
+                            Decline
+                          </button>
+                          <button type="button" className="ad-btn ad-btn--primary apl-approve" disabled={busy === a.key} onClick={() => approve(a)}>
+                            {busy === a.key ? "…" : "Approve"}
+                          </button>
+                        </>
+                      ) : (
+                        <span className={`ad-badge ad-badge--${a.g === "approved" ? "green" : "red"}`}>{STAGE_LABEL[a.stage] || a.stage}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!loading && pr.data && !rows.length && <p className="apl-empty">{all.length ? "No applications match these filters." : "No applications yet."}</p>}
         </div>
       </section>
 
       {open && (
         <Drawer eyebrow="Decision workspace" title={`Screen ${open.name} for ${open.campaign}`} closeHref="/admin/applications">
           <DecisionPanel
-            meta={`${open.campaign} · ${open.type} · Applied ${open.applied.toLowerCase()} · ${open.followers} followers`}
+            meta={[open.campaign, open.type !== "—" ? open.type : "", `Applied ${dayAgo(open.appliedAt).toLowerCase()}`, open.followers !== "—" ? `${open.followers} followers` : ""].filter(Boolean).join(" · ")}
             badges={[
               { label: open.fit, tone: open.fit === "Good fit" ? "green" : "orange" },
               { label: "Applications", tone: "violet" },
             ]}
-            why={`${open.name} (${open.handle}) is waiting for a decision. Review campaign brief and evidence before making a decision.`}
+            why={
+              open.g === "pending"
+                ? `${open.name} (${open.handle}) is waiting for a decision. Review campaign brief and evidence before making a decision.`
+                : `${open.name} — ${STAGE_LABEL[open.stage] || open.stage}${open.reason ? `: ${open.reason}` : ""}.`
+            }
             actions={
-              done[open.id] ? (
+              open.g !== "pending" ? (
                 <>
-                  <span className={`ad-badge ad-badge--${done[open.id] === "approved" ? "green" : "red"} apl-state`}>{done[open.id] === "approved" ? "✓ Approved" : "Declined"}</span>
-                  <Link href={`/admin/campaigns/${open.cid}/creators`} className="ad-btn ad-btn--ghost">
-                    Open campaign
-                  </Link>
+                  <span className={`ad-badge ad-badge--${open.g === "approved" ? "green" : "red"} apl-state`}>{open.g === "approved" ? "✓ Approved" : "Declined"}</span>
+                  {open.cid && (
+                    <Link href={`/admin/campaigns/${open.cid}/creators`} className="ad-btn ad-btn--ghost">
+                      Open campaign
+                    </Link>
+                  )}
                 </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="ad-btn ad-btn--primary"
-                    onClick={() => {
-                      decide(open, "approved");
-                      router.push("/admin/applications");
-                    }}
-                  >
-                    Approve
+                  <button type="button" className="ad-btn ad-btn--primary" disabled={busy === open.key} onClick={() => approve(open, () => router.push("/admin/applications"))}>
+                    {busy === open.key ? "…" : "Approve"}
                   </button>
-                  <button
-                    type="button"
-                    className="ad-btn ad-btn--ghost"
-                    onClick={() => {
-                      decide(open, "declined");
-                      router.push("/admin/applications");
-                    }}
-                  >
+                  <button type="button" className="ad-btn ad-btn--ghost" disabled={busy === open.key} onClick={() => decline(open, () => router.push("/admin/applications"))}>
                     Decline
                   </button>
-                  <Link href={`/admin/creators/${open.id}/profile`} className="ad-btn ad-btn--ghost">
-                    View 360°
-                  </Link>
-                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
-                    Open campaign
-                  </Link>
+                  {open.memberId && (
+                    <Link href={`/admin/creators/${open.memberId}/profile`} className="ad-btn ad-btn--ghost">
+                      View 360°
+                    </Link>
+                  )}
+                  {open.cid && (
+                    <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
+                      Open campaign
+                    </Link>
+                  )}
                 </>
               )
             }
           />
         </Drawer>
       )}
-
-      {toast && (
-        <div className="ad-toast" role="status">
-          ✓ {toast}
-        </div>
+      {openId && !open && !loading && (
+        <Drawer eyebrow="Decision workspace" title="Application not found" closeHref="/admin/applications">
+          <p className="apl-empty">This application isn’t in the list any more.</p>
+        </Drawer>
       )}
+
+      {reasonNode}
+      {toastNode}
 
       <style>{`
         .apl { padding: 22px 22px 22px; }
         .apl-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 7px; }
         .apl-csv { margin-right: 8px; border: 0; background: none; padding: 0; font-size: 14px; font-weight: 800; color: #6657e9; }
         .apl-csv:hover { color: var(--ad-primary-2); }
+        .apl-csv:disabled { opacity: .45; }
+        .apl-back { margin-left: 10px; font-family: var(--ad-sans); font-size: 12.5px; font-weight: 800; color: #6657e9; letter-spacing: 0; }
+        .apl-decline:disabled, .apl-approve:disabled { opacity: .5; }
         .apl-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
         .apl-tabs .ad-tab { height: 37px; }
         .apl-tabs .ad-tab:not(.is-on) { color: #67718a; }

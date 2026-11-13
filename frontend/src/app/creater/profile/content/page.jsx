@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
-import { CATEGORIES, LANGUAGES, CREATOR } from "@/components/creater/data";
+import { CATEGORIES, LANGUAGES } from "@/components/creater/data";
+import { useCreator, saveSection, displayName, setAvailability, setTravel, getAvailability, getTravel } from "@/services/creator";
 import { Check } from "@/components/ui/Icons";
 
 // Figma: "Professional" card ke content types (formats isi mein save hote hain)
@@ -12,12 +12,19 @@ const TYPES = ["Reels", "Stories", "Posts", "Carousels", "Lives", "UGC videos", 
 const AVAIL = [
   ["available", "🟢 Available"],
   ["limited", "🟡 Limited"],
-  ["off", "🔴 Unavailable"],
+  ["unavailable", "🔴 Unavailable"],
 ];
 
-/** /creater/profile/content — categories (max 3), languages, formats */
+// Screen words ↔ database values (purane profile.js ke CONTENT_TYPES / travel / management)
+const FMT_KEY = { Reels: "reel", Stories: "story", Posts: "post", Carousels: "carousel", Lives: "live", "UGC videos": "ugc", Unboxing: "unboxing", Reviews: "review", Tutorials: "tutorial", Vlogs: "vlog" };
+const FMT_UI = Object.fromEntries(Object.entries(FMT_KEY).map(([k, v]) => [v, k]));
+const TRAVEL = { "Only my city": "city_only", "Within my state": "state_only", "Anywhere in India": "domestic" };
+const MANAGE = { "Self-managed": "self_managed", Agency: "agency_managed", "Talent manager": "celebrity_agent_managed" };
+const ui = (map, v) => Object.keys(map).find((k) => map[k] === v) || "";
+
+/** /creater/profile/content — categories (max 3), languages, formats + Professional (api.save_profile_section "professional") */
 export default function YourContent() {
-  const [s, update] = useSession();
+  const c = useCreator();
   const [cats, setCats] = useState([]);
   const [langs, setLangs] = useState([]);
   const [formats, setFormats] = useState([]);
@@ -27,25 +34,44 @@ export default function YourContent() {
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
   const [toast, setToast] = useState("");
-  const [city, setCity] = useState(CREATOR.city.toLowerCase());
-  const [pro, setPro] = useState({ display: CREATOR.name, travel: "", manage: "" });
-  const [avail, setAvail] = useState("available");
+  const [city, setCity] = useState("");
+  const [pro, setPro] = useState({ display: "", travel: "", manage: "" });
+  const [avail, setAvail] = useState("");
   const [travelling, setTravelling] = useState(false);
+  const [trav, setTrav] = useState({ city: "" });
+  const [busy, setBusy] = useState(false);
+  const loaded = useRef(false);
 
   useEffect(() => {
-    setCats(s.categories);
-    setLangs(s.languages);
-    setFormats(s.formats);
-    setExtraCats(s.customCats || []);
-    setExtraLangs((s.languages || []).filter((l) => !LANGUAGES.includes(l)));
-    if (s.city) setCity(s.city);
-    if (s.pro) setPro((x) => ({ ...x, ...s.pro }));
-    if (s.available) setAvail(s.available);
-    setTravelling(!!s.travelling);
-  }, [s.categories, s.languages, s.formats, s.customCats, s.city, s.pro, s.available, s.travelling]);
+    if (loaded.current || !c.ready || !c.profile) return;
+    loaded.current = true;
+    const p = c.profile.professional || {};
+    const ids = (p.categories || []).map((x) => (CATEGORIES.find((k) => k.label.toLowerCase() === String(x).toLowerCase()) || {}).id || x);
+    setCats(ids);
+    setExtraCats(ids.filter((x) => !CATEGORIES.some((k) => k.id === x)));
+    setLangs(p.languages || []);
+    setExtraLangs((p.languages || []).filter((l) => !LANGUAGES.includes(l)));
+    setFormats((p.content_formats || []).map((f) => FMT_UI[f] || f));
+    setCity(p.city_coarse || c.meta?.bx_manual?.city || "");
+    setPro({ display: p.display_name || displayName(c), travel: ui(TRAVEL, p.travel_willingness), manage: ui(MANAGE, p.management_status) });
+    setAvail(p.availability_status || "");
+    // availability + travel (alag RPC — purane app jaisa)
+    getAvailability().then(({ data }) => data?.status && setAvail(data.status));
+    getTravel().then(({ data }) => {
+      if (data && data.city) {
+        setTravelling(true);
+        setTrav({ city: data.city });
+      }
+    });
+  }, [c]);
 
+  const flash = (t) => {
+    setToast(t);
+    clearTimeout(window.__ycT);
+    window.__ycT = setTimeout(() => setToast(""), 2200);
+  };
   const toggleCat = (id) => {
-    if (cats.includes(id)) return setCats(cats.filter((c) => c !== id));
+    if (cats.includes(id)) return setCats(cats.filter((x) => x !== id));
     if (cats.length >= 3) {
       setMsg("Pick up to 3 — remove one first.");
       setTimeout(() => setMsg(""), 2200);
@@ -54,7 +80,6 @@ export default function YourContent() {
     setCats([...cats, id]);
   };
   const flip = (arr, set, v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
-
   const addOwn = (e) => {
     e.preventDefault();
     const t = text.trim();
@@ -69,19 +94,54 @@ export default function YourContent() {
     setText("");
     setAdding(null);
   };
-
-  const save = () => {
-    update({ categories: cats, languages: langs, formats, customCats: extraCats, city });
-    setToast("Your content saved");
-    setTimeout(() => setToast(""), 2200);
+  const savePro = async (patch, ok = "Saved") => {
+    try {
+      await saveSection("professional", patch);
+      flash(ok);
+    } catch (e) {
+      flash("Couldn't save: " + (e.message || e));
+    }
   };
-
+  const save = async () => {
+    setBusy(true);
+    await savePro(
+      { categories: cats.map((id) => (CATEGORIES.find((k) => k.id === id) || {}).label || id), languages: langs, city_coarse: city.trim() || null },
+      "Your content saved"
+    );
+    setBusy(false);
+  };
   const allLangs = [...LANGUAGES, ...extraLangs];
-  // Professional card — har badlav turant save
+  // Professional card — har badlav turant save (naam rukne par)
   const setP = (k) => (e) => {
-    const next = { ...pro, [k]: e.target.value };
-    setPro(next);
-    update({ pro: next });
+    const v = e.target.value;
+    setPro({ ...pro, [k]: v });
+    clearTimeout(window.__ycSave);
+    if (k === "display") window.__ycSave = setTimeout(() => savePro({ display_name: v.trim() || null }), 700);
+    if (k === "travel") savePro({ travel_willingness: TRAVEL[v] || null });
+    if (k === "manage") savePro({ management_status: MANAGE[v] || null });
+  };
+  const setFormat = (t) => {
+    const next = formats.includes(t) ? formats.filter((x) => x !== t) : [...formats, t];
+    setFormats(next);
+    savePro({ content_formats: next.map((x) => FMT_KEY[x] || x.toLowerCase()) });
+  };
+  const pickAvail = async (k) => {
+    setAvail(k);
+    try {
+      await setAvailability(k);
+      flash("Availability saved");
+    } catch (e) {
+      flash("Couldn't save: " + (e.message || e));
+    }
+  };
+  // ✈️ travelling: set_my_travel (city chahiye) — tick hatao to clear
+  const saveTravel = async (on, tcity) => {
+    try {
+      await setTravel(on ? tcity.trim() : "");
+      flash(on ? "Travel saved" : "Travel cleared");
+    } catch (e) {
+      flash("Couldn't save: " + (e.message || e));
+    }
   };
 
   return (
@@ -148,8 +208,8 @@ export default function YourContent() {
         <label className="yc-label" htmlFor="yc-city">City</label>
         <input id="yc-city" className="pf-input yc-city" value={city} onChange={(e) => setCity(e.target.value)} />
 
-        <button type="button" className="yc-save" onClick={save} disabled={!cats.length}>
-          Save
+        <button type="button" className="yc-save" onClick={save} disabled={!cats.length || busy}>
+          {busy ? "Saving…" : "Save"}
         </button>
         {!cats.length && <p className="pf-hint">Pick at least 1 category.</p>}
       </section>
@@ -193,11 +253,7 @@ export default function YourContent() {
               type="button"
               className={`yc-pill ${formats.includes(t) ? "is-on" : ""}`}
               aria-pressed={formats.includes(t)}
-              onClick={() => {
-                const next = formats.includes(t) ? formats.filter((x) => x !== t) : [...formats, t];
-                setFormats(next);
-                update({ formats: next });
-              }}
+              onClick={() => setFormat(t)}
             >
               {t}
             </button>
@@ -212,10 +268,7 @@ export default function YourContent() {
               type="button"
               className={`yc-pill yc-pill--b ${avail === k ? "is-on" : ""}`}
               aria-pressed={avail === k}
-              onClick={() => {
-                setAvail(k);
-                update({ available: k });
-              }}
+              onClick={() => pickAvail(k)}
             >
               {l}
             </button>
@@ -228,13 +281,25 @@ export default function YourContent() {
             checked={travelling}
             onChange={(e) => {
               setTravelling(e.target.checked);
-              update({ travelling: e.target.checked });
+              if (!e.target.checked) saveTravel(false, "");
             }}
           />
           <span>
             <b>✈️ I&apos;m travelling right now</b> — brands planning a campaign there can find you
           </span>
         </label>
+        {travelling && (
+          <form
+            className="yc-add yc-travcity"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (trav.city.trim()) saveTravel(true, trav.city);
+            }}
+          >
+            <input className="pf-input" placeholder="Which city are you in?" value={trav.city} onChange={(e) => setTrav({ city: e.target.value })} aria-label="Travel city" />
+            <button type="submit" className="pf-btn">Save</button>
+          </form>
+        )}
       </section>
 
       {toast && (

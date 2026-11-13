@@ -14,7 +14,9 @@ export default function CampaignCard({ c, href, guest = false, locked = false, a
   const ok = !locked && c.eligible;
   // Locked card: city chhod ke sirf followers + category (Figma)
   const whoLocked = c.who.replace(/ • Based in [^•]+/, "").replace("Category: ", "");
-  const status = applied ? "Applied" : ok ? "You match" : "Not eligible";
+  // Supabase data: c.checked === false = eligibility pata nahi (purane "⇄ Check fit"), c.closed = applications band
+  const unknown = !locked && !applied && c.checked === false;
+  const status = applied ? "Applied" : c.closed ? "Applications closed" : unknown ? "Check fit" : ok ? "You match" : "Not eligible";
   return (
     <div className={`cc-wrap ${guest || mobile === "dark" ? "cc-wrap--row" : ""} ${guest ? "cc-wrap--guest" : mobile === "dark" ? "cc-wrap--dark" : ""}`}>
       {/* ---------- Visual card ---------- */}
@@ -44,8 +46,10 @@ export default function CampaignCard({ c, href, guest = false, locked = false, a
               </Link>
             ) : (
               <>
-                {locked ? (
+                {locked || unknown ? (
                   <span className="cc-fit">⇄ Check fit</span>
+                ) : c.closed && !applied ? (
+                  <span className="cc-no">🔒 Applications closed</span>
                 ) : (
                   <span className={ok || applied ? "cc-ok" : "cc-no"}>{ok || applied ? `✓ ${status}` : "✗ Not eligible"}</span>
                 )}

@@ -1,58 +1,70 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import BrandShell from "@/components/brands/BrandShell";
-import { CREATORS, MATCHES, getCreator } from "@/components/brands/data";
+import { BrLoading, BrError, BrEmpty, BrAvatar, useToast } from "@/components/brands/BrandStates";
+import { usePicks, PICK_STATUS, short as fmt, igUrl } from "@/services/brand";
+import Link from "next/link";
 import { Download, Sparkle, Close, Plus, Check, Bookmark } from "@/components/ui/Icons";
 
-// Match score — is campaign ke liye Geek ka score
-const MATCH = { "aisha-khan": 94, "meera-iyer": 91, "pooja-nair": 86 };
-const matchOf = (id) => MATCH[id] ?? MATCHES.find((m) => m.id === id)?.score ?? 72;
-
-const num = (s) => {
-  const n = parseFloat(String(s).replace(/[^\d.]/g, "")) || 0;
-  return /M/i.test(s) ? n * 1e6 : /K/i.test(s) ? n * 1000 : n;
-};
-const inr = (n) => "₹" + Math.round(n).toLocaleString("en-IN");
-
-// Har row: value nikaalna + "best" kaun (max ya min)
+const eng1 = (v) => (v == null ? null : Math.round(Number(v) * 10) / 10);
+// Har row: value + "best" kaun (max) — shortlist ke snapshot (api.brand_discover_picks) se
 const ROWS = [
-  { key: "followers", label: "Followers", val: (c) => num(c.followers), show: (c) => c.followers, best: "max" },
-  { key: "eng", label: "Engagement", hint: "likes + comments + saves", val: (c) => parseFloat(c.eng), show: (c) => c.eng, best: "max" },
-  { key: "views", label: "Avg reel views", hint: "last 10 reels", val: (c) => num(c.avgViews), show: (c) => c.avgViews, best: "max" },
-  { key: "women", label: "Audience: women", val: (c) => c.womenNum, show: (c) => `${c.womenNum}%`, bar: "#e8336d", best: "max" },
-  { key: "age", label: "Audience: age 25–34", hint: "your target group", val: (c) => c.age2534, show: (c) => `${c.age2534}%`, bar: "#8b5cf6", best: "max" },
-  { key: "cities", label: "Top cities", show: (c) => c.topCities },
-  { key: "fee", label: "Fee", hint: "1 Reel + 2 Stories", val: (c) => num(c.fee), show: (c) => c.feeFull, best: "min" },
-  { key: "cpv", label: "Cost per 1K views", hint: "fee ÷ avg views", val: (c) => num(c.fee) / (num(c.avgViews) / 1000), show: (c) => inr(num(c.fee) / (num(c.avgViews) / 1000)), best: "min" },
-  { key: "worked", label: "Worked with Nykaa", worked: true },
-  { key: "match", label: "Match for the brief", hint: "Geek’s score", val: (c) => matchOf(c.id), show: (c) => matchOf(c.id), best: "max" },
+  { key: "followers", label: "Followers", val: (c) => Number(c.s0.followers) || 0, show: (c) => (c.s0.followers != null ? fmt(c.s0.followers) : "—"), best: "max" },
+  { key: "eng", label: "Engagement", hint: "likes + comments", val: (c) => Number(c.s0.engagement) || 0, show: (c) => (c.s0.engagement != null ? `${eng1(c.s0.engagement)}%` : "—"), best: "max" },
+  { key: "city", label: "City", show: (c) => c.s0.city || "—" },
+  { key: "campaign", label: "For campaign", show: (c) => c.campaign || "No campaign yet" },
+  { key: "status", label: "Status", hint: "Geek team", show: (c) => (PICK_STATUS[c.status] || [c.status])[0] },
+  { key: "note", label: "Your note", show: (c) => c.note || "—" },
 ];
 
-/** /brands/discovery/compare — shortlist ke creators side by side */
+/** /brands/discovery/compare — shortlist (api.brand_discover_picks) ke creators side by side; "Best" = sabse zyada followers / engagement */
 export default function DiscoveryCompare() {
-  const [ids, setIds] = useState(["aisha-khan", "meera-iyer", "pooja-nair"]);
+  const picks = usePicks();
+  const [toast, say] = useToast();
+  const [ids, setIds] = useState(null); // pick_id list (pehle 3)
   const [adding, setAdding] = useState(false);
-  const [short, setShort] = useState(["aisha-khan"]);
-  const [saved, setSaved] = useState([]);
-  const [toast, setToast] = useState("");
+  useEffect(() => {
+    if (ids === null && picks.list.length) setIds(picks.list.slice(0, 3).map((p) => p.pick_id));
+  }, [picks.list, ids]);
 
-  const cols = ids.map(getCreator);
-  const others = CREATORS.filter((c) => !ids.includes(c.id));
-  const pick = cols.length ? cols.reduce((a, b) => (matchOf(b.id) > matchOf(a.id) ? b : a)) : null;
+  const all = picks.list.map((k) => ({ ...k, s0: k.snapshot || {}, name: (k.snapshot && k.snapshot.name) || "@" + k.handle }));
+  const cols = (ids || []).map((id) => all.find((x) => x.pick_id === id)).filter(Boolean);
+  const others = all.filter((c) => !(ids || []).includes(c.pick_id));
+  const top = (f) => (cols.length ? cols.reduce((a, c) => (f(c) > f(a) ? c : a)) : null);
+  const mostF = top((c) => Number(c.s0.followers) || 0);
+  const mostE = top((c) => Number(c.s0.engagement) || 0);
+  const pick = mostE;
 
   const bestOf = (row) => {
     if (!row.best || cols.length < 2) return null;
     const vals = cols.map(row.val);
-    const target = row.best === "max" ? Math.max(...vals) : Math.min(...vals);
-    return cols[vals.indexOf(target)].id;
+    const target = Math.max(...vals);
+    return target ? cols[vals.indexOf(target)].pick_id : null;
   };
-  const toggle = (arr, set, id) => set(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
-  const flash = (t) => {
-    setToast(t);
-    setTimeout(() => setToast(""), 2400);
-  };
+
+  if (picks.loading && !picks.list.length) {
+    return (
+      <BrandShell crumbs={[{ label: "Discovery", href: "/brands/discovery" }, { label: "My shortlist", href: "/brands/discovery/shortlist" }, { label: "Compare" }]}>
+        <BrLoading rows={6} />
+      </BrandShell>
+    );
+  }
+  if (!picks.list.length) {
+    return (
+      <BrandShell crumbs={[{ label: "Discovery", href: "/brands/discovery" }, { label: "My shortlist", href: "/brands/discovery/shortlist" }, { label: "Compare" }]}>
+        {picks.error ? (
+          <BrError error={picks.error} onRetry={picks.reload} />
+        ) : (
+          <BrEmpty title="Nothing to compare yet" text="Shortlist two or more creators in Discovery to compare them side by side.">
+            <Link href="/brands/discovery" className="br-btn br-btn--primary br-btn--sm">
+              Find creators
+            </Link>
+          </BrEmpty>
+        )}
+      </BrandShell>
+    );
+  }
 
   return (
     <BrandShell
@@ -68,9 +80,9 @@ export default function DiscoveryCompare() {
         <div>
           <p className="br-eyebrow">Discovery · My shortlist</p>
           <h1 className="br-h1">Compare creators</h1>
-          <p className="br-sub">Side by side — audience, engagement and fee. Green marks the best in each row.</p>
+          <p className="br-sub">Side by side — followers, engagement and where each one stands. Green marks the best in each row.</p>
         </div>
-        <button type="button" className="br-btn br-btn--ghost" onClick={() => flash("Comparison PDF is downloading…")}>
+        <button type="button" className="br-btn br-btn--ghost" onClick={() => window.print()}>
           <Download size={14} /> Download as PDF
         </button>
       </div>
@@ -78,8 +90,9 @@ export default function DiscoveryCompare() {
       <p className="dcm-ai">
         <Sparkle size={15} />
         <span>
-          Aisha reaches the most 25–34 women. Pooja gives the cheapest views and the most engaged audience. Meera is the safe pick — she already did 2.1M
-          views for Nykaa.
+          {cols.length < 2
+            ? "Add one more creator to compare."
+            : `${mostF.name} has the most followers (${fmt(mostF.s0.followers || 0)}). ${mostE.name} has the most engaged audience${mostE.s0.engagement != null ? ` (${eng1(mostE.s0.engagement)}%)` : ""}.`}
         </span>
       </p>
 
@@ -89,15 +102,15 @@ export default function DiscoveryCompare() {
             <tr>
               <th className="dcm-first">
                 <strong>Comparing {cols.length} creators</strong>
-                <small>for Wedding Season Looks</small>
-                {cols.length < 4 &&
+                <small>from your shortlist</small>
+                {cols.length < 4 && others.length > 0 &&
                   (adding ? (
                     <select
                       className="dcm-add__sel"
                       autoFocus
                       defaultValue=""
                       onChange={(e) => {
-                        if (e.target.value) setIds([...ids, e.target.value]);
+                        if (e.target.value) setIds([...(ids || []), e.target.value]);
                         setAdding(false);
                       }}
                       onBlur={() => setAdding(false)}
@@ -106,8 +119,8 @@ export default function DiscoveryCompare() {
                         Pick a creator…
                       </option>
                       {others.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} · {c.followers}
+                        <option key={c.pick_id} value={c.pick_id}>
+                          {c.name} · {c.s0.followers != null ? fmt(c.s0.followers) : "—"}
                         </option>
                       ))}
                     </select>
@@ -118,24 +131,23 @@ export default function DiscoveryCompare() {
                   ))}
               </th>
               {cols.map((c) => (
-                <th key={c.id} className="dcm-col">
+                <th key={c.pick_id} className="dcm-col">
                   {cols.length > 1 && (
-                    <button type="button" className="dcm-x" aria-label={`Remove ${c.name}`} onClick={() => setIds(ids.filter((x) => x !== c.id))}>
+                    <button type="button" className="dcm-x" aria-label={`Remove ${c.name}`} onClick={() => setIds(ids.filter((x) => x !== c.pick_id))}>
                       <Close size={12} />
                     </button>
                   )}
-                  <span className="br-av br-av--lg" style={{ background: c.av }}>
-                    {c.initials}
-                  </span>
-                  <Link href={`/brands/creators/${c.id}`} className="dcm-name">
+                  <BrAvatar name={c.name} src={c.s0.profile_picture_url} cls="br-av--lg" />
+                  <a href={igUrl(c.handle)} target="_blank" rel="noreferrer" className="dcm-name">
                     {c.name} <Check size={12} />
-                  </Link>
+                  </a>
                   <small>
-                    {c.handle} · {c.city}
+                    @{c.handle}
+                    {c.s0.city ? ` · ${c.s0.city}` : ""}
                   </small>
-                  {pick?.id === c.id && cols.length > 1 && (
+                  {pick?.pick_id === c.pick_id && cols.length > 1 && (
                     <span className="dcm-pick">
-                      <Sparkle size={11} /> Geek’s pick for this campaign
+                      <Sparkle size={11} /> Most engaged audience
                     </span>
                   )}
                 </th>
@@ -152,26 +164,11 @@ export default function DiscoveryCompare() {
                     {row.hint && <small>{row.hint}</small>}
                   </td>
                   {cols.map((c) => (
-                    <td key={c.id} className={best === c.id ? "is-best" : ""}>
-                      {row.worked ? (
-                        c.workedNykaa ? (
-                          <span className="br-badge br-badge--green">{c.workedNykaa}</span>
-                        ) : (
-                          <span className="br-badge br-badge--grey">No</span>
-                        )
-                      ) : (
-                        <>
-                          <span className="dcm-val">
-                            {row.show(c)}
-                            {best === c.id && <em>Best</em>}
-                          </span>
-                          {row.bar && (
-                            <span className="dcm-bar">
-                              <i style={{ width: `${row.val(c)}%`, background: row.bar }} />
-                            </span>
-                          )}
-                        </>
-                      )}
+                    <td key={c.pick_id} className={best === c.pick_id ? "is-best" : ""}>
+                      <span className="dcm-val">
+                        {row.show(c)}
+                        {best === c.pick_id && <em>Best</em>}
+                      </span>
                     </td>
                   ))}
                 </tr>
@@ -181,31 +178,23 @@ export default function DiscoveryCompare() {
               <td className="dcm-first">
                 <small>Pick one or more</small>
               </td>
-              {cols.map((c) => {
-                const sl = short.includes(c.id);
-                const sv = saved.includes(c.id);
-                return (
-                  <td key={c.id}>
-                    <div className="dcm-btns">
-                      <button type="button" className={`br-btn br-btn--sm ${sl ? "br-btn--primary" : "br-btn--ghost"}`} onClick={() => toggle(short, setShort, c.id)}>
-                        {sl ? <Check size={13} /> : <Plus size={13} />} {sl ? "Shortlisted" : "Shortlist"}
-                      </button>
-                      <button type="button" className={`br-btn br-btn--sm br-btn--soft ${sv ? "is-saved" : ""}`} onClick={() => toggle(saved, setSaved, c.id)}>
-                        <Bookmark size={13} /> {sv ? "Saved" : "Save"}
-                      </button>
-                    </div>
-                  </td>
-                );
-              })}
+              {cols.map((c) => (
+                <td key={c.pick_id}>
+                  <div className="dcm-btns">
+                    <button type="button" className="br-btn br-btn--sm br-btn--primary" onClick={() => say(`@${c.handle} is already on your shortlist`)}>
+                      <Check size={13} /> Shortlisted
+                    </button>
+                    <button type="button" className="br-btn br-btn--sm br-btn--soft" onClick={() => say("Shortlisted creators go to the Geek team — saving them separately is coming soon")}>
+                      <Bookmark size={13} /> Save
+                    </button>
+                  </div>
+                </td>
+              ))}
             </tr>
           </tbody>
         </table>
       </div>
-      {toast && (
-        <div className="br-toast" role="status">
-          <Check size={14} /> {toast}
-        </div>
-      )}
+      {toast}
 
       <style>{`
         .dcm-ai {

@@ -1,28 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
-import { readSession, writeSession } from "@/components/creater/session";
+import { useCreator, updateMeta, saveSection, markOnbDone, displayName } from "@/services/creator";
 
 /** /creater/onboarding/details — Setup 4 (Instagram nahi): handle, naam, city, followers */
 export default function SetupDetails() {
   const router = useRouter();
   const [f, setF] = useState({ handle: "", name: "", city: "", followers: "" });
   const [errs, setErrs] = useState({});
+  const [busy, setBusy] = useState(false);
+  const c = useCreator();
+  const loaded = useRef(false);
 
+  // Pehle se bhara (bx_manual metadata / profile) ho to wahi
   useEffect(() => {
-    const s = readSession();
-    setF({ handle: s.handle || "", name: s.name || "", city: s.city || "", followers: s.followers || "" });
-  }, []);
+    if (loaded.current || !c.ready || !c.loggedIn) return;
+    loaded.current = true;
+    const md = c.meta?.bx_manual || {};
+    const pro = c.profile?.professional || {};
+    setF({ handle: md.ig_handle || (pro.ig_handle_self ? "@" + pro.ig_handle_self : ""), name: displayName(c), city: md.city || pro.city_coarse || "", followers: md.followers ? String(md.followers) : "" });
+  }, [c]);
+  const done = () => {
+    markOnbDone();
+    router.push(/explore=1/.test(window.location.search) ? "/creater/discover" : "/creater/home");
+  };
 
   const set = (k, v) => {
     setF({ ...f, [k]: v });
     setErrs({ ...errs, [k]: "" });
   };
 
-  const finish = (e) => {
+  const finish = async (e) => {
     e.preventDefault();
     const h = f.handle.trim().replace(/^@?/, "@");
     const n = {};
@@ -32,14 +43,28 @@ export default function SetupDetails() {
     if (!/^\d{2,9}$/.test(f.followers.replace(/,/g, ""))) n.followers = "Enter followers as a number, e.g. 12000.";
     setErrs(n);
     if (Object.keys(n).length) return;
-    writeSession({ handle: h, name: f.name.trim(), city: f.city.trim(), followers: f.followers.replace(/,/g, ""), ig: false, setupDone: true });
-    router.push("/creater/home");
+    // Purana onbManual: login metadata (bx_manual, "self-reported") + personal / professional section
+    setBusy(true);
+    const handle = h.replace(/^@+/, "");
+    const name = f.name.trim();
+    const city = f.city.trim();
+    const fol = f.followers.replace(/[^\d]/g, "");
+    try {
+      await updateMeta({ bx_manual: { ig_handle: "@" + handle, followers: fol ? Number(fol) : null, city, self_reported: true, at: new Date().toISOString() } });
+      const parts = name.split(/\s+/).filter(Boolean);
+      if (parts.length) await saveSection("personal", { first_name: parts[0], last_name: parts.slice(1).join(" ") || null }, "ui-manual");
+      const pp = { display_name: name, city_coarse: city, ig_handle_self: handle };
+      if (fol) pp.followers_self = fol;
+      await saveSection("professional", pp, "ui-manual");
+    } catch (ex) {
+      setErrs({ followers: "Couldn't save: " + (ex.message || ex) });
+      setBusy(false);
+      return;
+    }
+    done();
   };
 
-  const skip = () => {
-    writeSession({ setupDone: true });
-    router.push("/creater/home");
-  };
+  const skip = () => done();
 
   const field = (k, label, ph, extra = {}) => (
     <div className="dt-field">
@@ -52,7 +77,7 @@ export default function SetupDetails() {
   );
 
   return (
-    <OnboardShell tone="light" eyebrow="Last step" avatar="C">
+    <OnboardShell tone="light" eyebrow="Last step" avatar="C" gate="member">
       <title>Tell us about you — Bounty</title>
       <form className="dt" onSubmit={finish} noValidate>
         <h2 className="dt-h">Tell us about you.</h2>
@@ -64,8 +89,8 @@ export default function SetupDetails() {
         <p className="dt-note">
           Shown to brands as “self-reported” until you connect Instagram. Some campaigns need a verified account.
         </p>
-        <button type="submit" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block dt-cta">
-          Finish →
+        <button type="submit" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block dt-cta" disabled={busy}>
+          {busy ? "Saving…" : "Finish →"}
         </button>
         <Link href="/creater/onboarding/meta" className="dt-link">
           Connect Instagram instead

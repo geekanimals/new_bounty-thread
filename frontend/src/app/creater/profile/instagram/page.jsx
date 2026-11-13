@@ -3,36 +3,64 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
-import { CREATOR } from "@/components/creater/data";
+import { useCreator, switchIg, fmtFollowers, startInstagramConnect, getIgAccounts, disconnectIg, setExperienceVisible } from "@/services/creator";
 import { Check, Instagram } from "@/components/ui/Icons";
 
 /** /creater/profile/instagram — verified Instagram, connected accounts, privacy */
 export default function InstagramPrivacy() {
-  const [s, update] = useSession();
-  const locked = !s.ig;
-  const [accounts, setAccounts] = useState([{ handle: CREATOR.handle, followers: CREATOR.followers, active: true, img: CREATOR.avatar }]);
+  const c = useCreator();
+  const locked = !c.hasIg;
+  const ig = c.igAccounts[0] || {};
+  const conn = c.profile?.connection || {};
+  const [accounts, setAccounts] = useState([]);
   const [confirm, setConfirm] = useState(null);
   const [showExp, setShowExp] = useState(false);
   const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState("");
 
-  // Locked (Instagram nahi) to list khaali
+  // Saare jude Instagram accounts (my_ig_accounts) — ek active
+  const loadAccts = async () => {
+    const { data } = await getIgAccounts();
+    setAccounts(Array.isArray(data) ? data : []);
+  };
   useEffect(() => {
-    if (locked) setAccounts([]);
-  }, [locked]);
+    if (c.ready && c.loggedIn) loadAccts();
+  }, [c.ready, c.loggedIn, c.hasIg]);
 
   const flash = (t) => {
     setToast(t);
-    setTimeout(() => setToast(""), 2200);
+    setTimeout(() => setToast(""), 2400);
   };
-
-  const disconnect = (h) => {
-    const next = accounts.filter((a) => a.handle !== h);
-    setAccounts(next);
+  const switchTo = async (a) => {
+    setBusy(a.ig_user_id);
+    try {
+      await switchIg(a.ig_user_id);
+      flash(`Switched to @${a.username || "account"} ✓`);
+      loadAccts();
+    } catch (e) {
+      flash(e.message || String(e));
+    }
+    setBusy("");
+  };
+  // ig_disconnect_account — aakhri account gaya to app phir Instagram step maangega (purana igDisconnect)
+  const disconnect = async (a) => {
     setConfirm(null);
-    // Aakhri account hata diya to app locked mode mein
-    if (!next.length) update({ ig: false });
-    flash(`${h} disconnected`);
+    setBusy(a.ig_user_id);
+    const h = "@" + (a.username || "account");
+    const { data, error } = await disconnectIg(a.ig_user_id);
+    setBusy("");
+    if (error) return flash(error.message);
+    flash(`${h} disconnected${data && data.switched && data.active ? ` · now using @${data.active}` : ""} ✓`);
+    if (!(data && data.none_left)) loadAccts();
+  };
+  const setVis = async (on) => {
+    setShowExp(on);
+    const { error } = await setExperienceVisible(on);
+    if (error) {
+      setShowExp(!on);
+      return flash("Couldn't save: " + error.message);
+    }
+    flash(on ? "Brands can see your verified experience" : "Verified experience hidden from brands");
   };
 
   return (
@@ -55,26 +83,26 @@ export default function InstagramPrivacy() {
         <section className="pf-card ig-ver">
           <div className="ig-ver__top">
             <span className="ig-tag">Verified Instagram</span>
-            <strong>{CREATOR.handle}</strong>
+            <strong>@{ig.username}</strong>
             <span className="ig-dotsep">·</span>
-            <a href={`https://www.instagram.com/${CREATOR.user}/`} target="_blank" rel="noreferrer" className="ig-open">
+            <a href={`https://www.instagram.com/${ig.username}/`} target="_blank" rel="noreferrer" className="ig-open">
               Open
             </a>
           </div>
           <p className="ig-nums">
             <span>
-              Followers: <b>{CREATOR.followers}</b>
+              Followers: <b>{fmtFollowers(ig.followers_count ?? conn.followers_count)}</b>
             </span>
             <span>
-              Following: <b>{CREATOR.following}</b>
+              Following: <b>{conn.follows_count != null ? fmtFollowers(conn.follows_count) : "—"}</b>
             </span>
             <span>
-              Posts: <b>{CREATOR.posts}</b>
+              Posts: <b>{fmtFollowers(ig.media_count ?? conn.media_count)}</b>
             </span>
           </p>
           <p className="ig-note">
             Instagram identity is verified and read-only. Need a change?{" "}
-            <button type="button" className="ig-ulink" onClick={() => flash("Request sent — Geek team will reach out on WhatsApp")}>
+            <button type="button" className="ig-ulink" onClick={() => startInstagramConnect({ after: "profile" })}>
               Request correction / reconnect
             </button>
           </p>
@@ -92,18 +120,18 @@ export default function InstagramPrivacy() {
         {accounts.length === 0 && <p className="ig-empty">No Instagram connected yet.</p>}
         <ul className="ig-list">
           {accounts.map((a) => (
-            <li key={a.handle}>
-              <img src={a.img} alt="" />
+            <li key={a.ig_user_id || a.username}>
+              {a.profile_picture_url ? <img src={a.profile_picture_url} alt="" referrerPolicy="no-referrer" /> : <img src="/creater/avatar.jpg" alt="" />}
               <span className="ig-list__txt">
                 <strong>
-                  {a.handle} {a.active && <em>Active</em>}
+                  @{a.username} {a.active && <em>Active</em>}
                 </strong>
-                <small>{a.followers} followers</small>
+                <small>{a.followers_count != null ? `${fmtFollowers(a.followers_count)} followers` : a.token_expired ? "Login expired" : ""}</small>
               </span>
-              {confirm === a.handle ? (
+              {confirm === a.ig_user_id ? (
                 <span className="ig-confirm">
-                  Disconnect?
-                  <button type="button" className="ig-btn ig-btn--red" onClick={() => disconnect(a.handle)}>
+                  {accounts.length <= 1 ? "Your only Instagram — disconnect?" : "Disconnect?"}
+                  <button type="button" className="ig-btn ig-btn--red" onClick={() => disconnect(a)}>
                     Yes
                   </button>
                   <button type="button" className="ig-btn" onClick={() => setConfirm(null)}>
@@ -112,8 +140,18 @@ export default function InstagramPrivacy() {
                 </span>
               ) : (
                 <span className="ig-confirm">
-                  <small>In use</small>
-                  <button type="button" className="ig-btn" onClick={() => setConfirm(a.handle)}>
+                  {a.active ? (
+                    <small>In use</small>
+                  ) : a.token_expired ? (
+                    <button type="button" className="ig-btn" onClick={() => startInstagramConnect({ after: "profile" })}>
+                      Reconnect
+                    </button>
+                  ) : (
+                    <button type="button" className="ig-btn" onClick={() => switchTo(a)} disabled={busy === a.ig_user_id}>
+                      Switch
+                    </button>
+                  )}
+                  <button type="button" className="ig-btn" onClick={() => setConfirm(a.ig_user_id)} disabled={busy === a.ig_user_id}>
                     Disconnect
                   </button>
                 </span>
@@ -135,10 +173,7 @@ export default function InstagramPrivacy() {
           <input
             type="checkbox"
             checked={showExp}
-            onChange={(e) => {
-              setShowExp(e.target.checked);
-              flash(e.target.checked ? "Brands can see your verified experience" : "Verified experience hidden from brands");
-            }}
+            onChange={(e) => setVis(e.target.checked)}
           />
           Show my verified brand experience to brands
         </label>

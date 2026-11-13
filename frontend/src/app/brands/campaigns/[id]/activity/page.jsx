@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, notFound } from "next/navigation";
-import BrandShell, { ToneIcon } from "@/components/brands/BrandShell";
-import CampaignTop from "@/components/brands/CampaignTop";
-import { getCampaign, ACTIVITY, TEAM, ACCOUNT_MANAGER } from "@/components/brands/data";
+import { useEffect, useState } from "react";
+import { ToneIcon } from "@/components/brands/BrandShell";
+import CampaignFrame from "@/components/brands/CampaignFrame";
+import { useToast } from "@/components/brands/BrandStates";
+import { useTeam, TEAM_ROLES, bInitials, bAv, bAgo } from "@/services/brand";
 import { ChevronDown, WhatsApp } from "@/components/ui/Icons";
 
 const FILTERS = [
@@ -13,99 +13,26 @@ const FILTERS = [
   { key: "approvals", label: "Approvals" },
   { key: "money", label: "Money" },
 ];
+// participation stage (timeline "to") → filter + icon + rang
+const POSTS = ["content_approved", "published", "completed"];
+const LOOK = {
+  published: ["play", "green"],
+  completed: ["check", "green"],
+  content_approved: ["check", "green"],
+  content_submitted: ["play", "orange"],
+  changes_requested: ["chat", "blue"],
+  content_created: ["play", "blue"],
+  product_sent: ["package", "blue"],
+  applied: ["users", "orange"],
+  eligible: ["users", "orange"],
+  sent_to_brand: ["users", "orange"],
+};
 
-/** /brands/campaigns/[id]/activity — campaign mein jo bhi hua, naya sabse upar */
+/** /brands/campaigns/[id]/activity — campaign mein jo hua, naya sabse upar (purana paintTab "activity": api.brand_campaign timeline) */
 export default function CampaignActivity() {
-  const { id } = useParams();
-  const c = getCampaign(id);
-  const [filter, setFilter] = useState("all");
-  const [shown, setShown] = useState(6);
-  if (!c) notFound();
-
-  const list = ACTIVITY.filter((a) => filter === "all" || a.kind === filter);
-
   return (
-    <BrandShell crumbs={[{ label: "Campaigns", href: "/brands/campaigns" }, { label: c.title }]}>
-      <title>{`${c.title} · Activity — Geek OS Brand`}</title>
-      <CampaignTop c={c} />
-
-      <div className="cv">
-        <section className="br-card cv-card">
-          <div className="br-card__head">
-            <div>
-              <h2 className="br-card__title">Activity</h2>
-              <p className="br-card__sub">Everything that happened in this campaign, newest first</p>
-            </div>
-            <div className="br-seg">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  className={filter === f.key ? "is-on" : ""}
-                  onClick={() => {
-                    setFilter(f.key);
-                    setShown(6);
-                  }}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <ol className="cv-list">
-            {list.slice(0, shown).map((a, i) => (
-              <li key={a.title + i}>
-                <ToneIcon icon={a.icon} tone={a.tone} size={30} />
-                <div className="cv-txt">
-                  <strong>{a.title}</strong>
-                  <small>{a.text}</small>
-                </div>
-                <span className="cv-time">{a.time}</span>
-              </li>
-            ))}
-            {list.length === 0 && <li className="cv-empty">Nothing here yet.</li>}
-          </ol>
-
-          {list.length > shown && (
-            <div className="br-more">
-              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(shown + 6)}>
-                Load more <ChevronDown size={14} />
-              </button>
-            </div>
-          )}
-        </section>
-
-        <aside className="br-card cv-team">
-          <h3>Your team here</h3>
-          <ul>
-            {TEAM.map((t) => (
-              <li key={t.email}>
-                <span className="br-av br-av--sm" style={{ background: t.av }}>
-                  {t.initials}
-                </span>
-                <span>
-                  <strong>{t.name}</strong>
-                  <small>{t.role}</small>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="cv-team__label">Geek account manager</p>
-          <div className="cv-am">
-            <span className="br-av br-av--sm" style={{ background: ACCOUNT_MANAGER.av }}>
-              {ACCOUNT_MANAGER.initials}
-            </span>
-            <span>
-              <strong>{ACCOUNT_MANAGER.name}</strong>
-              <small>{ACCOUNT_MANAGER.note}</small>
-            </span>
-          </div>
-          <a href="https://wa.me/" target="_blank" rel="noreferrer" className="br-btn br-btn--wa br-btn--sm br-btn--block cv-wa">
-            <WhatsApp size={14} /> Message on WhatsApp
-          </a>
-        </aside>
-      </div>
+    <>
+      <CampaignFrame tab="Activity">{(d) => <ActivityTab timeline={d.timeline || []} />}</CampaignFrame>
 
       <style>{`
         .cv { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
@@ -138,6 +65,104 @@ export default function CampaignActivity() {
           .cv-time { width: 100%; padding-left: 44px; }
         }
       `}</style>
-    </BrandShell>
+    </>
+  );
+}
+
+function ActivityTab({ timeline }) {
+  const team = useTeam();
+  const [filter, setFilter] = useState("all");
+  const [shown, setShown] = useState(6);
+  const [now, setNow] = useState(0);
+  const [toast, say] = useToast();
+  useEffect(() => setNow(Date.now()), []);
+
+  const items = timeline.map((e) => ({ ...e, kind: POSTS.includes(e.to) ? "posts" : "approvals" }));
+  const list = items.filter((a) => filter === "all" || a.kind === filter);
+  const members = ((team.data || {}).members || []).filter((m) => m.role !== "removed");
+
+  return (
+    <div className="cv">
+      <section className="br-card cv-card">
+        <div className="br-card__head">
+          <div>
+            <h2 className="br-card__title">Activity</h2>
+            <p className="br-card__sub">Everything that happened in this campaign, newest first</p>
+          </div>
+          <div className="br-seg">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                className={filter === f.key ? "is-on" : ""}
+                onClick={() => {
+                  setFilter(f.key);
+                  setShown(6);
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <ol className="cv-list">
+          {list.slice(0, shown).map((a, i) => {
+            const [icon, tone] = LOOK[a.to] || ["users", "violet"];
+            return (
+              <li key={(a.at || "") + i}>
+                <ToneIcon icon={icon} tone={tone} size={30} />
+                <div className="cv-txt">
+                  <strong>{a.creator || "A creator"}</strong>
+                  <small>{a.status || a.to}</small>
+                </div>
+                <span className="cv-time">{bAgo(a.at, now)}</span>
+              </li>
+            );
+          })}
+          {list.length === 0 && <li className="cv-empty">{filter === "money" ? "Bills and payments are in Billing." : "Nothing here yet."}</li>}
+        </ol>
+
+        {list.length > shown && (
+          <div className="br-more">
+            <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(shown + 6)}>
+              Load more <ChevronDown size={14} />
+            </button>
+          </div>
+        )}
+      </section>
+
+      <aside className="br-card cv-team">
+        <h3>Your team here</h3>
+        <ul>
+          {members.map((t) => (
+            <li key={t.member_id || t.email}>
+              <span className="br-av br-av--sm" style={{ background: bAv(t.email || t.name) }}>
+                {bInitials(t.name || t.email)}
+              </span>
+              <span>
+                <strong>{t.name || t.email}</strong>
+                <small>{TEAM_ROLES[t.role] || t.role}</small>
+              </span>
+            </li>
+          ))}
+          {!members.length && <li className="cv-empty">{team.loading ? "Loading…" : team.error || "Just you for now."}</li>}
+        </ul>
+        <p className="cv-team__label">Geek account manager</p>
+        <div className="cv-am">
+          <span className="br-av br-av--sm" style={{ background: "linear-gradient(135deg,#8b5cf6,#c084fc)" }}>
+            G
+          </span>
+          <span>
+            <strong>Geek team</strong>
+            <small>Replies on WhatsApp and email</small>
+          </span>
+        </div>
+        <button type="button" className="br-btn br-btn--wa br-btn--sm br-btn--block cv-wa" onClick={() => say("Coming soon — WhatsApp from here. Message your Geek account manager directly for now.")}>
+          <WhatsApp size={14} /> Message on WhatsApp
+        </button>
+      </aside>
+      {toast}
+    </div>
   );
 }

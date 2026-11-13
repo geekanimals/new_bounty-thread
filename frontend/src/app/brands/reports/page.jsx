@@ -1,28 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
-import { CAMPAIGNS, YEAR_SUMMARY } from "@/components/brands/data";
-import { BarChart, Download, Check, ChevronDown } from "@/components/ui/Icons";
+import { BrLoading, BrEmpty, BrError, useToast } from "@/components/brands/BrandStates";
+import { useBrandCampaigns, loadCampaignAnalytics, campaignCsv, campaignPdf, allCampaignsCsv, bCampaignCard, bShort, bEr } from "@/services/brand";
+import { BarChart, Download, ChevronDown } from "@/components/ui/Icons";
 
 const FIRST = 5;
 
-/** /brands/reports — har campaign ki ready report: PDF + Excel */
+/**
+ * /brands/reports — har campaign ki report: PDF + Excel (purana paintReports: har campaign ka campaign_analytics totals,
+ * campCsv / campPdf, "All campaigns (CSV)").
+ */
 export default function BrandReports() {
+  const d = useBrandCampaigns();
   const [shown, setShown] = useState(FIRST);
-  const [toast, setToast] = useState("");
-  const list = CAMPAIGNS.filter((c) => c.status !== "review");
-  // Dummy: purane saal ki 2 aur reports "Load more" ke liye
-  const older = [
-    { id: "holi-colour-pop", title: "Holi Colour Pop", status: "completed", dates: "Mar 2026", views: "980K", sales: "₹2.4L", reportEng: "5.6%", gradient: "linear-gradient(120deg,#22c55e 0%,#a3e635 100%)" },
-    { id: "valentine-red-edit", title: "Valentine Red Edit", status: "completed", dates: "Feb 2026", views: "760K", sales: "₹1.9L", reportEng: "6.1%", gradient: "linear-gradient(120deg,#be123c 0%,#fb7185 100%)" },
-  ];
-  const all = [...list, ...older];
+  const [tot, setTot] = useState({}); // campaign_id → totals
+  const [busy, setBusy] = useState("");
+  const [toast, say] = useToast();
+  const ids = d.list.map((c) => c.campaign_id).join(",");
 
-  const download = (what, title) => {
-    setToast(`${what} — ${title} is downloading…`);
-    setTimeout(() => setToast(""), 2400);
+  // har campaign ke numbers (purana C.forEach loadAn)
+  useEffect(() => {
+    let on = true;
+    d.list.forEach((c) =>
+      loadCampaignAnalytics(c.campaign_id).then((r) => {
+        if (on) setTot((t) => ({ ...t, [c.campaign_id]: r.error ? { error: true } : (r.data || {}).totals || {} }));
+      })
+    );
+    return () => {
+      on = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids]);
+
+  const all = d.list.map(bCampaignCard);
+  const sum = (k) => Object.values(tot).reduce((a, t) => a + (Number(t[k]) || 0), 0);
+  const loaded = Object.keys(tot).length;
+  const summary = loaded
+    ? `${bShort(sum("views"))} views · ${bShort(sum("posts"))} posts · ${bShort(sum("creators_live"))} creators posted · ${bShort(sum("followers"))} followers reached`
+    : "Adding up your campaigns…";
+
+  const run = async (key, f) => {
+    setBusy(key);
+    const r = await f();
+    setBusy("");
+    if (r && r.error) say(r.error.message || String(r.error));
   };
 
   return (
@@ -33,81 +57,84 @@ export default function BrandReports() {
       <h1 className="br-h1">Reports</h1>
       <p className="br-sub">Download a ready report for any campaign — PDF for your team, Excel for the numbers.</p>
 
-      <section className="rp-year">
-        <span className="rp-year__ic">
-          <BarChart size={18} />
-        </span>
-        <div className="rp-year__txt">
-          <strong>2026 so far — all campaigns</strong>
-          <small>{YEAR_SUMMARY}</small>
-        </div>
-        <button type="button" className="rp-year__btn" onClick={() => download("Yearly PDF", "2026")}>
-          <Download size={14} /> Yearly PDF
-        </button>
-      </section>
+      {d.loading ? (
+        <BrLoading cards={3} />
+      ) : d.error ? (
+        <BrError error={d.error} onRetry={d.reload} />
+      ) : !all.length ? (
+        <BrEmpty title="No reports yet" text="Each campaign gets a report here as soon as it starts — views, posts and every creator’s numbers." />
+      ) : (
+        <>
+          <section className="rp-year">
+            <span className="rp-year__ic">
+              <BarChart size={18} />
+            </span>
+            <div className="rp-year__txt">
+              <strong>All campaigns so far</strong>
+              <small>{summary}</small>
+            </div>
+            <button type="button" className="rp-year__btn" disabled={busy === "all"} onClick={() => run("all", () => allCampaignsCsv(d.list, d.brand))}>
+              <Download size={14} /> {busy === "all" ? "Preparing…" : "All campaigns (Excel)"}
+            </button>
+          </section>
 
-      <div className="rp-grid">
-        {all.slice(0, shown).map((c) => {
-          const live = c.status === "live";
-          return (
-            <article key={c.id} className="br-card rp-card">
-              <div className="rp-cover" style={{ background: c.gradient }}>
-                <small>Campaign report</small>
-                <strong>{c.title}</strong>
-              </div>
-              <div className="rp-body">
-                <div className="rp-meta">
-                  <span>{live ? (c.ended ? c.ended : "Live · updated hourly") : c.dates}</span>
-                  <span className={`br-badge br-badge--${live ? "blue" : "green"}`}>{live ? "Live" : "Final"}</span>
-                </div>
-                <div className="rp-nums">
-                  <p>
-                    <strong>{c.views}</strong>
-                    <small>views</small>
-                  </p>
-                  <p>
-                    <strong>{c.sales}</strong>
-                    <small>sales</small>
-                  </p>
-                  <p>
-                    <strong>{c.reportEng}</strong>
-                    <small>eng.</small>
-                  </p>
-                </div>
-                <div className="rp-actions">
-                  <button type="button" className="br-btn br-btn--primary br-btn--sm" onClick={() => download("PDF", c.title)}>
-                    <Download size={13} /> PDF
-                  </button>
-                  <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => download("Excel", c.title)}>
-                    <Download size={13} /> Excel
-                  </button>
-                  {CAMPAIGNS.some((x) => x.id === c.id) ? (
-                    <Link href={`/brands/campaigns/${c.id}/analytics`} className="br-link rp-preview">
-                      Preview
-                    </Link>
-                  ) : (
-                    <span className="rp-preview rp-preview--off">Archived</span>
-                  )}
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+          <div className="rp-grid">
+            {all.slice(0, shown).map((c) => {
+              const live = c.status !== "completed";
+              const t = tot[c.id];
+              return (
+                <article key={c.id} className="br-card rp-card">
+                  <div className="rp-cover" style={{ background: c.gradient }}>
+                    <small>Campaign report</small>
+                    <strong>{c.title}</strong>
+                  </div>
+                  <div className="rp-body">
+                    <div className="rp-meta">
+                      <span>{live ? `${c.statusLabel} · updated hourly` : c.dates}</span>
+                      <span className={`br-badge br-badge--${live ? "blue" : "green"}`}>{live ? "Live" : "Final"}</span>
+                    </div>
+                    <div className="rp-nums">
+                      <p>
+                        <strong>{t ? (t.error ? "—" : bShort(t.views)) : "…"}</strong>
+                        <small>views</small>
+                      </p>
+                      <p>
+                        <strong>{t ? (t.error ? "—" : bShort(t.posts)) : "…"}</strong>
+                        <small>posts</small>
+                      </p>
+                      <p>
+                        <strong>{t ? (t.error ? "—" : bEr(t)) : "…"}</strong>
+                        <small>eng.</small>
+                      </p>
+                    </div>
+                    <div className="rp-actions">
+                      <button type="button" className="br-btn br-btn--primary br-btn--sm" disabled={busy === "pdf" + c.id} onClick={() => run("pdf" + c.id, () => campaignPdf(c.id))}>
+                        <Download size={13} /> PDF
+                      </button>
+                      <button type="button" className="br-btn br-btn--ghost br-btn--sm" disabled={busy === "xl" + c.id} onClick={() => run("xl" + c.id, () => campaignCsv(c.id))}>
+                        <Download size={13} /> {busy === "xl" + c.id ? "…" : "Excel"}
+                      </button>
+                      <Link href={`/brands/campaigns/${c.id}/analytics`} className="br-link rp-preview">
+                        Preview
+                      </Link>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
 
-      {shown < all.length && (
-        <div className="br-more">
-          <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(all.length)}>
-            Load more <ChevronDown size={14} />
-          </button>
-        </div>
+          {shown < all.length && (
+            <div className="br-more">
+              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(all.length)}>
+                Load more <ChevronDown size={14} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
-      {toast && (
-        <div className="br-toast" role="status">
-          <Check size={14} /> {toast}
-        </div>
-      )}
+      {toast}
 
       <style>{`
         .rp-year {

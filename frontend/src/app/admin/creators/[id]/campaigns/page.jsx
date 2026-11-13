@@ -23,9 +23,9 @@ export default function CreatorCampaignsTab() {
               </thead>
               <tbody>
                 {p.campaigns.map((c) => (
-                  <tr key={c.name}>
+                  <tr key={c.id}>
                     <td>
-                      <Link href="/admin/campaigns">{c.name}</Link>
+                      <Link href={c.campaignId ? `/admin/campaigns/${c.campaignId}/creators/${c.id}` : "/admin/campaigns"}>{c.name}</Link>
                     </td>
                     <td>{c.applied}</td>
                     <td>{c.step}</td>
@@ -34,6 +34,13 @@ export default function CreatorCampaignsTab() {
                     </td>
                   </tr>
                 ))}
+                {!p.campaigns.length && (
+                  <tr>
+                    <td colSpan={4} className="cpc-none">
+                      No campaign applications yet.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -47,6 +54,7 @@ export default function CreatorCampaignsTab() {
             .cpc .ad-table th:nth-child(3) { width: 21%; }
             .cpc .ad-table a:hover { color: var(--ad-primary); }
             .cpc + .cdw-priv { margin-top: 30px; }
+            .cpc-none { color: var(--ad-muted); }
           `}</style>
         </div>
       )}

@@ -1,23 +1,39 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import BountyShell from "@/components/creater/BountyShell";
-import TrackerFrame, { useTracker } from "@/components/creater/TrackerSteps";
+import TrackerFrame, { useTracker, TrackerWait, StepMismatch } from "@/components/creater/TrackerSteps";
+import PostStats from "@/components/creater/PostStats";
+import PayBox from "@/components/creater/PayBox";
 
-/** /creater/my-campaigns/[id]/verified — post verify ho gaya 🎉 */
+/** /creater/my-campaigns/[id]/verified — saare posts live (purane "You're live!"): numbers + payment */
 export default function VerifiedStep() {
-  const router = useRouter();
-  const { c, base, isPaid } = useTracker();
+  const t = useTracker();
+  if (!t.m)
+    return (
+      <BountyShell>
+        <TrackerWait t={t} />
+      </BountyShell>
+    );
+  const { c, m, isPaid } = t;
+  const onStep = t.step === "verified";
   return (
     <BountyShell>
-      <title>{`Post verified — ${c.title} — Bounty`}</title>
-      <TrackerFrame step="verified">
-        <span className="ts-ic ts-ic--gold">🎉</span>
-        <h2>Post verified!</h2>
-        <p>Your post is live with the right tags. {isPaid || c.type === "hybrid" ? "Your payment releases in 7 days." : "Your products are yours to keep."}</p>
-        <button type="button" className="ts-demo" onClick={() => router.push(`${base}/paid`)}>
-          Demo: release payment →
-        </button>
+      <title>{`You're live — ${c.title} — Bounty`}</title>
+      <TrackerFrame t={t} step={onStep ? "verified" : undefined}>
+        {onStep ? (
+          <>
+            <span className="ts-ic ts-ic--gold">🎉</span>
+            <h2>You’re live!</h2>
+            <p>
+              Your post is recorded on the campaign. The brand wraps up once the numbers are in.{" "}
+              {isPaid ? "Your payment follows the terms in your agreement." : "Your products are yours to keep."}
+            </p>
+            <PayBox t={t} />
+            <PostStats m={m} />
+          </>
+        ) : (
+          <StepMismatch t={t} />
+        )}
       </TrackerFrame>
     </BountyShell>
   );

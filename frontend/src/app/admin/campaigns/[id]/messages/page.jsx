@@ -1,36 +1,52 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { campaignById } from "@/components/admin/data";
-import { Panel, SubTabs, Note, useToast } from "@/components/admin/campaign2/kit";
+import { Panel, SubTabs, Note, TableState, useToast, copyText } from "@/components/admin/campaign2/kit";
+import { useRpc, rpc, errText } from "@/lib/supabase";
 
-const STEPS = (name) => [
-  { step: "1 · Not selected", tpl: "geek_step_not_selected", state: "With Meta", subject: `Update on ${name}`, body: `Hi {name}, thank you for applying to ${name}. This time the brand went with other creators — we'll ping you for the next one that fits.` },
-  { step: "2 · Approved — invite", tpl: "geek_campaign_access", state: "Approved", subject: `Approved for ${name} 🎉`, body: `Hi {name}, you're approved for ${name}! Open Geek OS to see the brief and accept the campaign.` },
-  { step: "3 · Contract sent", tpl: "geek_step_contract", state: "Approved", subject: "Sign your contract", body: "Hi {name}, your contract is ready. Read it and sign in the app — it takes a minute." },
-  { step: "4 · Address", tpl: "geek_step_address", state: "Approved", subject: "Confirm your delivery address", body: "Hi {name}, confirm where we should send your product so it reaches you on time." },
-  { step: "5 · Courier sent", tpl: "geek_step_shipped", state: "Approved", subject: "Your product is on the way", body: "Hi {name}, your product has shipped. Track it here: {tracking_link}" },
-  { step: "6 · Video due", tpl: "geek_step_video_due", state: "Approved", subject: "Your video is due in 2 days", body: "Hi {name}, a reminder that your video is due in 2 days. Upload your draft in the app." },
-  { step: "7 · Go live", tpl: "geek_step_go_live", state: "Approved", subject: "Your video is approved — post it", body: "Hi {name}, the brand approved your video 🎉 Post it today and add your post link in the app." },
-];
+/*
+ * 💬 Messages & templates — purane payments.js ka msgMap.
+ * Data: api.campaign_message_map (har step: WhatsApp template · email · app) · Submit to Meta: admin_step_template_mark (status queued).
+ */
+const ST = {
+  approved: ["Approved", "green"],
+  submitted: ["With Meta", "orange"],
+  queued: ["Sending to Meta", "orange"],
+  draft: ["Draft — not submitted", "orange"],
+  manual: ["Create in WhatsApp Manager", "orange"],
+  failed: ["Failed", "red"],
+  rejected: ["Rejected", "red"],
+  none: ["No WhatsApp", ""],
+};
+const stateOf = (w) => (w.general ? ["General update", "green"] : ST[w.status || "none"] || [w.status, ""]);
+const fmt = (t) => String(t || "").replace(/\*([^*\n]+)\*/g, "$1");
 
 export default function CampaignMessages() {
   const { id } = useParams();
-  const c = campaignById(id);
-  const base = c.name.split(" · ")[0];
   const [toast, show] = useToast();
-  const [rows, setRows] = useState(() => STEPS(base));
+  const { data, error, loading, reload } = useRpc("admin", "api.campaign_message_map", { p_campaign: id }, { skip: !id || id === "sample" });
   const [open, setOpen] = useState(null);
+  const [busy, setBusy] = useState("");
 
-  const submit = (i) => {
-    setRows((r) => r.map((x, j) => (j === i ? { ...x, state: "Submitted" } : x)));
-    show("Template submitted to Meta (Utility) — usually approved in a few minutes");
+  const d = data || {};
+  const sw = d.switches || {};
+  const phases = d.phases || [];
+  const notLive = phases.filter((p) => p.whatsapp && p.whatsapp.template && !p.whatsapp.general && p.whatsapp.status !== "approved").length;
+  const pill = (g, c, n) => (!g ? `${n} OFF in Settings` : !c ? `${n} OFF for this campaign` : `${n} ON`);
+
+  const submit = async (w) => {
+    if (!window.confirm(`Submit “${w.template}” to Meta for approval?\n\nCategory Utility, English, the exact text shown. Meta usually reviews within a few minutes to a day; it goes out automatically once approved.`)) return;
+    setBusy(w.template);
+    const { error: e } = await rpc("admin", "admin_step_template_mark", { p_name: w.template, p_status: "queued" });
+    setBusy("");
+    if (e) return show(errText(e));
+    show("Sent to Meta for approval ✓ — the status updates here");
+    reload(true);
   };
-  const pending = rows.filter((r) => r.state === "With Meta").length;
 
   return (
     <AdminShell>
@@ -47,19 +63,24 @@ export default function CampaignMessages() {
         title="💬 Messages & templates — every step"
         sub="What the creator gets at every step — on WhatsApp, by email and in the app. Tap a row to see the full message."
         actions={
-          <div className="mt-pills">
-            <Link href="/admin/settings/auto-messages" className="ad-badge">
-              WhatsApp OFF in Settings
-            </Link>
-            <Link href="/admin/settings/auto-messages" className="ad-badge">
-              Email OFF in Settings
-            </Link>
-          </div>
+          data && (
+            <div className="mt-pills">
+              <Link href="/admin/settings/auto-messages" className={`ad-badge ${sw.wa_global && sw.wa ? "ad-badge--green" : ""}`}>
+                {pill(sw.wa_global, sw.wa, "WhatsApp")}
+              </Link>
+              <Link href="/admin/settings/auto-messages" className={`ad-badge ${sw.email_global && sw.email ? "ad-badge--green" : ""}`}>
+                {pill(sw.email_global, sw.email, "Email")}
+              </Link>
+            </div>
+          )
         }
       >
-        {pending > 0 && (
+        {notLive > 0 && (
           <Note tone="amber" icon="⏳">
-            <b>{pending} WhatsApp template is not approved yet</b>— until then those messages go on the general update template. Open it and tap Submit to Meta (Utility).
+            <b>
+              {notLive} WhatsApp template{notLive > 1 ? "s are" : " is"} not approved yet
+            </b>
+            — until then those messages go on the general update template. Open it and tap Submit to Meta (Utility).
           </Note>
         )}
 
@@ -74,8 +95,9 @@ export default function CampaignMessages() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
-                <FragmentRow key={r.tpl} r={r} open={open === i} onToggle={() => setOpen(open === i ? null : i)} onSubmit={() => submit(i)} />
+              <TableState cols={4} loading={loading && !data} error={!data && error} onRetry={reload} empty={data && !phases.length && "No messages for this campaign type."} />
+              {phases.map((p, i) => (
+                <Row key={i} n={i + 1} p={p} open={open === i} busy={busy} onToggle={() => setOpen(open === i ? null : i)} onSubmit={submit} onCopy={async (t) => (await copyText(t), show("Copied ✓"))} />
               ))}
             </tbody>
           </table>
@@ -95,57 +117,91 @@ export default function CampaignMessages() {
         .mt-row td.mt-sub { font-size: 12px; color: var(--ad-muted); }
         .mt-row td.mt-ck { font-size: 13px; color: var(--ad-ink); }
         .mt-open td { padding: 0 11px 16px; white-space: normal; }
-        .mt-open__box { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; border-radius: 12px; background: var(--ad-soft-2); }
-        .mt-open__box p { margin-top: 6px; font-size: 13px; line-height: 1.5; color: var(--ad-text); }
+        .mt-open__box { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 14px; border-radius: 12px; background: var(--ad-soft-2); }
+        .mt-open__box p { margin-top: 6px; font-size: 13px; line-height: 1.5; color: var(--ad-text); white-space: pre-line; }
         .mt-open__box em { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #9aa2b4; }
-        .mt-open__act { grid-column: 1 / -1; display: flex; gap: 8px; }
-        @media (max-width: 640px) { .mt-open__box { grid-template-columns: 1fr; } }
+        .mt-open__box small { display: block; margin-top: 6px; font-size: 11.5px; color: var(--ad-muted); }
+        .mt-open__act { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+        @media (max-width: 1023px) { .mt-open__box { grid-template-columns: 1fr; } }
       `}</style>
     </AdminShell>
   );
 }
 
-function FragmentRow({ r, open, onToggle, onSubmit }) {
-  const tone = r.state === "Approved" ? "green" : r.state === "Submitted" ? "violet" : "orange";
+function Row({ n, p, open, busy, onToggle, onSubmit, onCopy }) {
+  const w = p.whatsapp || {},
+    e = p.email || {},
+    a = p.app || {};
+  const [label, tone] = stateOf(w);
+  const canSubmit = w.template && !w.general && ["draft", "manual", "failed", "rejected"].includes(w.status);
   return (
     <>
       <tr className="mt-row" onClick={onToggle} aria-expanded={open}>
         <td>
-          <b>{r.step}</b>
+          <b>
+            {n} · {p.phase}
+          </b>
         </td>
         <td>
-          {r.tpl}
-          <span className={`ad-badge ad-badge--${tone}`}>{r.state}</span>
+          {w.template || "—"}
+          <span className={`ad-badge ad-badge--${tone}`}>{label}</span>
         </td>
-        <td className="mt-sub">{r.subject}</td>
-        <td className="mt-ck">✓</td>
+        <td className="mt-sub">{e.subject || "—"}</td>
+        <td className="mt-ck">{a.title ? "✓" : "—"}</td>
       </tr>
       {open && (
         <tr className="mt-open">
           <td colSpan={4}>
             <div className="mt-open__box">
               <div>
-                <em>WhatsApp · {r.tpl}</em>
-                <p>{r.body}</p>
+                <em>WhatsApp{w.template ? ` · ${w.template}` : ""}</em>
+                <p>{fmt(w.text) || "—"}</p>
+                {w.template && !w.general && w.status !== "none" && (
+                  <small>
+                    Category Utility · English · {"{{1}}"} name · {"{{2}}"} campaign · {"{{3}}"} brand · {"{{4}}"} app link.
+                    {w.fallback ? ` Until it is approved this message goes on ${w.fallback}.` : ""}
+                  </small>
+                )}
               </div>
               <div>
-                <em>Email · {r.subject}</em>
-                <p>{r.body}</p>
+                <em>Email · {e.subject || "—"}</em>
+                <p>{fmt(e.text) || "—"}</p>
               </div>
-              {r.state === "With Meta" && (
+              <div>
+                <em>In the app · {a.title || "—"}</em>
+                <p>{fmt(String(a.text || "").replace(/\*\*/g, "*")) || "—"}</p>
+                {a.button && <small>[ {a.button} ]</small>}
+              </div>
+              {(canSubmit || w.text) && (
                 <div className="mt-open__act">
-                  <button
-                    type="button"
-                    className="ad-btn ad-btn--primary ad-btn--sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSubmit();
-                    }}
-                  >
-                    Submit to Meta (Utility)
-                  </button>
+                  {canSubmit && (
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn--primary ad-btn--sm"
+                      disabled={busy === w.template}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onSubmit(w);
+                      }}
+                    >
+                      {busy === w.template ? "Submitting…" : "📤 Submit to Meta (Utility)"}
+                    </button>
+                  )}
+                  {w.text && (
+                    <button
+                      type="button"
+                      className="ad-btn ad-btn--ghost ad-btn--sm"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onCopy(String(w.text));
+                      }}
+                    >
+                      Copy text
+                    </button>
+                  )}
                 </div>
               )}
+              {p.exists === false && <small>This step has no app / email message.</small>}
             </div>
           </td>
         </tr>

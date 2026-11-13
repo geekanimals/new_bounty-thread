@@ -1,188 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, notFound } from "next/navigation";
-import BrandShell, { ToneIcon } from "@/components/brands/BrandShell";
-import CampaignTop from "@/components/brands/CampaignTop";
-import { getCampaign, getCreator, VIEWS_DAILY, TOP_POSTS, WHO_WATCHED, CAMPAIGN_CREATORS } from "@/components/brands/data";
+import { ToneIcon } from "@/components/brands/BrandShell";
+import CampaignFrame from "@/components/brands/CampaignFrame";
+import { BrLoading, BrError } from "@/components/brands/BrandStates";
+import { useCampaignAnalytics, useTopPosts, useTrackReport, bWho, bShort, bEr, bGrad } from "@/services/brand";
 import { BarChart, Play, Eye, ChevronDown, Rupee } from "@/components/ui/Icons";
 
-const STATS = [
-  { label: "Views", value: "1.62M", note: "goal 1.37M · +18%", icon: "eye", dark: true },
-  { label: "Reach", value: "1.08M", note: "unique people", icon: "users", tone: "blue" },
-  { label: "Engagement", value: "6.8%", note: "likes, comments, saves", icon: "heart", tone: "red" },
-  { label: "Saves", value: "21.4K", note: "strong buy signal", icon: "package", tone: "orange" },
-  { label: "Cost per view", value: "₹0.26", note: "vs ₹0.40 target", icon: "wallet", tone: "green" },
-];
-// Chart ke 3 modes — har mode mein numbers ka scale alag
 const MODES = [
-  { key: "views", label: "Views", scale: 1, unit: (v) => `${Math.round(v * 2.4)}K views` },
-  { key: "eng", label: "Engagement", scale: 0.8, unit: (v) => `${(4 + v / 30).toFixed(1)}% eng.` },
-  { key: "clicks", label: "Clicks", scale: 0.6, unit: (v) => `${Math.round(v * 22)} clicks` },
+  { key: "views", label: "Views", unit: (v) => `${bShort(v)} views` },
+  { key: "eng", label: "Engagement", unit: (v) => `${bShort(v)} likes, comments, shares & saves` },
+  { key: "clicks", label: "Clicks", unit: (v) => `${bShort(v)} link clicks` },
 ];
 
-const vNum = (s) => (s === "—" ? 0 : parseFloat(s) * (/M/.test(s) ? 1000 : 1));
+/** posts ko din ke hisaab se jodo (post ki date / numbers ki date) → [{ d: "12", v }] */
+function daily(creators, mode) {
+  const by = {};
+  (creators || []).forEach((r) =>
+    (r.posts || []).forEach((p) => {
+      const st = p.stats || {};
+      const day = String(p.posted_at || st.at || "").slice(0, 10);
+      if (!day) return;
+      const v = mode === "views" ? Number(st.views) || 0 : ["likes", "comments", "shares", "saves"].reduce((a, k) => a + (Number(st[k]) || 0), 0);
+      by[day] = (by[day] || 0) + v;
+    })
+  );
+  return Object.keys(by)
+    .sort()
+    .slice(-14)
+    .map((k) => ({ key: k, d: String(Number(k.slice(8, 10))), v: by[k] }));
+}
 
-/** /brands/campaigns/[id]/analytics — views, top posts, kisne dekha */
+/** /brands/campaigns/[id]/analytics — views, top posts, har creator (purana paintAnalytics: campaign_analytics + brand_top_posts) */
 export default function CampaignAnalytics() {
-  const { id } = useParams();
-  const c = getCampaign(id);
-  const [mode, setMode] = useState("views");
-  const [shown, setShown] = useState(5);
-  if (!c) notFound();
-
-  const m = MODES.find((x) => x.key === mode);
-  // Engagement / clicks ke liye thoda alag shape — taaki toggle par chart badle
-  const data = VIEWS_DAILY.map((d, i) => ({
-    ...d,
-    v: mode === "views" ? d.v : Math.max(6, Math.round(d.v * m.scale + (i % 3) * 6 * (mode === "eng" ? 1 : -0.5))),
-  }));
-  const max = Math.max(...data.map((d) => d.v));
-  const byCreator = CAMPAIGN_CREATORS.filter((r) => r.views !== "—").sort((a, b) => vNum(b.views) - vNum(a.views));
-  const top = vNum(byCreator[0].views);
-
   return (
-    <BrandShell crumbs={[{ label: "Campaigns", href: "/brands/campaigns" }, { label: c.title }]}>
-      <title>{`${c.title} · Analytics — Geek OS Brand`}</title>
-      <CampaignTop c={c} />
-
-      <div className="ca-stats">
-        {STATS.map((s) => (
-          <div key={s.label} className={`br-stat ${s.dark ? "br-stat--dark" : ""}`}>
-            <p className="br-stat__label">
-              <ToneIcon icon={s.icon} tone={s.dark ? "dark" : s.tone} size={30} />
-              {s.label}
-            </p>
-            <p className="br-stat__value">{s.label === "Views" && c.status !== "live" ? c.views : s.value}</p>
-            <p className="br-stat__note">{s.note}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Views over time */}
-      <section className="br-card ca-card">
-        <div className="br-card__head">
-          <div className="ca-titlerow">
-            <span className="ca-ic">
-              <BarChart size={16} />
-            </span>
-            <div>
-              <h2 className="br-card__title">{m.label} over time</h2>
-              <p className="br-card__sub">Every live post, added up daily</p>
-            </div>
-          </div>
-          <div className="br-seg">
-            {MODES.map((x) => (
-              <button key={x.key} type="button" className={mode === x.key ? "is-on" : ""} onClick={() => setMode(x.key)}>
-                {x.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="ca-chart" data-scroll>
-          {data.map((d, i) => {
-            const last = i === data.length - 1;
-            const recent = i >= data.length - 4;
-            return (
-              <div key={d.d} className="ca-col" title={m.unit(d.v)}>
-                <span className="ca-tip">{m.unit(d.v)}</span>
-                <span className={`ca-barv ${last ? "is-last" : recent ? "is-recent" : ""}`} style={{ height: `${(d.v / max) * 100}%` }} />
-                <small>{d.d}</small>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Top 5 posts */}
-      <section className="br-card ca-card">
-        <div className="br-card__head">
-          <div>
-            <h2 className="br-card__title">Top 5 posts</h2>
-            <p className="br-card__sub">Pictures are saved copies — they never break</p>
-          </div>
-          <span className="br-link">All {c.postsLive} posts</span>
-        </div>
-        <div className="ca-posts" data-scroll>
-          {TOP_POSTS.map((p, i) => (
-            <a key={p.id} href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="ca-post">
-              <span className="br-thumb" style={{ background: p.g }}>
-                <span className="br-thumb__rank">#{i + 1}</span>
-                <span className="br-thumb__play">
-                  <Play size={11} />
-                </span>
-                <span className="br-thumb__views">
-                  <Eye size={11} /> {p.views}
-                </span>
-              </span>
-              <strong>{p.handle}</strong>
-              <small>
-                {p.eng} eng. · {p.clicks} clicks
-              </small>
-            </a>
-          ))}
-        </div>
-      </section>
-
-      <div className="ca-grid">
-        {/* By creator */}
-        <section className="br-card ca-card ca-by">
-          <h2 className="br-card__title">By creator</h2>
-          <p className="br-card__sub">Views · engagement · clicks</p>
-          <ul>
-            {byCreator.slice(0, shown).map((r) => {
-              const cr = getCreator(r.id);
-              return (
-                <li key={r.id}>
-                  <span className="br-who">
-                    <span className="br-av br-av--sm" style={{ background: cr.av }}>
-                      {cr.initials}
-                    </span>
-                    <span>
-                      <strong>{cr.name}</strong>
-                      <small>{cr.handle}</small>
-                    </span>
-                  </span>
-                  <span className="br-bar ca-by__bar">
-                    <i style={{ width: `${(vNum(r.views) / top) * 100}%` }} />
-                  </span>
-                  <strong className="ca-by__v">{r.views}</strong>
-                  <span className="ca-by__e">{r.eng}</span>
-                </li>
-              );
-            })}
-          </ul>
-          {byCreator.length > shown && (
-            <div className="br-more">
-              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(shown + 5)}>
-                Load more <ChevronDown size={14} />
-              </button>
-            </div>
-          )}
-        </section>
-
-        {/* Who watched */}
-        <section className="br-card ca-card ca-who">
-          <h2 className="br-card__title">Who watched</h2>
-          <p className="br-card__sub">From creators’ connected Instagram</p>
-          <ul>
-            {WHO_WATCHED.map((w) => (
-              <li key={w.label}>
-                <span className="ca-who__row">
-                  <span>{w.label}</span>
-                  <strong>{w.value}%</strong>
-                </span>
-                <span className="ca-who__bar">
-                  <i style={{ width: `${w.value}%`, background: w.tone }} />
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="ca-who__note">
-            <Rupee size={12} /> ₹0.26 per view — 35% cheaper than your target.
-          </p>
-        </section>
-      </div>
+    <>
+      <CampaignFrame tab="Analytics">{(d, c) => <AnalyticsTab id={c.id} />}</CampaignFrame>
 
       <style>{`
         .ca-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
@@ -236,7 +89,189 @@ export default function CampaignAnalytics() {
           .ca-by li { grid-template-columns: minmax(0, 1fr) 54px 42px; }
           .ca-by__bar { grid-column: 1 / -1; grid-row: 2; }
         }
-      `}</style>
-    </BrandShell>
+              .ca-none { margin: 6px 0 0; font-size: 13px; color: var(--br-muted); line-height: 1.55; }
+        .ca-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+        .ca-post .br-thumb { position: relative; overflow: hidden; }
+        .ca-post .br-thumb > span { z-index: 1; }
+`}</style>
+    </>
+  );
+}
+
+function AnalyticsTab({ id }) {
+  const an = useCampaignAnalytics(id);
+  const top = useTopPosts(id);
+  const [mode, setMode] = useState("views");
+  const [shown, setShown] = useState(5);
+  const trk = useTrackReport(mode === "clicks" ? id : null); // clicks sirf maangne par (tracking.js track_report)
+
+  if (an.loading && !an.data) return <BrLoading rows={6} />;
+  if (an.error) return <BrError error={an.error.message} onRetry={an.reload} />;
+
+  const a = an.data || {};
+  const t = a.totals || {};
+  const R = (a.creators || []).filter((r) => (r.posts || []).length);
+  const STATS = [
+    { label: "Views", value: bShort(t.views), note: `${bShort(t.posts)} posts live`, icon: "eye", dark: true },
+    { label: "Reach", value: bShort(t.reach), note: "unique people", icon: "users", tone: "blue" },
+    { label: "Engagement", value: bEr(t), note: "likes, comments, shares, saves on views", icon: "heart", tone: "red" },
+    { label: "Saves", value: bShort(t.saves), note: `${bShort(t.shares)} shares`, icon: "package", tone: "orange" },
+    { label: "Creators posted", value: bShort(t.creators_live), note: `${bShort(t.followers)} followers reached`, icon: "user", tone: "green" },
+  ];
+  const m = MODES.find((x) => x.key === mode);
+  const data =
+    mode === "clicks"
+      ? (((trk.data || {}).daily || []).slice(-14).map((x) => ({ key: x.d, d: String(Number(String(x.d).slice(8, 10))), v: Number(x.clicks) || 0 })))
+      : daily(a.creators, mode);
+  const max = Math.max(1, ...data.map((x) => x.v));
+  const byCreator = [...R].sort((p, q) => (Number(q.totals?.views) || 0) - (Number(p.totals?.views) || 0));
+  const topV = Math.max(1, Number(byCreator[0]?.totals?.views) || 0);
+
+  return (
+    <>
+      <div className="ca-stats">
+        {STATS.map((s) => (
+          <div key={s.label} className={`br-stat ${s.dark ? "br-stat--dark" : ""}`}>
+            <p className="br-stat__label">
+              <ToneIcon icon={s.icon} tone={s.dark ? "dark" : s.tone} size={30} />
+              {s.label}
+            </p>
+            <p className="br-stat__value">{s.value}</p>
+            <p className="br-stat__note">{s.note}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Over time */}
+      <section className="br-card ca-card">
+        <div className="br-card__head">
+          <div className="ca-titlerow">
+            <span className="ca-ic">
+              <BarChart size={16} />
+            </span>
+            <div>
+              <h2 className="br-card__title">{m.label} over time</h2>
+              <p className="br-card__sub">{mode === "clicks" ? "Clicks on creators’ links, by day" : "Every live post, added up by the day it went live"}</p>
+            </div>
+          </div>
+          <div className="br-seg">
+            {MODES.map((x) => (
+              <button key={x.key} type="button" className={mode === x.key ? "is-on" : ""} onClick={() => setMode(x.key)}>
+                {x.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {data.length ? (
+          <div className="ca-chart" data-scroll>
+            {data.map((x, i) => {
+              const last = i === data.length - 1;
+              const recent = i >= data.length - 4;
+              return (
+                <div key={x.key} className="ca-col" title={`${x.key}: ${m.unit(x.v)}`}>
+                  <span className="ca-tip">{m.unit(x.v)}</span>
+                  <span className={`ca-barv ${last ? "is-last" : recent ? "is-recent" : ""}`} style={{ height: `${Math.max(2, (x.v / max) * 100)}%` }} />
+                  <small>{x.d}</small>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ca-none">{mode === "clicks" && trk.loading ? "Loading clicks…" : "Numbers show up here as soon as creators post."}</p>
+        )}
+      </section>
+
+      {/* Top 5 posts */}
+      <section className="br-card ca-card">
+        <div className="br-card__head">
+          <div>
+            <h2 className="br-card__title">Top 5 posts</h2>
+            <p className="br-card__sub">Pictures are saved copies — they never break</p>
+          </div>
+          <span className="br-link">All {bShort(t.posts)} posts</span>
+        </div>
+        {top.list.length ? (
+          <div className="ca-posts" data-scroll>
+            {top.list.map((p, i) => {
+              const c = bWho(p.creator);
+              const img = p.thumb || (p.creator || {}).profile_picture_url;
+              return (
+                <a key={p.permalink + i} href={p.permalink} target="_blank" rel="noopener noreferrer" className="ca-post">
+                  <span className="br-thumb" style={{ background: bGrad(p.permalink) }}>
+                    {img && <img className="ca-img" src={img} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => e.currentTarget.remove()} />}
+                    <span className="br-thumb__rank">#{i + 1}</span>
+                    <span className="br-thumb__play">
+                      <Play size={11} />
+                    </span>
+                    <span className="br-thumb__views">
+                      <Eye size={11} /> {bShort(p.views)}
+                    </span>
+                  </span>
+                  <strong>{c.handle || c.name}</strong>
+                  <small>
+                    {p.er != null ? `${p.er}% eng.` : "—"} · {bShort(p.likes)} likes
+                  </small>
+                </a>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ca-none">{top.loading ? "Loading top posts…" : "No posts yet."}</p>
+        )}
+      </section>
+
+      <div className="ca-grid">
+        {/* By creator */}
+        <section className="br-card ca-card ca-by">
+          <h2 className="br-card__title">By creator</h2>
+          <p className="br-card__sub">Views · engagement</p>
+          {byCreator.length ? (
+            <ul>
+              {byCreator.slice(0, shown).map((r) => {
+                const cr = bWho(r.creator);
+                const q = r.totals || {};
+                return (
+                  <li key={r.participation_id || r.invite_id || cr.name}>
+                    <span className="br-who">
+                      <span className="br-av br-av--sm" style={{ background: cr.av }}>
+                        {cr.initials}
+                      </span>
+                      <span>
+                        <strong>{cr.name}</strong>
+                        <small>{cr.handle}</small>
+                      </span>
+                    </span>
+                    <span className="br-bar ca-by__bar">
+                      <i style={{ width: `${((Number(q.views) || 0) / topV) * 100}%` }} />
+                    </span>
+                    <strong className="ca-by__v">{bShort(q.views)}</strong>
+                    <span className="ca-by__e">{bEr(q)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="ca-none">No posts yet — numbers show up as soon as creators post.</p>
+          )}
+          {byCreator.length > shown && (
+            <div className="br-more">
+              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(shown + 5)}>
+                Load more <ChevronDown size={14} />
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Who watched */}
+        <section className="br-card ca-card ca-who">
+          <h2 className="br-card__title">Who watched</h2>
+          <p className="br-card__sub">From creators’ connected Instagram</p>
+          <p className="ca-none">Audience (city / age / gender) shows on each creator’s profile once they share their Instagram insights.</p>
+          <p className="ca-who__note">
+            <Rupee size={12} /> {t.waiting_numbers ? `${t.waiting_numbers} post${t.waiting_numbers === 1 ? "" : "s"} still waiting for numbers.` : "Numbers refresh as Instagram updates them."}
+          </p>
+        </section>
+      </div>
+    </>
   );
 }

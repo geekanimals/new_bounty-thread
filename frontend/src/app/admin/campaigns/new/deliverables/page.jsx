@@ -7,7 +7,7 @@ export default function NewCampaignDeliverables() {
   const { d, set } = useDraft();
   const n = (k) => Number(d[k]) || 0;
   return (
-    <Wizard step={1}>
+    <Wizard step={1} draft={{ d, set }}>
       <p className="nc-sec">What each creator delivers</p>
       <div className="nc-grid">
         <Field label="Reels" k="reels" d={d} set={set} type="number" />

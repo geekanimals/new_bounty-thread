@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell, { RumiTip } from "@/components/creater/OnboardShell";
-import { readSession, writeSession } from "@/components/creater/session";
+import { useCreator, reloadProfile, addDreamBrand, removeDreamBrand } from "@/services/creator";
 import { DREAM_BRANDS, getSidekick } from "@/components/creater/data";
 import { Heart } from "@/components/ui/Icons";
 
@@ -16,15 +16,21 @@ export default function SetupBrands() {
   const [custom, setCustom] = useState([]);
   const [add, setAdd] = useState(null);
   const [warn, setWarn] = useState("");
-  const [sk, setSk] = useState(getSidekick("rumi"));
+  const [busy, setBusy] = useState(false);
+  const c = useCreator();
+  const sk = getSidekick(c.prefs?.kid);
+  const loaded = useRef(false);
+  const nameOf = (id) => (DREAM_BRANDS.find((b) => b.id === id) || {}).name || id;
 
+  // Saved dream brands (naam se) → tiles
   useEffect(() => {
-    const s = readSession();
-    const known = DREAM_BRANDS.map((b) => b.id);
-    setPicked(s.dreamBrands || []);
-    setCustom((s.dreamBrands || []).filter((b) => !known.includes(b)));
-    setSk(getSidekick(s.sidekick));
-  }, []);
+    if (loaded.current || !c.ready || !c.loggedIn) return;
+    loaded.current = true;
+    const have = (c.profile?.dream_brands || []).map((d) => d.submitted_brand_name).filter(Boolean);
+    const ids = have.map((n) => (DREAM_BRANDS.find((b) => b.name.toLowerCase() === n.toLowerCase()) || {}).id || n);
+    setPicked(ids);
+    setCustom(ids.filter((x) => !DREAM_BRANDS.some((b) => b.id === x)));
+  }, [c]);
 
   const toggle = (id) => {
     if (picked.includes(id)) return setPicked(picked.filter((x) => x !== id));
@@ -45,13 +51,35 @@ export default function SetupBrands() {
     setAdd(null);
   };
 
-  const next = (save) => {
-    if (save) writeSession({ dreamBrands: picked });
+  // Purane onbStep(2) jaisa: hataye gaye → delete_dream_brand, naye → upsert_dream_brand (rank ke saath)
+  const next = async (save) => {
+    if (save) {
+      setBusy(true);
+      try {
+        const want = picked.map(nameOf);
+        const old = c.profile?.dream_brands || [];
+        for (const x of old) {
+          if (x.submitted_brand_name && !want.some((w) => w.toLowerCase() === x.submitted_brand_name.toLowerCase()))
+            await removeDreamBrand(x.aspiration_id, { corr: "ui-onboard", reload: false });
+        }
+        let rank = 1;
+        for (const b of want) {
+          if (!old.some((x) => (x.submitted_brand_name || "").toLowerCase() === b.toLowerCase()))
+            await addDreamBrand(b, rank, { corr: "ui-onboard", reload: false });
+          rank++;
+        }
+        reloadProfile();
+      } catch (e) {
+        setWarn("Couldn't save: " + (e.message || e));
+        setBusy(false);
+        return;
+      }
+    }
     router.push("/creater/onboarding/terms");
   };
 
   return (
-    <OnboardShell tone="light" step={5} eyebrow="Your dreams • 05/06" avatar>
+    <OnboardShell tone="light" step={5} eyebrow="Your dreams • 05/06" avatar gate="member">
       <title>Dream brands — Bounty</title>
       <div className="db">
         <h2 className="db-h">
@@ -117,8 +145,8 @@ export default function SetupBrands() {
         <p className="db-private">Your list is private. It&apos;s a wishlist, not a promise of selection.</p>
 
         <RumiTip mobileDark className="db-rumi" name={sk.name} img={sk.img} text="I'll ping you when a dream brand opens a campaign." />
-        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block db-cta" onClick={() => next(true)}>
-          Save my dream board →
+        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block db-cta" onClick={() => next(true)} disabled={busy}>
+          {busy ? "Saving…" : "Save my dream board →"}
         </button>
         <button type="button" className="db-skip" onClick={() => next(false)}>
           Skip for now

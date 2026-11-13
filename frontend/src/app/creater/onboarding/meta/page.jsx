@@ -1,43 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
-import { Check, ShieldCheck } from "@/components/ui/Icons";
-
-// Dummy Instagram accounts (asli mein Meta se aayenge)
-const ACCOUNTS = [
-  { id: "a1", handle: "@shivam.rathore8907", name: "Shivam Rathore", followers: "12.4K followers", img: "/creater/avatar.jpg", type: "Creator account" },
-  { id: "a2", handle: "@shivam.eats.jaipur", name: "Shivam Eats", followers: "2.1K followers", img: "/creater/cat-food.jpg", type: "Business account" },
-];
+import { startInstagramConnect } from "@/services/creator";
 
 /**
- * /creater/onboarding/meta — Instagram connect: account chuno (dummy).
- * Asli app mein yahan Meta ka official popup khulega — password kabhi Bounty par nahi maanga jaata.
- * Agla step alag route: /creater/onboarding/meta/allow (Back ek step).
+ * /creater/onboarding/meta — "Connect Instagram": seedha Instagram (Meta) ki official login window par.
+ * Purane app jaisa — beech mein koi Geek page nahi, password kabhi Bounty par nahi.
+ * Wapsi: <site>/app.html?code&state → /legacy → /creater → /creater/onboarding/connecting
+ * ?next=apply → connect ke baad Discover par wapas (apply poora karne)
  */
 export default function MetaConnect() {
   const router = useRouter();
-  const [opening, setOpening] = useState(true);
-  const [acc, setAcc] = useState("a1");
-  const [next, setNext] = useState("");
+  const [err, setErr] = useState("");
+  const started = useRef(false);
 
+  const go = async () => {
+    setErr("");
+    try {
+      const next = /next(=|%3D)apply/.test(window.location.search) ? "discover" : "";
+      await startInstagramConnect({ after: next });
+    } catch (e) {
+      setErr("Couldn't open Instagram: " + (e.message || e));
+    }
+  };
   useEffect(() => {
-    if (/next(=|%3D)apply/.test(window.location.search)) setNext("apply");
-    const t = setTimeout(() => setOpening(false), 1200);
+    if (started.current) return;
+    started.current = true;
+    const t = setTimeout(go, 600); // "Opening…" ek pal dikhe
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cancel = () => (window.history.length > 1 ? router.back() : router.push("/creater/onboarding/instagram"));
-  const chosen = ACCOUNTS.find((a) => a.id === acc);
-  const goAllow = () => {
-    try {
-      window.sessionStorage.setItem("bounty_meta", JSON.stringify({ acc, next }));
-    } catch {
-      /* ignore */
-    }
-    router.push("/creater/onboarding/meta/allow");
-  };
 
   return (
     <OnboardShell tone="light" step={4} onBack={cancel}>
@@ -45,8 +41,7 @@ export default function MetaConnect() {
       <div className="mt">
         <span className="mt-ig" aria-hidden="true" />
         <h2 className="mt-h">Connect Instagram</h2>
-
-        {opening ? (
+        {!err ? (
           <div className="mt-open" role="status">
             <span className="mt-spin" />
             <p>Opening Meta&apos;s secure window…</p>
@@ -54,29 +49,15 @@ export default function MetaConnect() {
           </div>
         ) : (
           <>
-            <p className="mt-sub">Choose the Instagram account you create with.</p>
-            <div className="mt-accs" role="radiogroup" aria-label="Instagram accounts">
-              {ACCOUNTS.map((a) => (
-                <button key={a.id} type="button" role="radio" aria-checked={acc === a.id} className={`mt-acc ${acc === a.id ? "is-on" : ""}`} onClick={() => setAcc(a.id)}>
-                  <img src={a.img} alt="" />
-                  <span>
-                    <strong>{a.handle}</strong>
-                    <small>
-                      {a.type} · {a.followers}
-                    </small>
-                  </span>
-                  <i>{acc === a.id && <Check size={12} />}</i>
-                </button>
-              ))}
-            </div>
-            <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block mt-cta" onClick={goAllow}>
-              Continue as {chosen.handle}
-            </button>
-            <button type="button" className="mt-cancel" onClick={cancel}>
-              Cancel
+            <p className="mt-sub">{err}</p>
+            <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block mt-cta" onClick={go}>
+              Try again
             </button>
           </>
         )}
+        <button type="button" className="mt-cancel" onClick={cancel}>
+          Cancel
+        </button>
       </div>
 
       <style>{`

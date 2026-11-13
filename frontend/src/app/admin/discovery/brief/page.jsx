@@ -4,53 +4,65 @@ import { useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import DiscoveryHead from "@/components/admin/discovery/DiscoveryHead";
-import { CREATORS } from "@/components/admin/data";
+import InviteModal from "@/components/admin/discovery/InviteModal";
+import { smartParse } from "@/components/admin/discovery/smart";
+import { rpc, errText } from "@/lib/supabase";
+import { kNum, cap1 } from "@/components/admin/creator/live";
 
-const WHY = {
-  "aarav-shah": "Lifestyle · Bengaluru · posts weekly",
-  "nisha-rao": "Beauty · Mumbai · strong saves",
-  "ritika-sen": "Fashion · Hindi + English",
-  "kabir-mehta": "Food · Delhi · high comments",
-  "ananya-iyer": "Travel · Chennai · steady reach",
-  "rohan-das": "Fitness · Pune · Hindi speaker",
-  "aisha-khan": "Beauty · Mumbai · 6.4% engagement",
-  "meera-iyer": "Lifestyle · Bengaluru · 842K views",
-  "pooja-nair": "Home · Kochi · cat parent",
-};
 const IDEAS = ["Female fashion creators in Mumbai, 50k+", "Moms in Delhi who speak Hindi", "Cat parents in Pune"];
-const BASE = [92, 88, 81, 76];
+const CATS = ["Lifestyle", "Fashion", "Beauty", "Food", "Travel", "Fitness", "Health", "Tech", "Comedy", "Entertainment", "Parenting", "Gaming", "Finance", "Business", "Education", "Music", "Dance", "Art", "Photography", "Sports", "Pets", "Home decor", "Auto", "Spirituality"];
 
-/* "Fit" score — brief ke shabd creator ke category/city/why se milao */
-function rank(brief) {
-  const words = brief.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
-  return CREATORS.map((c) => {
-    const hay = `${c.category} ${c.city} ${WHY[c.id]}`.toLowerCase();
-    const hits = words.filter((w) => hay.includes(w.replace(/s$/, ""))).length;
-    return { c, fit: Math.min(97, 60 + hits * 12 + (c.complete ? 6 : 0) + (c.ig ? 4 : 0)) };
-  })
-    .sort((a, b) => b.fit - a.fit)
-    .slice(0, 4);
+/* Brief ki line → creator_search ke filters (purane csSmartApply + run jaisa) */
+function filtersOf(p) {
+  const f = { categories: p.categories.filter((c) => CATS.includes(c)), location: p.location, gender: p.gender, min_engagement: p.min_engagement, min_age: p.min_age, max_age: p.max_age, language: p.language, sort: "followers_desc" };
+  if (p.min) f.min_followers = p.min;
+  if (p.max) f.max_followers = p.max;
+  if (p.words.length) f.words = p.words;
+  if (p.gender) f.gender_soft = "yes";
+  Object.keys(f).forEach((k) => (f[k] === "" || f[k] == null || (Array.isArray(f[k]) && !f[k].length)) && delete f[k]);
+  return f;
+}
+/* "Why they fit" + Fit % = brief ki kitni shartein is creator par sach hain (asli data se) */
+function fitOf(c, p) {
+  const checks = [];
+  if (p.location) checks.push([`📍 ${c.city || "city not known"}`, String(c.city || "").toLowerCase().includes(p.location.toLowerCase()) || String(c.state || "").toLowerCase().includes(p.location.toLowerCase())]);
+  if (p.categories.length) checks.push([(c.categories || []).slice(0, 2).map(cap1).join(", ") || "no category", (c.categories || []).some((x) => p.categories.map((y) => y.toLowerCase()).includes(String(x).toLowerCase()))]);
+  if (p.min || p.max) checks.push([`${kNum(c.followers)} followers`, (!p.min || (c.followers || 0) >= +p.min) && (!p.max || (c.followers || 0) <= +p.max)]);
+  if (p.min_engagement) checks.push([`${c.engagement ?? "—"}% engagement`, (c.engagement || 0) >= +p.min_engagement]);
+  if (p.language) checks.push([cap1(p.language), (c.languages || []).some((x) => String(x).toLowerCase() === p.language)]);
+  const met = checks.filter((x) => x[1]).length;
+  const why = checks.length ? checks.map((x) => x[0]).join(" · ") : [c.city, (c.categories || [])[0] && cap1(c.categories[0])].filter(Boolean).join(" · ") || "—";
+  return { why, fit: checks.length ? Math.round((100 * met) / checks.length) : null };
 }
 
-/* Discovery → Match to a brief (Figma 053) */
+/* Discovery → Match to a brief (Figma 053) — "Describe who you need" (purane app jaisa: line → filters → creator_search) */
 export default function DiscoveryBrief() {
   const [brief, setBrief] = useState("");
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
   const [invited, setInvited] = useState([]);
+  const [inv, setInv] = useState(null);
+  const [toast, setToast] = useState("");
 
-  const find = (text) => {
+  const find = async (text) => {
     const t = (text ?? brief).trim();
     if (!t) return;
     setBrief(t);
     setBusy(true);
-    setTimeout(() => {
-      setRes(rank(t));
-      setBusy(false);
-    }, 450);
+    setErr(null);
+    const p = smartParse(t);
+    const filters = filtersOf(p);
+    const ask = (source, size) => rpc("admin", "api.creator_search", { p_filters: { ...filters, source }, p_page: 1, p_size: size, p_campaign: null });
+    const [P, X] = await Promise.all([ask("platform", 12), ask("external", 12)]);
+    setBusy(false);
+    if (P.error || X.error) return setErr(P.error || X.error);
+    const list = [...((P.data && P.data.rows) || []), ...((X.data && X.data.rows) || [])].map((c) => ({ c, ...fitOf(c, p) }));
+    list.sort((a, b) => (b.fit ?? 0) - (a.fit ?? 0) || (b.c.followers || 0) - (a.c.followers || 0));
+    setRes({ list, chips: p.chips });
   };
 
-  const rows = res || CREATORS.slice(0, 4).map((c, i) => ({ c, fit: BASE[i] }));
+  const rows = res ? res.list : [];
 
   return (
     <AdminShell>
@@ -90,36 +102,65 @@ export default function DiscoveryBrief() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ c, fit }) => (
-                <tr key={c.id}>
-                  <td>
-                    <Link href={`/admin/creators/${c.id}/profile`} className="db-name">
-                      {c.name}
-                    </Link>
-                    <span className="db-handle">{c.handle}</span>
-                  </td>
-                  <td>{WHY[c.id]}</td>
-                  <td>{c.followers}</td>
-                  <td>
-                    <span className={`ad-badge ${fit >= 75 ? "ad-badge--green" : "ad-badge--orange"}`}>{fit}%</span>
-                  </td>
-                  <td>
-                    {invited.includes(c.id) ? (
-                      <span className="db-done">✓ Invited</span>
-                    ) : (
-                      <button type="button" className="db-link" onClick={() => setInvited([...invited, c.id])}>
-                        Invite →
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {rows.map(({ c, fit, why }, i) => {
+                const key = c.member_id || c.handle || String(i);
+                return (
+                  <tr key={key + i}>
+                    <td>
+                      {c.member_id ? (
+                        <Link href={`/admin/creators/${c.member_id}/profile`} className="db-name">
+                          {c.name || "@" + c.handle}
+                        </Link>
+                      ) : (
+                        <a href={`https://instagram.com/${encodeURIComponent(c.handle || "")}`} target="_blank" rel="noopener noreferrer" className="db-name">
+                          {c.name || "@" + c.handle}
+                        </a>
+                      )}
+                      <span className="db-handle">
+                        {c.handle ? "@" + c.handle : ""}
+                        {c.member_id ? "" : " · Instagram"}
+                      </span>
+                    </td>
+                    <td>{why}</td>
+                    <td>{kNum(c.followers)}</td>
+                    <td>{fit == null ? "—" : <span className={`ad-badge ${fit >= 75 ? "ad-badge--green" : "ad-badge--orange"}`}>{fit}%</span>}</td>
+                    <td>
+                      {invited.includes(key) ? (
+                        <span className="db-done">✓ Invited</span>
+                      ) : (
+                        <button type="button" className="db-link" onClick={() => setInv({ key, handle: c.handle, member_id: c.member_id, name: c.name })}>
+                          Invite →
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          {res && !!res.chips.length && <p className="db-chips">Searching for: {res.chips.map((c) => c[1]).join(" · ")}</p>}
+          {err && <p className="db-empty">{errText(err)}</p>}
+          {!res && !err && <p className="db-empty">Describe the creators you need — e.g. male creators in Jaipur with dogs.</p>}
+          {res && !rows.length && !err && <p className="db-empty">No creator matches this brief — try fewer conditions.</p>}
         </div>
       </section>
 
+      {inv && (
+        <InviteModal
+          who={inv}
+          onClose={() => setInv(null)}
+          onDone={(m) => {
+            setInvited((l) => [...l, inv.key]);
+            setInv(null);
+            setToast(m);
+            setTimeout(() => setToast(""), 3200);
+          }}
+        />
+      )}
+      {toast && <div className="ad-toast">✓ {toast}</div>}
+
       <style>{`
+        .db-empty, .db-chips { margin-top: 14px; font-size: 12.5px; color: var(--ad-muted); }
         .db-card { padding: 25px 22px 30px; }
         .db-sub { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .db-row { display: flex; gap: 10px; margin-top: 17px; }

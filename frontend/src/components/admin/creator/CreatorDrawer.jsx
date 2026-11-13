@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CreatorCards from "@/app/admin/creators/cards/page";
-import { profileById } from "@/components/admin/creator/profiles";
+import { useCreatorProfile, profileView, useMsgPause, agoTxt, uaShort } from "@/components/admin/creator/live";
+import { rpc, useRpc, errText } from "@/lib/supabase";
 
 export const CP_TABS = [
   { k: "profile", label: "👤 Profile" },
@@ -18,12 +19,20 @@ export const CP_TABS = [
 /**
  * Creator profile — Figma mein right side drawer (820px) jo Creators (cards) page ke upar khulta hai.
  * Har tab apna route: /admin/creators/[id]/<tab>. Band karo → wapas cards.
+ * Data: admin_creator_profile (purane app ka Creator 360) — id = member id.
  */
 export default function CreatorDrawer({ id, tab, children }) {
   const router = useRouter();
-  const p = profileById(id);
-  const [paused, setPaused] = useState(false);
+  const { data, error, loading, reload } = useCreatorProfile(id);
+  const p = profileView(id, data);
+  // "Active 7h ago · iPhone · Essential cookies" (creator_activity)
+  const { data: act } = useRpc("admin", "api.creator_activity", { p_member: id, p_days: 30 }, { skip: !id });
+  const pause = useMsgPause();
+  const paused = pause.pausedFor({ member: id });
   const [ask, setAsk] = useState(false);
+  const [confirmTxt, setConfirmTxt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [delErr, setDelErr] = useState("");
   const [toast, setToast] = useState("");
   const close = () => router.push("/admin/creators/cards");
 
@@ -40,8 +49,64 @@ export default function CreatorDrawer({ id, tab, children }) {
 
   const flash = (t) => {
     setToast(t);
-    setTimeout(() => setToast(""), 2200);
+    setTimeout(() => setToast(""), 2600);
   };
+
+  const activeLine = act
+    ? [
+        act.last_seen ? `Active ${agoTxt(act.last_seen)}` : "No activity yet",
+        act.last_device ? uaShort(act.last_device) : "",
+        act.consent === "all" ? "All cookies" : act.consent === "essential" ? "Essential cookies" : "Cookies not chosen",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "…";
+
+  // ⏸ / ▶ — WhatsApp + email ek saath (admin_msg_pause)
+  const togglePause = async () => {
+    const on = !paused;
+    if (!window.confirm(on ? "Pause all messages to this creator? WhatsApp and email both stop (login codes still go)." : "Resume messages to this creator?")) return;
+    const r = await pause.toggle({ member: id });
+    if (r.error) return flash("Couldn't change it: " + errText(r.error));
+    flash(on ? `⏸ Messages paused for ${(r.data && r.data.name) || p.name}` : `▶ Messages resumed for ${(r.data && r.data.name) || p.name}`);
+  };
+
+  // 🗑 Poora user delete (admin_delete_user, "DELETE" type karke) — purane app jaisa
+  const doDelete = async () => {
+    setBusy(true);
+    setDelErr("");
+    const r = await rpc("admin", "admin_delete_user", { p_member: id, p_confirm: confirmTxt.trim() });
+    setBusy(false);
+    if (r.error) return setDelErr(errText(r.error));
+    setAsk(false);
+    router.push("/admin/creators/cards");
+  };
+
+  if (error || (loading && !data)) {
+    return (
+      <>
+        <CreatorCards snapshot />
+        <div className="cdw-wrap" onClick={close}>
+          <aside className="cdw" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Creator profile">
+            <button type="button" className="cdw-x" onClick={close} aria-label="Close">
+              ✕
+            </button>
+            {error ? (
+              <p className="cdw-state">
+                {errText(error)}{" "}
+                <button type="button" className="cdw-txt" onClick={() => reload()}>
+                  Retry
+                </button>
+              </p>
+            ) : (
+              <p className="cdw-state">Loading creator…</p>
+            )}
+          </aside>
+        </div>
+        <style>{`.cdw-state { padding: 40px 0; font-size: 14px; color: var(--ad-muted); }`}</style>
+      </>
+    );
+  }
 
   return (
     <>
@@ -52,39 +117,47 @@ export default function CreatorDrawer({ id, tab, children }) {
             ✕
           </button>
           <div className="cdw-head">
-            <span className="cdw-av">{p.name[0]}</span>
+            {p.pic ? (
+              <img className="cdw-av cdw-av--img" src={p.pic} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
+            ) : (
+              <span className="cdw-av">{p.name[0]}</span>
+            )}
             <div className="cdw-who">
               <p className="cdw-eye">Creator profile</p>
               <h2>{p.name}</h2>
               <p className="cdw-sub">
-                {p.handle} · {p.followers} followers · joined {p.joined} · Profile {p.score}
+                {p.handle ? `${p.handle} · ${p.followers} followers · ` : ""}joined {p.joined} · Profile {p.score}
               </p>
             </div>
           </div>
 
           <div className="cdw-acts">
-            <Link href="/admin/inbox" className="cdw-wa">
-              💬 WhatsApp
-            </Link>
-            <button
-              type="button"
-              className="cdw-txt"
-              onClick={() => {
-                setPaused(!paused);
-                flash(paused ? "Messages resumed" : "Messages paused for this creator");
-              }}
-            >
+            {p.whatsapp ? (
+              <a href={`https://wa.me/${p.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="cdw-wa">
+                💬 WhatsApp
+              </a>
+            ) : (
+              <span className="cdw-wa is-off">💬 No WhatsApp</span>
+            )}
+            {p.email && (
+              <a href={`mailto:${p.email}`} className="cdw-txt">
+                ✉️ Email
+              </a>
+            )}
+            <button type="button" className="cdw-txt" onClick={togglePause}>
               {paused ? "▶️ Resume messages" : "⏸️ Pause messages"}
             </button>
-            <span className="cdw-live">🟢 {p.active}</span>
-            <button type="button" className="cdw-txt" onClick={() => setAsk(true)}>
+            <Link href={`/admin/creators/${id}/activity`} className="cdw-live">
+              {act?.last_seen ? "🟢" : "⚪"} {activeLine}
+            </Link>
+            <button type="button" className="cdw-txt" onClick={() => (setConfirmTxt(""), setDelErr(""), setAsk(true))}>
               🗑️ Delete user
             </button>
           </div>
 
           <nav className="cdw-tabs" data-scroll>
             {CP_TABS.map((t) => (
-              <Link key={t.k} href={`/admin/creators/${p.id}/${t.k}`} className={`ad-tab ${tab === t.k ? "is-on" : ""}`}>
+              <Link key={t.k} href={`/admin/creators/${id}/${t.k}`} className={`ad-tab ${tab === t.k ? "is-on" : ""}`}>
                 {t.label}
               </Link>
             ))}
@@ -99,20 +172,21 @@ export default function CreatorDrawer({ id, tab, children }) {
         <div className="ad-overlay" style={{ zIndex: 130 }} onClick={() => setAsk(false)}>
           <div className="ad-modal cdw-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete user">
             <h3 className="ad-h2">Delete {p.name}?</h3>
-            <p>The account moves to Settings › Delete requests for 30 days, then it is removed for good.</p>
+            <p>
+              This removes for good: their login, creator profile (personal details, contact, addresses, pets, rates), Instagram and WhatsApp link, every campaign they were on, alerts
+              and activity. Campaigns they created move to you; a record stays in the Audit log. They can sign up again fresh.
+            </p>
+            <label className="ad-label cdw-lbl" htmlFor="cdwDel">
+              Type <b>DELETE</b> to confirm
+            </label>
+            <input id="cdwDel" className="ad-input" autoComplete="off" placeholder="DELETE" value={confirmTxt} onChange={(e) => setConfirmTxt(e.target.value)} />
+            {delErr && <p className="cdw-err">{delErr}</p>}
             <div>
               <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAsk(false)}>
                 Cancel
               </button>
-              <button
-                type="button"
-                className="ad-btn ad-btn--danger"
-                onClick={() => {
-                  setAsk(false);
-                  flash(`${p.name} sent to delete requests`);
-                }}
-              >
-                Delete user
+              <button type="button" className="ad-btn ad-btn--danger" disabled={busy || confirmTxt.trim() !== "DELETE"} onClick={doDelete}>
+                {busy ? "Deleting…" : "Delete permanently"}
               </button>
             </div>
           </div>
@@ -148,6 +222,10 @@ export default function CreatorDrawer({ id, tab, children }) {
         .cdw-modal { padding: 24px; }
         .cdw-modal p { margin-top: 10px; font-size: 13.5px; line-height: 1.5; color: var(--ad-muted); }
         .cdw-modal div { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .cdw-lbl { margin-top: 14px; }
+        .cdw-err { color: var(--ad-red) !important; font-weight: 700; }
+        .cdw-av--img { object-fit: cover; }
+        .cdw-wa.is-off { color: var(--ad-muted); }
 
         @media (max-width: 640px) {
           .cdw { padding: 20px 16px 30px; }

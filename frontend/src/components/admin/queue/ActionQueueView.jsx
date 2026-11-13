@@ -1,54 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
 import Drawer from "@/components/admin/queue/Drawer";
 import DecisionPanel from "@/components/admin/queue/DecisionPanel";
-import { FILTERS, FILTER_LABEL, queueFor, queueItem } from "@/components/admin/queue/queueData";
-
-const KEY = "geek_aq_done";
-const readDone = () => {
-  try {
-    return JSON.parse(window.sessionStorage.getItem(KEY) || "[]");
-  } catch {
-    return [];
-  }
-};
+import QueueRecords from "@/components/admin/queue/QueueRecords";
+import { FILTERS, FILTER_LABEL } from "@/components/admin/queue/queueData";
+import { useApprovals, buildQueue, useToast, useReason, act, errText, StateBox } from "@/components/admin/queue/live";
 
 const base = (f) => (f === "all" ? "/admin/action-queue" : `/admin/action-queue/${f}`);
 
 /**
- * Action queue (Figma 007, 009–017). filter = tab, openId = drawer wala item (008/011/013/015).
+ * Action queue (Figma 007, 009–017) — asli data: api.approvals_inbox + api.process_inbox (har 20 sec).
+ * filter = tab, openId = drawer wala group (008/011/013/015).
  */
 export default function ActionQueueView({ filter = "all", openId }) {
   const router = useRouter();
-  const [done, setDone] = useState([]);
-  const [toast, setToast] = useState("");
+  const { inbox, proc, loading, error, reload } = useApprovals();
+  const [toastNode, toast] = useToast();
+  const [reasonNode, ask] = useReason();
+  const [busy, setBusy] = useState("");
 
-  useEffect(() => setDone(readDone()), []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2600);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const finish = (id, msg) => {
-    const next = [...new Set([...done, id])];
-    setDone(next);
-    try {
-      window.sessionStorage.setItem(KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-    setToast(msg);
-  };
-
-  const items = queueFor(filter).filter((q) => !done.includes(q.id));
-  const open = openId ? queueItem(openId) : null;
+  const all = buildQueue(inbox, proc);
+  const items = filter === "all" ? all : all.filter((q) => q.f === filter);
+  const open = openId ? all.find((q) => q.id === openId) : null;
   const closeHref = base(filter);
+  const itemHref = (q) => `${filter === "all" ? "/admin/action-queue/all" : closeHref}/${q.id}`;
+
+  const kindN = (...k) => proc.filter((x) => k.includes(x.kind)).length;
+  const apps = (inbox.applicants || []).length + (inbox.marketplace || []).length;
+  const total = apps + proc.length + (inbox.campaigns || []).length + (inbox.signups || []).length;
+
+  /* ek decision chalao → toast → data dobara */
+  const run = async (key, fn, okMsg, after) => {
+    setBusy(key);
+    const { error: e } = await fn();
+    setBusy("");
+    if (e) return toast(errText(e), true);
+    toast(okMsg);
+    reload();
+    after && after();
+  };
+  const approveCampaign = (q) => run(q.id, () => act.approveCampaign(q.rec.id), `${q.rec.name} is live — creators can apply now`, () => openId && router.push(closeHref));
+  const sendBack = async (q) => {
+    const pick = await ask("Send this campaign back as a draft — what needs changing?", { mode: "text", required: false, label: "What needs changing?", placeholder: "e.g. Add the product value and deliverables", hint: false, cta: "Send back" });
+    if (!pick) return;
+    run(q.id, () => act.sendBackCampaign(q.rec.id, pick.note), `${q.rec.name} sent back as a draft`, () => openId && router.push(closeHref));
+  };
+  const approveSignup = (q) => run(q.id, () => act.approveSignup(q.rec.id), `Approved — ${q.rec.name || q.rec.email} can sign in now`, () => openId && router.push(closeHref));
+  const declineSignup = async (q) => {
+    const pick = await ask("Why are you declining this signup?", { mode: "text", label: "Reason", placeholder: "They are told this reason in the app, on WhatsApp and by email.", hint: false, cta: "Decline signup" });
+    if (!pick) return;
+    run(q.id, () => act.declineSignup(q.rec.id, pick.note), `Declined — ${q.rec.name || q.rec.email} was notified`, () => openId && router.push(closeHref));
+  };
 
   return (
     <AdminShell>
@@ -56,18 +63,18 @@ export default function ActionQueueView({ filter = "all", openId }) {
 
       <Stats
         items={[
-          { value: 60, label: "Creator decisions", note: "Pending screening", href: "/admin/action-queue/applications" },
-          { value: 21, label: "Video reviews", note: "Submitted content", href: "/admin/action-queue/content" },
-          { value: 1, label: "Contracts to send", note: "Ready for verification", href: "/admin/action-queue/contracts" },
-          { value: 25, label: "Logistics actions", note: "To send + in transit", href: "/admin/action-queue/logistics" },
-          { value: 82, label: "Priority items", note: "Illustrative aggregate", href: "/admin/action-queue" },
+          { value: apps, label: "Creator decisions", note: "Pending screening", href: "/admin/action-queue/applications" },
+          { value: kindN("review"), label: "Video reviews", note: "Submitted content", href: "/admin/action-queue/content" },
+          { value: kindN("contract", "unsigned"), label: "Contracts to send", note: "Ready for verification", href: "/admin/action-queue/contracts" },
+          { value: kindN("ship", "deliver", "blocked"), label: "Logistics actions", note: "To send + in transit", href: "/admin/action-queue/logistics" },
+          { value: total, label: "Priority items", note: "Everything waiting on you", href: "/admin/action-queue" },
         ]}
       />
 
       <section className="ad-card aq">
         <div className="aq-head">
           <h2 className="ad-h2">Decision inbox</h2>
-          <p className="aq-note">Sample tasks · read-only until demo action</p>
+          <p className="aq-note">Live · refreshes every 20s</p>
         </div>
         <nav className="ad-tabs aq-tabs" aria-label="Filter decisions" data-scroll>
           {FILTERS.map((f) => (
@@ -78,12 +85,13 @@ export default function ActionQueueView({ filter = "all", openId }) {
         </nav>
 
         <div className="aq-list">
+          <StateBox loading={loading && !items.length} error={!items.length && error} onRetry={reload} />
           {items.map((q) => (
             <div key={q.id} className="aq-row">
               <span className="aq-ic">{q.icon}</span>
               <div className="aq-main">
                 <p className="aq-title">
-                  <Link href={`${closeHref === "/admin/action-queue" ? "/admin/action-queue/all" : closeHref}/${q.id}`}>{q.title}</Link> <span className="ad-count">{q.count}</span>
+                  <Link href={itemHref(q)}>{q.title}</Link> <span className="ad-count">{q.count}</span>
                 </p>
                 <p className="aq-sub">{q.line || `${q.campaign} · ${q.reason}`}</p>
               </div>
@@ -92,50 +100,34 @@ export default function ActionQueueView({ filter = "all", openId }) {
                 <span className="aq-when">{q.when}</span>
                 {q.kind === "campaign" ? (
                   <>
-                    <Link href={`/admin/action-queue/campaigns/${q.id}`} className="aq-text">
+                    <Link href={itemHref(q)} className="aq-text">
                       Open brief
                     </Link>
-                    <button type="button" className="ad-btn ad-btn--primary aq-solid" onClick={() => finish(q.id, "Monsoon Menu Launch is live — creators can apply now")}>
-                      Approve &amp; go live
+                    <button type="button" className="ad-btn ad-btn--primary aq-solid" disabled={busy === q.id} onClick={() => approveCampaign(q)}>
+                      {busy === q.id ? "…" : "Approve & go live"}
                     </button>
                   </>
                 ) : q.kind === "signup" ? (
                   <>
-                    <button type="button" className="aq-text" onClick={() => finish(q.id, `Declined — ${q.title.split(" wants")[0]} was notified`)}>
+                    <button type="button" className="aq-text" disabled={busy === q.id} onClick={() => declineSignup(q)}>
                       Decline
                     </button>
-                    <button type="button" className="ad-btn ad-btn--primary aq-solid" onClick={() => finish(q.id, `Approved — ${q.title.split(" wants")[0]} can sign in now`)}>
-                      Approve
+                    <button type="button" className="ad-btn ad-btn--primary aq-solid" disabled={busy === q.id} onClick={() => approveSignup(q)}>
+                      {busy === q.id ? "…" : "Approve"}
                     </button>
                   </>
                 ) : (
-                  <Link href={`${closeHref === "/admin/action-queue" ? "/admin/action-queue/all" : closeHref}/${q.id}`} className="ad-btn ad-btn--ghost aq-review">
+                  <Link href={itemHref(q)} className="ad-btn ad-btn--ghost aq-review">
                     Review →
                   </Link>
                 )}
               </div>
             </div>
           ))}
-          {!items.length && (
+          {!loading && !error && !items.length && (
             <div className="aq-empty">
               <strong>All clear ✨</strong>
-              <span>Nothing waiting in {FILTER_LABEL[filter]}.</span>
-              {done.length > 0 && (
-                <button
-                  type="button"
-                  className="aq-text"
-                  onClick={() => {
-                    setDone([]);
-                    try {
-                      window.sessionStorage.removeItem(KEY);
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                >
-                  Reset demo
-                </button>
-              )}
+              <span>Nothing waiting in {FILTER_LABEL[filter] || "this tab"}.</span>
             </div>
           )}
         </div>
@@ -144,7 +136,7 @@ export default function ActionQueueView({ filter = "all", openId }) {
       {open && (
         <Drawer eyebrow="Decision workspace" title={open.title} closeHref={closeHref}>
           <DecisionPanel
-            meta={`${open.campaign} · ${open.when} · ${open.count} records`}
+            meta={`${open.campaign} · ${open.when} · ${open.count} record${open.count > 1 ? "s" : ""}`}
             badges={[
               { label: open.pri, tone: open.tone },
               { label: FILTER_LABEL[open.f], tone: "violet" },
@@ -152,16 +144,33 @@ export default function ActionQueueView({ filter = "all", openId }) {
             why={`${open.reason}. Review campaign brief and evidence before making a decision.`}
             actions={
               <>
-                <button
-                  type="button"
-                  className="ad-btn ad-btn--primary"
-                  onClick={() => {
-                    finish(open.id, open.kind === "campaign" ? "Monsoon Menu Launch is live — creators can apply now" : open.kind === "signup" ? "Account approved" : "Marked reviewed (demo)");
-                    router.push(closeHref);
-                  }}
-                >
-                  {open.kind === "campaign" ? "Approve & go live" : open.kind === "signup" ? "Approve" : "Mark reviewed (demo)"}
-                </button>
+                {open.kind === "campaign" ? (
+                  <>
+                    <button type="button" className="ad-btn ad-btn--primary" disabled={busy === open.id} onClick={() => approveCampaign(open)}>
+                      {busy === open.id ? "…" : "Approve & go live"}
+                    </button>
+                    <button type="button" className="ad-btn ad-btn--ghost" onClick={() => sendBack(open)}>
+                      Send back
+                    </button>
+                  </>
+                ) : open.kind === "signup" ? (
+                  <>
+                    <button type="button" className="ad-btn ad-btn--primary" disabled={busy === open.id} onClick={() => approveSignup(open)}>
+                      {busy === open.id ? "…" : "Approve"}
+                    </button>
+                    <button type="button" className="ad-btn ad-btn--ghost" onClick={() => declineSignup(open)}>
+                      Decline
+                    </button>
+                  </>
+                ) : open.f === "applications" ? (
+                  <Link href="/admin/applications" className="ad-btn ad-btn--primary">
+                    Open applications
+                  </Link>
+                ) : open.f === "logistics" ? (
+                  <Link href="/admin/logistics" className="ad-btn ad-btn--primary">
+                    Open logistics
+                  </Link>
+                ) : null}
                 {open.cid ? (
                   <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
                     Open campaign
@@ -173,15 +182,19 @@ export default function ActionQueueView({ filter = "all", openId }) {
                 )}
               </>
             }
-          />
+          >
+            {open.kind === "group" && <QueueRecords group={open} ask={ask} toast={toast} onDone={reload} />}
+          </DecisionPanel>
+        </Drawer>
+      )}
+      {openId && !open && !loading && (
+        <Drawer eyebrow="Decision workspace" title="Already handled" closeHref={closeHref}>
+          <p className="aq-gone">This item isn’t waiting any more — someone already took care of it.</p>
         </Drawer>
       )}
 
-      {toast && (
-        <div className="ad-toast" role="status">
-          ✓ {toast}
-        </div>
-      )}
+      {reasonNode}
+      {toastNode}
 
       <style>{`
         .aq { padding: 22px 22px 30px; }
@@ -213,6 +226,8 @@ export default function ActionQueueView({ filter = "all", openId }) {
         .aq-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 16px; border-radius: 14px; border: 1px dashed var(--ad-line-2); text-align: center; }
         .aq-empty strong { font-family: var(--ad-head); font-size: 17px; font-weight: 800; }
         .aq-empty span { font-size: 13px; color: var(--ad-muted); }
+        .aq-gone { margin-top: 18px; font-size: 14px; color: var(--ad-muted); }
+        .aq-text:disabled { opacity: .5; }
 
         @media (max-width: 1023px) {
           .aq-row { flex-wrap: wrap; }

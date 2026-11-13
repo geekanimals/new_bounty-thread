@@ -1,56 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BrandShell, { ToneIcon } from "@/components/brands/BrandShell";
-import { IG, BRAND } from "@/components/brands/data";
-import { Refresh, Users, Clock, Play, Eye, Check } from "@/components/ui/Icons";
+import { BrLoading, BrEmpty, BrError, useToast } from "@/components/brands/BrandStates";
+import { useBrandInstagram, igRefresh, igConnect, bShort, bNum, bAgo, bInitials, bGrad } from "@/services/brand";
+import { Refresh, Users, Clock, Check, Instagram } from "@/components/ui/Icons";
 
-const RANGES = ["7", "30", "90"];
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const HOURS = ["9a", "11a", "1p", "3p", "5p", "7p", "9p", "11p"];
-// Heatmap: kab followers online hote hain (0–4 level)
-const HEAT = [
-  [1, 2, 3, 3, 3, 3, 2, 1],
-  [1, 2, 3, 3, 3, 3, 2, 1],
-  [1, 2, 3, 3, 3, 3, 2, 1],
-  [1, 2, 3, 3, 3, 3, 2, 1],
-  [1, 2, 3, 3, 3, 3, 2, 1],
-  [1, 2, 3, 4, 4, 4, 3, 1],
-  [1, 2, 3, 4, 4, 4, 3, 1],
-];
-const SHADES = ["#fdeef3", "#f9cfdc", "#f2a4bf", "#e86b98", "#d9346f"];
-const SORTS = [
-  { key: "reach", label: "Reach" },
-  { key: "saves", label: "Saves" },
-  { key: "shares", label: "Shares" },
-];
-const num = (s) => {
-  const n = parseFloat(String(s).replace(/[^\d.]/g, "")) || 0;
-  return /M/i.test(s) ? n * 1e6 : /K/i.test(s) ? n * 1000 : n;
-};
+const RANGES = ["7", "28", "90"];
 
-/** /brands/instagram — brand ka apna Instagram business account */
+/**
+ * /brands/instagram — brand ka apna Instagram business account (purana fbCard: brand_portal.facebook.pages[].instagram;
+ * Refresh = brand-fb-login refresh). Range / growth / best time / best posts ka data purane app mein nahi tha → "Coming soon".
+ */
 export default function BrandInstagram() {
-  const [range, setRange] = useState("30");
+  const ig = useBrandInstagram();
+  const [pick, setPick] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [updated, setUpdated] = useState(IG.updated);
-  const [sort, setSort] = useState("reach");
+  const [now, setNow] = useState(0);
+  const [toast, say] = useToast();
+  useEffect(() => setNow(Date.now()), []);
+  const acc = ig.accounts[pick] || ig.accounts[0];
 
-  const stats = IG.stats[range];
-  // range ke hisaab se chart ke bars (7 din = kam bars)
-  const bars = range === "7" ? IG.growth.slice(-7) : range === "90" ? [...IG.growth.slice(0, 4).map((v) => Math.round(v * 0.6)), ...IG.growth] : IG.growth;
-  const max = Math.max(...bars);
-  const best = [...IG.best].sort((a, b) => num(b[sort]) - num(a[sort]));
-  const gain = { "7": "+6.1K in 7 days", "30": "+28.4K in 30 days", "90": "+71.2K in 90 days" }[range];
-  const pct = { "7": "+0.2%", "30": "+0.9%", "90": "+2.1%" }[range];
-
-  const refresh = () => {
+  const refresh = async () => {
     setBusy(true);
-    setTimeout(() => {
-      setBusy(false);
-      setUpdated("updated just now");
-    }, 1100);
+    const r = await igRefresh();
+    setBusy(false);
+    say(r && r.error ? r.error.message : "Updated ✓");
   };
+  const connect = async () => {
+    const r = await igConnect();
+    if (r && r.error) say(r.error.message);
+  };
+
+  const stats = acc
+    ? [
+        { label: "Followers", value: bShort(acc.followers), note: `@${acc.username}`, icon: "users", dark: true },
+        { label: "Posts", value: bNum(acc.posts), note: "on the account", icon: "instagram" },
+        { label: "Page reach", value: bShort(acc.page_reach_28d), note: `last 28 days · ${acc.page || "Facebook Page"}`, icon: "eye" },
+        { label: "Page engagement", value: bShort(acc.page_engaged_28d), note: "last 28 days", icon: "heart" },
+      ]
+    : [];
 
   return (
     <BrandShell>
@@ -60,138 +49,123 @@ export default function BrandInstagram() {
       <h1 className="br-h1">Instagram</h1>
       <p className="br-sub">Your own Instagram business account — how it grows while campaigns run.</p>
 
-      {/* Account row */}
-      <section className="br-card ig-acc">
-        <span className="ig-acc__ring">
-          <span style={{ background: BRAND.gradient }}>{BRAND.letter}</span>
-        </span>
-        <div className="ig-acc__txt">
-          <strong>
-            {IG.handle} <Check size={13} />
-          </strong>
-          <small>Business account · connected through Facebook · {updated}</small>
-        </div>
-        <div className="ig-acc__right">
-          <div className="br-seg">
-            {RANGES.map((r) => (
-              <button key={r} type="button" className={range === r ? "is-on" : ""} onClick={() => setRange(r)}>
-                {r} days
-              </button>
-            ))}
-          </div>
-          <button type="button" className="br-btn br-btn--ghost br-btn--sm ig-refresh" onClick={refresh} disabled={busy}>
-            <span className={busy ? "ig-spin" : ""}>
-              <Refresh size={13} />
-            </span>
+      {ig.loading ? (
+        <BrLoading rows={4} />
+      ) : ig.error ? (
+        <BrError error={ig.error} />
+      ) : !ig.linked ? (
+        <BrEmpty title="Connect your Facebook business" text="Your Instagram business account comes through the Facebook Page it’s linked to. Connect Facebook to see it here.">
+          {ig.can && (
+            <button type="button" className="br-btn br-btn--primary br-btn--sm" onClick={connect}>
+              Connect Facebook
+            </button>
+          )}
+        </BrEmpty>
+      ) : !acc ? (
+        <BrEmpty title="No Instagram account found" text="None of your Facebook Pages has an Instagram business account linked. Link one in Instagram settings, then tap Refresh.">
+          <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={refresh} disabled={busy}>
             {busy ? "Refreshing…" : "Refresh"}
           </button>
-        </div>
-      </section>
-
-      {/* Stats */}
-      <div className="ig-stats">
-        {stats.map((s, i) => (
-          <div key={s.label} className={`br-stat ${s.dark ? "br-stat--dark" : ""}`}>
-            <p className="br-stat__label">
-              <ToneIcon icon={s.icon} tone={s.dark ? "dark" : ["blue", "orange", "green"][i - 1]} size={30} />
-              {s.label}
-            </p>
-            <p className="br-stat__value">{s.value}</p>
-            <p className="br-stat__note">{s.note}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="ig-grid">
-        {/* Followers growth */}
-        <section className="br-card ig-card">
-          <div className="br-card__head">
-            <div className="ig-titlerow">
-              <span className="ig-ic">
-                <Users size={16} />
-              </span>
-              <div>
-                <h2 className="br-card__title">Followers</h2>
-                <p className="br-card__sub">{gain}</p>
-              </div>
+        </BrEmpty>
+      ) : (
+        <>
+          {/* Account row */}
+          <section className="br-card ig-acc">
+            <span className="ig-acc__ring">
+              <span style={{ background: acc.picture ? `center / cover no-repeat url("${acc.picture}")` : bGrad(acc.username) }}>{acc.picture ? "" : bInitials(acc.username).slice(0, 1)}</span>
+            </span>
+            <div className="ig-acc__txt">
+              <strong>
+                @{acc.username} <Check size={13} />
+              </strong>
+              <small>
+                Business account · connected through Facebook · updated {bAgo(ig.refreshedAt, now)}
+                {ig.accounts.length > 1 && (
+                  <>
+                    {" · "}
+                    <select className="ig-pick" aria-label="Instagram account" value={pick} onChange={(e) => setPick(Number(e.target.value))}>
+                      {ig.accounts.map((x, i) => (
+                        <option key={x.username + i} value={i}>
+                          @{x.username}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </small>
             </div>
-            <span className="br-badge br-badge--green">{pct}</span>
-          </div>
-          <div className="ig-chart" role="img" aria-label="Followers growth chart">
-            {bars.map((v, i) => {
-              const last = i === bars.length - 1;
-              const recent = i >= bars.length - 4;
-              return (
-                <span
-                  key={i}
-                  className={last ? "is-last" : recent ? "is-recent" : ""}
-                  style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
-                  title={`${v}K new followers`}
-                />
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Best time */}
-        <section className="br-card ig-card">
-          <h2 className="br-card__title">Best time to post</h2>
-          <p className="br-card__sub">When your followers are online</p>
-          <div className="ig-heat">
-            {DAYS.map((d, di) => (
-              <div key={d} className="ig-heat__row">
-                <span className="ig-heat__day">{d}</span>
-                {HEAT[di].map((lv, hi) => (
-                  <i key={hi} style={{ background: SHADES[lv] }} title={`${d} ${HOURS[hi]}`} />
+            <div className="ig-acc__right">
+              <div className="br-seg">
+                {RANGES.map((r) => (
+                  <button key={r} type="button" className={r === "28" ? "is-on" : ""} onClick={() => r !== "28" && say(`Coming soon — ${r}-day Instagram insights.`)}>
+                    {r} days
+                  </button>
                 ))}
               </div>
-            ))}
-            <div className="ig-heat__row ig-heat__hours">
-              <span className="ig-heat__day" />
-              {HOURS.map((h) => (
-                <span key={h}>{h}</span>
-              ))}
-            </div>
-          </div>
-          <p className="ig-best">
-            <Clock size={14} /> Best: Sat &amp; Sun, 7–9 pm
-          </p>
-        </section>
-      </div>
-
-      {/* Best posts */}
-      <section className="br-card ig-card ig-posts">
-        <div className="br-card__head">
-          <div>
-            <h2 className="br-card__title">Your best posts</h2>
-            <p className="br-card__sub">Last {range} days, by {sort}</p>
-          </div>
-          <div className="br-seg">
-            {SORTS.map((s) => (
-              <button key={s.key} type="button" className={sort === s.key ? "is-on" : ""} onClick={() => setSort(s.key)}>
-                {s.label}
+              <button type="button" className="br-btn br-btn--ghost br-btn--sm ig-refresh" onClick={refresh} disabled={busy}>
+                <span className={busy ? "ig-spin" : ""}>
+                  <Refresh size={13} />
+                </span>
+                {busy ? "Refreshing…" : "Refresh"}
               </button>
+            </div>
+          </section>
+
+          {/* Stats */}
+          <div className="ig-stats">
+            {stats.map((s, i) => (
+              <div key={s.label} className={`br-stat ${s.dark ? "br-stat--dark" : ""}`}>
+                <p className="br-stat__label">
+                  <ToneIcon icon={s.icon} tone={s.dark ? "dark" : ["blue", "orange", "green"][i - 1]} size={30} />
+                  {s.label}
+                </p>
+                <p className="br-stat__value">{s.value}</p>
+                <p className="br-stat__note">{s.note}</p>
+              </div>
             ))}
           </div>
-        </div>
-        <div className="ig-tiles" data-scroll>
-          {best.map((p) => (
-            <a key={p.title} href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="ig-tile">
-              <span className="br-thumb" style={{ background: p.g }}>
-                <span className="br-thumb__play">
-                  <Play size={11} />
-                </span>
-                <span className="br-thumb__views">
-                  {sort === "reach" && <Eye size={11} />}
-                  {p[sort]}
-                  {sort !== "reach" && ` ${sort}`}
-                </span>
-              </span>
-              <strong>{p.title}</strong>
-            </a>
-          ))}
-        </div>
-      </section>
+
+          <div className="ig-grid">
+            <section className="br-card ig-card">
+              <div className="br-card__head">
+                <div className="ig-titlerow">
+                  <span className="ig-ic">
+                    <Users size={16} />
+                  </span>
+                  <div>
+                    <h2 className="br-card__title">Followers</h2>
+                    <p className="br-card__sub">{bNum(acc.followers)} today</p>
+                  </div>
+                </div>
+              </div>
+              <p className="ig-none">Coming soon — daily follower growth. Today’s count updates every time you tap Refresh.</p>
+            </section>
+
+            <section className="br-card ig-card">
+              <h2 className="br-card__title">Best time to post</h2>
+              <p className="br-card__sub">When your followers are online</p>
+              <p className="ig-none">
+                <Clock size={14} /> Coming soon — needs Instagram audience insights.
+              </p>
+            </section>
+          </div>
+
+          <section className="br-card ig-card ig-posts">
+            <div className="br-card__head">
+              <div>
+                <h2 className="br-card__title">Your best posts</h2>
+                <p className="br-card__sub">From your Instagram</p>
+              </div>
+              <a href={`https://instagram.com/${acc.username}`} target="_blank" rel="noopener noreferrer" className="br-btn br-btn--ghost br-btn--sm">
+                <Instagram size={13} /> Open Instagram
+              </a>
+            </div>
+            <p className="ig-none">Coming soon — your top posts by reach, saves and shares.</p>
+          </section>
+        </>
+      )}
+
+      {toast}
 
       <style>{`
         .ig-acc { display: flex; align-items: center; gap: 14px; margin: 22px 0 16px; padding: 16px 18px; flex-wrap: wrap; }
@@ -249,7 +223,9 @@ export default function BrandInstagram() {
           .ig-tiles { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
           .ig-tile { flex: 0 0 42%; scroll-snap-align: start; }
         }
-      `}</style>
+              .ig-none { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--br-muted); }
+        .ig-pick { border: 0; background: transparent; font: inherit; color: var(--br-primary); font-weight: 700; }
+`}</style>
     </BrandShell>
   );
 }

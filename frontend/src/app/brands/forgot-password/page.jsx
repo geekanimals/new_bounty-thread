@@ -1,19 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { sendPasswordReset, takeRecoverySession } from "@/services/brand";
 import { Send, ArrowLeft, ArrowRight, Mail, Lock } from "@/components/ui/Icons";
 
-/** /brands/forgot-password — reset link email par */
+/**
+ * /brands/forgot-password — reset link email par (Supabase Auth resetPasswordForEmail).
+ * Purane brand door mein reset nahi tha ("Ask your Geek account manager") — ye naya hai, sirf Supabase Auth ka apna email.
+ * Email ka link yahin wapas aata hai (#type=recovery) → session → Settings mein naya password.
+ */
 export default function BrandForgot() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e) => {
+  // reset link se wapas aaye?
+  useEffect(() => {
+    takeRecoverySession().then((m) => {
+      if (m === "") router.replace("/brands/settings?reset=1");
+      else if (m) setErr(m);
+    });
+  }, [router]);
+
+  const submit = async (e) => {
     e.preventDefault();
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setErr("Enter the work email you sign in with.");
     setErr("");
+    setBusy(true);
+    const r = await sendPasswordReset(email);
+    setBusy(false);
+    if (r.error) return setErr(r.error.message || String(r.error));
     setSent(true);
   };
 
@@ -74,8 +94,8 @@ export default function BrandForgot() {
                 <input id="bf-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@brand.com" autoComplete="email" />
               </div>
               {err && <p className="bf-err">{err}</p>}
-              <button type="submit" className="bf-submit">
-                Send reset link <ArrowRight size={15} />
+              <button type="submit" className="bf-submit" disabled={busy}>
+                {busy ? "Sending…" : "Send reset link"} <ArrowRight size={15} />
               </button>
             </form>
           )}

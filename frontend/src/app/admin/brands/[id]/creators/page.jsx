@@ -3,38 +3,50 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import BrandPanel from "@/components/admin/brand/BrandPanel";
+import BrandPanel, { useBrand } from "@/components/admin/brand/BrandPanel";
 import PTable from "@/components/admin/brand/PTable";
-import { CAMPAIGNS, CREATORS, brandById } from "@/components/admin/data";
 
-/* Figma 067 — Beardo ke creators */
-const BEARDO = [
-  { id: "nisha-rao", name: "Nisha Rao", campaign: "Detan Express Kit", step: "Done", posted: true },
-  { id: "kabir-mehta", name: "Kabir Mehta", campaign: "Detan Express Kit", step: "Delivered", posted: false },
-  { id: "aditi-verma", name: "Aditi Verma", campaign: "Festive Essential Kit", step: "Video submitted", posted: false },
-];
-const STEPS = ["Done", "Delivered", "Video submitted", "Approved", "Contract signed"];
-const TONE = { Done: "green", Delivered: "orange", "Video submitted": "violet", Approved: "green", "Contract signed": "blue" };
-const short = (n) => n.replace(/^(Beardo|Circle|Vaaree)\s+/, "").replace(/ · (Paid|Barter)$/, "");
+/* purane app ke barter steps (hubStepLabel) — number hata ke */
+const STEP = {
+  applied: "Registered", invited: "Registered", shortlisted: "Registered", eligible: "Screened", sent_to_brand: "Sent to brand",
+  brand_confirmed: "Brand confirmed", accepted: "Brand confirmed", contract_sent: "Contract sent", contract_signed: "Contract signed",
+  address_confirmed: "Address confirmed", product_sent: "Courier sent", product_delivered: "Delivered", content_created: "Video brief sent",
+  content_submitted: "Video submitted", changes_requested: "Changes asked", content_approved: "Client approved", published: "Posted", completed: "Done",
+  ineligible: "Declined", brand_declined: "Declined by brand", dropped: "Dropped", rejected: "Rejected",
+};
+const label = (s) => STEP[s] || String(s || "—").replace(/_/g, " ");
+const tone = (s) =>
+  ["completed", "published", "content_approved"].includes(s) ? "green"
+  : ["product_sent", "product_delivered", "address_confirmed"].includes(s) ? "orange"
+  : ["content_submitted", "content_created", "changes_requested"].includes(s) ? "violet"
+  : ["contract_sent", "contract_signed", "brand_confirmed", "accepted"].includes(s) ? "blue"
+  : ["ineligible", "brand_declined", "dropped", "rejected"].includes(s) ? "red" : "";
+const POSTED = ["published", "completed"];
 
-/** /admin/brands/[id]/creators */
-export default function BrandCreators() {
+/** /admin/brands/[id]/creators — is brand ki campaigns ke creators (brand_detail.creators) */
+export default function BrandCreatorsPage() {
   const { id } = useParams();
-  const b = brandById(id);
-  const camps = CAMPAIGNS.filter((c) => !c.hidden && c.brand === b.name);
-  const rows =
-    b.id === "beardo"
-      ? BEARDO
-      : b.creators
-        ? CREATORS.slice(0, Math.min(4, b.creators)).map((c, i) => ({ id: c.id, name: c.name, campaign: short(camps[i % Math.max(camps.length, 1)]?.name || "—"), step: STEPS[i % STEPS.length], posted: i === 0 }))
-        : [];
+  return (
+    <BrandPanel id={id}>
+      <BrandCreators />
+    </BrandPanel>
+  );
+}
+
+function BrandCreators() {
+  const { d } = useBrand();
+  const rows = (d.creators || []).map((p) => {
+    const c = p.creator || {};
+    return { key: p.participation_id, mid: c.member_id, name: c.username ? `@${c.username}` : c.name || "Creator", campaign: p.campaign || "—", stage: p.stage };
+  });
   const [q, setQ] = useState("");
   const [camp, setCamp] = useState("all");
-  const shown = rows.filter((r) => r.name.toLowerCase().includes(q.trim().toLowerCase()) && (camp === "all" || r.campaign === camp));
+  const qq = q.trim().toLowerCase();
+  const shown = rows.filter((r) => r.name.toLowerCase().includes(qq) && (camp === "all" || r.campaign === camp));
   const options = [...new Set(rows.map((r) => r.campaign))];
 
   return (
-    <BrandPanel id={id}>
+    <>
       <div className="bcr-f">
         <input className="ad-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator…" aria-label="Search creator" />
         <select className="ad-input" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
@@ -53,15 +65,23 @@ export default function BrandCreators() {
           { label: "Posted", w: "11%" },
         ]}
         rows={shown.map((r) => [
-          <Link key="n" href={`/admin/creators/${r.id}/profile`} className="bcr-n">
-            {r.name}
-          </Link>,
-          r.campaign,
-          <span key="s" className={`ad-badge ad-badge--${TONE[r.step] || ""}`}>
-            {r.step}
+          r.mid ? (
+            <Link key="n" href={`/admin/creators/${r.mid}/profile`} className="bcr-n" title={r.name}>
+              {r.name}
+            </Link>
+          ) : (
+            <span key="n" title={r.name}>
+              {r.name}
+            </span>
+          ),
+          <span key="c" title={r.campaign}>
+            {r.campaign}
+          </span>,
+          <span key="s" className={`ad-badge ad-badge--${tone(r.stage)}`}>
+            {label(r.stage)}
           </span>,
           <span key="p" className="bcr-p">
-            {r.posted ? "✓" : "—"}
+            {POSTED.includes(r.stage) ? "✓" : "—"}
           </span>,
         ])}
         empty={rows.length ? "No creator matches." : "No creators on this brand’s campaigns yet."}
@@ -77,6 +97,6 @@ export default function BrandCreators() {
           .bcr-f .ad-input:first-child, .bcr-f select.ad-input { width: 100%; }
         }
       `}</style>
-    </BrandPanel>
+    </>
   );
 }

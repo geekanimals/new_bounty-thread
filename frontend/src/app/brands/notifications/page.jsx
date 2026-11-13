@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BrandShell, { ToneIcon } from "@/components/brands/BrandShell";
-import { NOTIFICATIONS, NOTIF_SETTINGS, USER } from "@/components/brands/data";
+import { BrError, useToast } from "@/components/brands/BrandStates";
+import { useNotifications, markRead, markAllRead, routeFor, notifLook, ago } from "@/services/brand";
 import { Check, ChevronDown, Info } from "@/components/ui/Icons";
 
 const FILTERS = [
@@ -15,22 +16,41 @@ const FILTERS = [
 ];
 const GROUPS = ["Today", "Yesterday", "Earlier"];
 const FIRST = 8;
+// "How we tell you" — purane brand portal mein ye settings nahi thi (Figma control, abhi backend nahi → Coming soon)
+const PREFS = [
+  { label: "Approvals", app: true, email: true, wa: true },
+  { label: "Videos to review", app: true, email: true, wa: true },
+  { label: "Campaign results", app: true, email: true, wa: false },
+  { label: "Bills & payments", app: true, email: true, wa: false },
+  { label: "Facebook comments", app: true, email: false, wa: false },
+];
+// alert → filter wala dabba (icon se)
+const CAT = { users: "approvals", play: "approvals", receipt: "money", trend: "campaigns", megaphone: "campaigns", check: "social" };
 
-/** /brands/notifications — saari updates ek jagah + kahan bataye wo settings */
+/**
+ * /brands/notifications — purane app ke alerts (api.get_my_notifications, har 20 sec) + mark read / all read.
+ * Har alert ka button uske action_route ("?go=…") wale naye page par le jaata hai.
+ */
 export default function BrandNotifications() {
+  const notif = useNotifications();
+  const [toast, say] = useToast();
   const [filter, setFilter] = useState("all");
-  const [readAll, setReadAll] = useState(false);
-  const [readIds, setReadIds] = useState([]);
   const [showAll, setShowAll] = useState(false);
-  const [prefs, setPrefs] = useState(NOTIF_SETTINGS);
-  const [daily, setDaily] = useState(true);
+  const [now, setNow] = useState(0); // Today / Yesterday ke liye — effect mein
+  useEffect(() => {
+    setNow(Date.now());
+  }, [notif.list]);
 
-  const count = (k) => (k === "all" ? NOTIFICATIONS.length : NOTIFICATIONS.filter((n) => n.cat === k).length);
-  const filtered = filter === "all" ? NOTIFICATIONS : NOTIFICATIONS.filter((n) => n.cat === filter);
+  const all = notif.list.map((x) => {
+    const look = notifLook(x);
+    const d = new Date(x.created_at);
+    const day = now ? Math.floor((new Date(now).setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000) : 2;
+    return { ...x, ...look, cat: CAT[look.icon] || "social", group: day <= 0 ? "Today" : day === 1 ? "Yesterday" : "Earlier" };
+  });
+  const count = (k) => (k === "all" ? all.length : all.filter((n) => n.cat === k).length);
+  const filtered = filter === "all" ? all : all.filter((n) => n.cat === filter);
   const list = showAll ? filtered : filtered.slice(0, FIRST);
-  const isUnread = (n) => n.unread && !readAll && !readIds.includes(n.id);
-
-  const flip = (i, key) => setPrefs((p) => p.map((r, j) => (j === i ? { ...r, [key]: !r[key] } : r)));
+  const soon = () => say("Choosing where each update reaches you — coming soon");
 
   return (
     <BrandShell crumbs={[{ label: "Notifications" }]}>
@@ -58,8 +78,8 @@ export default function BrandNotifications() {
                 </button>
               ))}
             </div>
-            <button type="button" className="nt-mark" onClick={() => setReadAll(true)} disabled={readAll}>
-              <Check size={13} /> {readAll ? "All read" : "Mark all as read"}
+            <button type="button" className="nt-mark" onClick={() => markAllRead()} disabled={!notif.unread}>
+              <Check size={13} /> {notif.unread ? "Mark all as read" : "All read"}
             </button>
           </div>
 
@@ -71,23 +91,19 @@ export default function BrandNotifications() {
                 <p className="nt-group">{g}</p>
                 <ul className="nt-list">
                   {items.map((n) => {
-                    const un = isUnread(n);
+                    const un = !n.read;
                     return (
-                      <li key={n.id} className={un ? "is-unread" : ""}>
+                      <li key={n.notification_id} className={un ? "is-unread" : ""} onClick={() => un && markRead(n.notification_id)}>
                         <i className="nt-dot" aria-hidden="true" />
                         <ToneIcon icon={n.icon} tone={n.tone} size={36} />
                         <span className="nt-txt">
                           <strong>{n.title}</strong>
-                          <small>{n.text}</small>
+                          <small>{n.body}</small>
                         </span>
-                        <span className="nt-time">{n.time}</span>
-                        {n.action && (
-                          <Link
-                            href={n.href}
-                            onClick={() => setReadIds((r) => [...r, n.id])}
-                            className={`br-btn br-btn--sm ${n.primary ? "br-btn--primary" : "br-btn--ghost"}`}
-                          >
-                            {n.action}
+                        <span className="nt-time">{ago(n.created_at, now)}</span>
+                        {n.action_route && (
+                          <Link href={routeFor(n.action_route)} className={`br-btn br-btn--sm ${un ? "br-btn--primary" : "br-btn--ghost"}`}>
+                            {n.action_label || "Open"}
                           </Link>
                         )}
                       </li>
@@ -97,7 +113,12 @@ export default function BrandNotifications() {
               </div>
             );
           })}
-          {!list.length && <p className="nt-empty">Nothing here yet.</p>}
+          {notif.error && !all.length && (
+            <div className="nt-errbox">
+              <BrError error={notif.error} onRetry={notif.reload} />
+            </div>
+          )}
+          {!list.length && !notif.error && <p className="nt-empty">{notif.loading ? "Loading…" : "Nothing here yet — new approvals, videos, posts and bills show up here."}</p>}
 
           {!showAll && filtered.length > FIRST && (
             <div className="br-more nt-more">
@@ -119,7 +140,7 @@ export default function BrandNotifications() {
               <span>Email</span>
               <span>WhatsApp</span>
             </div>
-            {prefs.map((r, i) => (
+            {PREFS.map((r) => (
               <div key={r.label} className="nt-row">
                 <span className="nt-row__label">{r.label}</span>
                 {["app", "email", "wa"].map((k) => (
@@ -129,7 +150,7 @@ export default function BrandNotifications() {
                       className={`br-toggle ${r[k] ? "is-on" : ""}`}
                       aria-pressed={r[k]}
                       aria-label={`${r.label} on ${k}`}
-                      onClick={() => flip(i, k)}
+                      onClick={soon}
                     />
                   </span>
                 ))}
@@ -142,13 +163,14 @@ export default function BrandNotifications() {
               <strong>Daily summary</strong>
               <small>Every morning at 9:00</small>
             </span>
-            <button type="button" className={`br-toggle ${daily ? "is-on" : ""}`} aria-pressed={daily} aria-label="Daily summary" onClick={() => setDaily(!daily)} />
+            <button type="button" className="br-toggle" aria-pressed={false} aria-label="Daily summary" onClick={soon} />
           </div>
           <p className="nt-wa">
-            <Info size={13} /> WhatsApp goes to {USER.whatsapp}
+            <Info size={13} /> WhatsApp updates go to the number the Geek team has for you
           </p>
         </aside>
       </div>
+      {toast}
 
       <style>{`
         .nt-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; margin-top: 22px; }
@@ -169,6 +191,7 @@ export default function BrandNotifications() {
         .nt-time { font-size: 11.5px; color: var(--br-faint); white-space: nowrap; }
         .nt-empty { padding: 30px; text-align: center; color: var(--br-muted); }
         .nt-more { margin: 0; padding: 16px; }
+        .nt-errbox { padding: 16px; }
 
         .nt-prefs { padding: 20px; position: sticky; top: 92px; }
         .nt-table { margin-top: 14px; }

@@ -1,46 +1,116 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import BountyShell from "@/components/creater/BountyShell";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { useSession } from "@/components/creater/session";
-import { EARNINGS, PAYOUTS, CREATOR, getSidekick } from "@/components/creater/data";
+import { useSession, errText, inr, fmtDate, savePaymentDetails, useMyCampaignRows, useCampaignFlows } from "@/services/creator";
+import { getSidekick } from "@/components/creater/data";
 import { ChevronDown, Lock, Check } from "@/components/ui/Icons";
 
 const FIRST = 4;
-const STATUS = { paid: ["Paid", "bx-tag--green"], pending: ["Pending", ""], product: ["Product", "bx-tag--teal"] };
+const STATUS = { paid: ["Paid", "bx-tag--green"], pending: ["Pending", ""], waiting: ["Waiting for post", ""], action: ["Action needed", "bx-tag--red"], product: ["Product", "bx-tag--teal"] };
+// product mil gaya (barter) — purane Bounty payments jaisa
+const GOT = ["product_sent", "content_created", "changes_requested", "content_submitted", "content_approved", "published", "completed", "brand_confirmed"];
 
-/** /creater/payments — "Payments & rewards": kamaai, payouts aur bank/UPI details */
+/**
+ * /creater/payments — "Payments & rewards": kamaai, payouts aur bank/UPI details
+ * Purane Bounty payments jaisa: get_my_campaigns + my_campaign_flows (payment + payouts). Bank / UPI → save_payment_details
+ * (har paid campaign par hota hai — sign ke baad; koi paid campaign nahi to form nahi khulta, purane jaisa message).
+ */
 export default function Payments() {
   const [s] = useSession();
   const sk = getSidekick(s.sidekick);
-  const fresh = !s.ig; // naya / WhatsApp-only creator — abhi sab zero
+  const mine = useMyCampaignRows();
+  const flows = useCampaignFlows();
   const [shown, setShown] = useState(FIRST);
   const [form, setForm] = useState(false);
   const [mode, setMode] = useState("upi");
   const [upi, setUpi] = useState("");
-  const [bank, setBank] = useState({ name: CREATOR.name, acc: "", acc2: "", ifsc: "" });
-  const [saved, setSaved] = useState(fresh ? null : "UPI · shivam@okhdfc");
+  const [bank, setBank] = useState({ name: "", acc: "", acc2: "", ifsc: "" });
   const [tried, setTried] = useState(false);
-  // Session load hone ke baad: naya creator → koi payout details nahi
-  useEffect(() => {
-    setSaved(fresh ? null : "UPI · shivam@okhdfc");
-  }, [fresh]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [toast, setToast] = useState("");
+  const flash = (t) => {
+    setToast(t);
+    setTimeout(() => setToast(""), 2600);
+  };
 
-  const e = fresh ? { total: "₹0", paid: "₹0", pending: "₹0", products: 0 } : EARNINGS;
-  const payouts = fresh ? [] : PAYOUTS;
+  // purane loadPayments jaisa hisaab
+  const list = Array.isArray(mine.data) ? mine.data : [];
+  const F = flows.data || {};
+  const payouts = [];
+  let earned = 0;
+  let pending = 0;
+  let needPart = null;
+  let haveBank = null;
+  const prods = list.filter((c) => c.product_value && GOT.includes(c.stage) && (c.campaign_type || "") !== "paid");
+  const prodVal = prods.reduce((x, c) => x + (+c.product_value || 0), 0);
+  list.forEach((c) => {
+    const f = F[c.participation_id] || {};
+    const p = f.payment;
+    if (!f.paid || !p) return;
+    const pos = p.payouts || [];
+    const sumPaid = pos.filter((o) => o.status === "paid").reduce((x, o) => x + (+o.amount || 0), 0);
+    const amt = p.amount != null ? +p.amount : null;
+    if (amt != null) {
+      earned += sumPaid;
+      pending += Math.max(0, amt - sumPaid);
+    }
+    const need = !p.method || ["pending", "failed", "needs_update"].includes(p.details_status);
+    if (need && !needPart) needPart = { part: c.participation_id, p };
+    if (p.method && !haveBank) haveBank = { part: c.participation_id, p };
+    const title = `${c.campaign || "Campaign"}${c.brand ? " · " + c.brand : ""}`;
+    const to = p.method === "upi" ? `UPI · ${p.upi_id || ""}` : p.method ? `Bank ••••${p.account_last4 || ""}` : "";
+    pos.forEach((o) =>
+      payouts.push({
+        id: o.payout_id || `${c.participation_id}-${o.part}`,
+        title,
+        note: o.status === "paid" ? to || "Paid" : o.part === "advance" ? "Advance" : o.part === "balance" ? "Releases after your post is verified" : "Fee",
+        amount: inr(o.amount),
+        status: o.status === "paid" ? "paid" : ["queued", "processing", "due"].includes(o.status) ? "pending" : "waiting",
+        date: o.status === "paid" && o.paid_at ? fmtDate(o.paid_at) : "",
+      })
+    );
+    if (!pos.length) payouts.push({ id: c.participation_id, title, note: need ? "Add payout details" : "After your post", amount: amt != null ? inr(amt) : "—", status: need ? "action" : "waiting", date: "" });
+  });
+  prods.forEach((c) =>
+    payouts.push({ id: `prod-${c.participation_id}`, title: `${c.campaign || "Campaign"}${c.brand ? " · " + c.brand : ""}`, note: `Products worth ${inr(c.product_value)} · delivered`, amount: "Products", status: "product", date: "" })
+  );
+  const e = { total: inr(earned), paid: inr(earned), pending: inr(pending), products: prods.length };
+  const target = needPart || haveBank; // form kis campaign par save hoga
+  const tp = target?.p;
+  const saved = haveBank && !needPart ? (tp.method === "upi" ? `UPI · ${tp.upi_id || ""}` : `Bank · ••••${tp.account_last4 || ""}${tp.ifsc ? " · " + tp.ifsc : ""}`) : null;
+  const savedNote = saved ? (tp.details_status === "verified" ? "verified" : "the Geek team is checking it") : "";
+  const loading = (mine.loading || flows.loading) && !mine.data;
 
-  const upiOk = /^[\w.-]{2,}@[a-z]{2,}$/i.test(upi.trim());
+  const upiOk = /^[a-z0-9._-]{2,255}@[a-z][a-z0-9.-]{1,63}$/i.test(upi.trim());
   const ifscOk = /^[A-Z]{4}0[A-Z0-9]{6}$/.test(bank.ifsc);
-  const accOk = bank.acc.length >= 9 && bank.acc === bank.acc2;
-  const valid = mode === "upi" ? upiOk : bank.name.trim() && accOk && ifscOk;
+  const accOk = /^\d{9,18}$/.test(bank.acc) && bank.acc === bank.acc2;
+  const nameOk = bank.name.trim().length >= 3;
+  const valid = mode === "upi" ? upiOk && nameOk : nameOk && accOk && ifscOk;
 
-  const save = (ev) => {
+  const openForm = () => {
+    if (!target) return flash("You'll add bank / UPI details when a paid campaign needs them — right after you sign its agreement.");
+    setMode(tp?.method === "bank" ? "bank" : "upi");
+    setUpi(tp?.upi_id || "");
+    setBank({ name: tp?.account_name || "", acc: "", acc2: "", ifsc: tp?.ifsc || "" });
+    setTried(false);
+    setErr("");
+    setForm(true);
+  };
+  const save = async (ev) => {
     ev.preventDefault();
     setTried(true);
-    if (!valid) return;
-    setSaved(mode === "upi" ? `UPI · ${upi.trim()}` : `Bank · ••••${bank.acc.slice(-4)} · ${bank.ifsc}`);
+    if (!valid || !target) return;
+    setBusy(true);
+    setErr("");
+    const { error } = await savePaymentDetails({ participation: target.part, method: mode, name: bank.name.trim(), accountNo: bank.acc, ifsc: bank.ifsc, upi: upi.trim().toLowerCase() });
+    setBusy(false);
+    if (error) return setErr(errText(error));
     setForm(false);
+    flash("Saved — we're verifying your details");
+    flows.reload();
   };
 
   return (
@@ -76,13 +146,22 @@ export default function Payments() {
 
         <div className="py-right">
           <p className="py-label">— Payouts —</p>
-          {payouts.length === 0 ? (
+          {loading ? (
+            <div className="py-empty">Loading your payouts…</div>
+          ) : mine.error && !mine.data ? (
+            <div className="py-empty">
+              Couldn&apos;t load payouts.{" "}
+              <button type="button" className="py-retry" onClick={() => (mine.reload(), flows.reload())}>
+                Try again
+              </button>
+            </div>
+          ) : payouts.length === 0 ? (
             <div className="py-empty">No payouts yet — paid and barter campaigns show up here once you&apos;re selected.</div>
           ) : (
             <ul className="py-list">
               {payouts.slice(0, shown).map((p) => (
                 <li key={p.id}>
-                  <span className="py-ic">{p.status === "product" ? "🎁" : p.status === "paid" ? "💸" : "⏳"}</span>
+                  <span className="py-ic">{p.status === "product" ? "🎁" : p.status === "paid" ? "💸" : p.status === "action" ? "🏦" : "⏳"}</span>
                   <span className="py-txt">
                     <strong>{p.title}</strong>
                     <small>{p.note}</small>
@@ -108,9 +187,9 @@ export default function Payments() {
               <div className="py-bank__row">
                 <span>
                   <strong>🏦 {saved ? "Payout details" : "Add your bank / UPI details"}</strong>
-                  <small>{saved ? `${saved} · verified` : "Must be in your own name. Only you and the Geek team see it."}</small>
+                  <small>{saved ? `${saved} · ${savedNote}` : needPart?.p?.details_status === "failed" || needPart?.p?.details_status === "needs_update" ? "Your last details didn't verify — please add them again." : "Must be in your own name. Only you and the Geek team see it."}</small>
                 </span>
-                <button type="button" className="py-add" onClick={() => setForm(true)}>
+                <button type="button" className="py-add" onClick={openForm}>
                   {saved ? "Change" : "Add"}
                 </button>
               </div>
@@ -125,9 +204,14 @@ export default function Payments() {
                     Bank account
                   </button>
                 </div>
+                <label className="bx-label" htmlFor="py-name">
+                  Account holder name (exactly as in the bank)
+                </label>
+                <input id="py-name" className="bx-input" value={bank.name} maxLength={80} autoComplete="name" onChange={(ev) => setBank({ ...bank, name: ev.target.value })} />
+                {tried && !nameOk && <p className="bx-err">Type the account holder&apos;s full name.</p>}
                 {mode === "upi" ? (
                   <>
-                    <label className="bx-label" htmlFor="py-upi">
+                    <label className="bx-label py-gap" htmlFor="py-upi">
                       UPI ID
                     </label>
                     <input id="py-upi" className="bx-input" value={upi} onChange={(ev) => setUpi(ev.target.value)} placeholder="name@okhdfcbank" />
@@ -135,10 +219,6 @@ export default function Payments() {
                   </>
                 ) : (
                   <div className="py-grid">
-                    <div className="py-full">
-                      <label className="bx-label">Account holder name</label>
-                      <input className="bx-input" value={bank.name} onChange={(ev) => setBank({ ...bank, name: ev.target.value })} />
-                    </div>
                     <div>
                       <label className="bx-label">Account number</label>
                       <input className="bx-input" inputMode="numeric" value={bank.acc} onChange={(ev) => setBank({ ...bank, acc: ev.target.value.replace(/\D/g, "").slice(0, 18) })} />
@@ -151,18 +231,19 @@ export default function Payments() {
                       <label className="bx-label">IFSC</label>
                       <input className="bx-input" value={bank.ifsc} onChange={(ev) => setBank({ ...bank, ifsc: ev.target.value.toUpperCase().slice(0, 11) })} placeholder="HDFC0001234" />
                     </div>
-                    {tried && !valid && <p className="bx-err py-full">Check the account numbers match and the IFSC looks like HDFC0001234.</p>}
+                    {tried && nameOk && !valid && <p className="bx-err py-full">Check the account numbers match (9–18 digits) and the IFSC looks like HDFC0001234.</p>}
                   </div>
                 )}
                 <p className="py-safe">
                   <Lock size={12} /> Saved encrypted. Payouts to someone else’s account are blocked.
                 </p>
+                {err && <p className="bx-err">{err}</p>}
                 <div className="py-actions">
                   <button type="button" className="bx-btn bx-btn--ghost" onClick={() => setForm(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="bx-btn bx-btn--dark">
-                    <Check size={14} /> Save
+                  <button type="submit" className="bx-btn bx-btn--dark" disabled={busy}>
+                    <Check size={14} /> {busy ? "Saving…" : "Save & verify"}
                   </button>
                 </div>
               </form>
@@ -172,6 +253,12 @@ export default function Payments() {
           <RumiTip className="py-rumi" name={sk.name} img={sk.img} text="Add your UPI once — every payout goes there automatically." />
         </div>
       </div>
+
+      {toast && (
+        <div className="bx-toast" role="status">
+          <Check size={14} /> {toast}
+        </div>
+      )}
 
       <style>{`
         /* Figma: 6 · Payments */
@@ -211,7 +298,9 @@ export default function Payments() {
         .py-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 12px; border-radius: 999px; background: #efe4cc; }
         .py-seg button { height: 34px; border: 0; border-radius: 999px; background: none; font-size: 13px; font-weight: 600; }
         .py-seg button.is-on { background: var(--bx-green); color: var(--bx-cream); }
-        .py-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .py-gap { margin-top: 10px; }
+        .py-retry { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: #2a9d8f; cursor: pointer; }
+        .py-grid { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .py-full { grid-column: 1 / -1; }
         .py-safe { display: flex; align-items: center; gap: 6px; margin: 12px 0; font-size: 12px; color: var(--bx-muted); }
         .py-actions { display: flex; justify-content: flex-end; gap: 8px; }

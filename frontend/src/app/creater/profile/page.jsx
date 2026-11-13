@@ -4,14 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { useSession } from "@/components/creater/session";
-import { CREATOR, CATEGORIES, DREAM_BRANDS, COLLAB_TYPES, getSidekick } from "@/components/creater/data";
+import { useSession } from "@/services/creator";
+import { CATEGORIES, DREAM_BRANDS, COLLAB_TYPES, getSidekick } from "@/components/creater/data";
 import { ChevronRight } from "@/components/ui/Icons";
 
 /** /creater/profile — Profile hub: photo, % complete aur saare sections ki list */
 export default function ProfileHub() {
   const [s, update] = useSession();
-  const locked = !s.ig;
   const sk = getSidekick(s.sidekick);
   const useSk = !!s.useSidekickPic;
   const [tip, setTip] = useState(true);
@@ -23,7 +22,7 @@ export default function ProfileHub() {
   const termsTxt = [terms.join(", "), s.rates?.reel ? `Reel ₹${Number(s.rates.reel).toLocaleString("en-IN")}` : ""].filter(Boolean).join(" · ") || "Set your rates";
 
   const left = [
-    { icon: "👤", title: "About you", sub: locked ? "Name, gender, birthday, married, pets" : CREATOR.first.toLowerCase(), href: "/creater/profile/about" },
+    { icon: "👤", title: "About you", sub: s.first ? s.first : "Name, gender, birthday, married, pets", href: "/creater/profile/about" },
     { icon: "📞", title: "Contact", sub: "WhatsApp, backup email", href: "/creater/profile/contact" },
     { icon: "📍", title: "Delivery address", sub: "Where brands send your kit", href: "/creater/profile/address" },
     { icon: "🎬", title: "What you create", sub: what, href: "/creater/profile/content" },
@@ -31,8 +30,8 @@ export default function ProfileHub() {
   const right = [
     { icon: "🛠️", title: "Skills & resources", sub: "What you're good at and the gear you have", href: "/creater/profile/skills" },
     { icon: "💙", title: "Dream brands", sub: "Brands you'd love to work with", href: "/creater/profile/dream-brands" },
-    { icon: "🤝", title: "Your terms & rate card", sub: locked ? "Barter, paid, hybrid · Reel, Story, Post rates" : termsTxt, href: "/creater/profile/terms" },
-    { icon: "📸", title: "Instagram & privacy", sub: locked ? "Connect Instagram · what brands see" : `${CREATOR.handle} · what brands see`, href: "/creater/profile/instagram" },
+    { icon: "🤝", title: "Your terms & rate card", sub: s.collab.length || s.rates?.reel ? termsTxt : "Barter, paid, hybrid · Reel, Story, Post rates", href: "/creater/profile/terms" },
+    { icon: "📸", title: "Instagram & privacy", sub: s.ig && s.handle ? `${s.handle} · what brands see` : "Connect Instagram · what brands see", href: "/creater/profile/instagram" },
   ];
 
   const row = (r) => (
@@ -56,18 +55,14 @@ export default function ProfileHub() {
             <span className="ph-av">
               {useSk ? (
                 <img src={sk.img} alt={sk.name} className="ph-av__sk" style={{ background: sk.bg }} />
-              ) : locked ? (
-                <span className="ph-av__c">C</span>
+              ) : s.avatar ? (
+                <img src={s.avatar} alt={s.name} referrerPolicy="no-referrer" />
               ) : (
-                <img src={CREATOR.avatar} alt={CREATOR.name} />
+                <span className="ph-av__c">{(s.name || "C")[0].toUpperCase()}</span>
               )}
             </span>
-            <h1>{locked ? "Creator" : CREATOR.user}</h1>
-            {!locked && (
-              <p>
-                {CREATOR.handle} · {CREATOR.city.toLowerCase()}
-              </p>
-            )}
+            <h1>{s.ig && s.handle ? s.handle.replace(/^@/, "") : s.name || "Creator"}</h1>
+            {(s.handle || s.city) && <p>{[s.handle, s.city && s.city.toLowerCase()].filter(Boolean).join(" · ")}</p>}
           </div>
 
           <div className="ph-toggle bx-card">
@@ -82,11 +77,11 @@ export default function ProfileHub() {
           </div>
 
           <Link href="/creater/profile/finish" className="ph-pct bx-card">
-            <strong>Profile {locked ? 19 : CREATOR.profilePct}% complete</strong>
+            <strong>Profile {s.profilePct}% complete</strong>
             <span className="bx-bar">
-              <i style={{ width: `${locked ? 19 : CREATOR.profilePct}%` }} />
+              <i style={{ width: `${s.profilePct}%` }} />
             </span>
-            <small>{locked ? 13 : 9} things left — tap to finish</small>
+            <small>{s.profileLeft ? `${s.profileLeft} things left — tap to finish` : "All done ✓"}</small>
           </Link>
 
           {left.map(row)}

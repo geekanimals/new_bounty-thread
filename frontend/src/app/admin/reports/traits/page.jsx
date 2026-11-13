@@ -3,55 +3,63 @@
 import { useMemo, useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
-import { REPORT_TABS, LinkTabs, Panel, Table, downloadFile, toCsv, useToast } from "@/components/admin/settings/kit";
+import { REPORT_TABS, LinkTabs, Panel, Table, downloadFile, toCsv, useToast, kfmt, emptyState } from "@/components/admin/settings/kit";
+import { useRpc } from "@/lib/supabase";
+import { CTR_TRAITS, ctrGroup, traitCsvRows } from "@/components/admin/settings/traits";
 
-/* Group by ke hisaab se dummy groups (Figma: Category) */
-const GROUPS = {
-  Category: [
-    ["Lifestyle", 82, "27%", "14.2k", "3.4%", "71%", 38, 31],
-    ["Beauty", 61, "20%", "19.8k", "4.1%", "66%", 29, 22],
-    ["Food", 44, "14%", "22.5k", "3.0%", "58%", 21, 18],
-    ["Fashion", 39, "13%", "11.3k", "3.8%", "62%", 17, 12],
-    ["Travel", 22, "7%", "16.9k", "2.9%", "55%", 8, 6],
-  ],
-  City: [
-    ["Mumbai", 74, "25%", "21.4k", "3.7%", "68%", 31, 25],
-    ["Delhi", 58, "19%", "18.2k", "3.2%", "63%", 24, 19],
-    ["Bengaluru", 51, "17%", "15.9k", "3.9%", "70%", 22, 18],
-    ["Kolkata", 33, "11%", "10.6k", "3.5%", "57%", 12, 9],
-    ["Chennai", 27, "9%", "14.8k", "3.1%", "59%", 10, 8],
-  ],
-  Followers: [
-    ["Under 10k", 96, "32%", "6.1k", "4.6%", "61%", 30, 24],
-    ["10k – 25k", 118, "40%", "16.4k", "3.6%", "67%", 49, 40],
-    ["25k – 50k", 61, "20%", "34.2k", "3.0%", "72%", 24, 19],
-    ["50k+", 23, "8%", "78.5k", "2.4%", "74%", 10, 7],
-  ],
-  "Profile completion": [
-    ["Complete", 35, "12%", "24.8k", "3.9%", "100%", 22, 19],
-    ["Half done", 142, "48%", "16.1k", "3.4%", "58%", 61, 46],
-    ["Just started", 121, "40%", "11.7k", "3.1%", "22%", 30, 22],
-  ],
-};
-const CAMPS = ["All campaigns", "Circle Diwali Declutter", "Beardo Detan Express Kit", "Vaaree Biggest Diwali Sale", "Pujo with Olio"];
 const HEAD = ["Creators", "Share", "Avg followers", "Avg engagement", "Avg profile", "Posted", "Completed"];
+const fmtA = (v, d) => (v == null ? "—" : d ? Math.round(v * 10) / 10 + d : kfmt(v));
 
+/**
+ * /admin/reports/traits — 🧩 Creator traits report (purane app jaisa):
+ *  data = api.creator_trait_rows(p_campaign, p_brand, p_only) · campaign list = api.org_reports
+ */
 export default function ReportsTraits() {
-  const [by, setBy] = useState("Category");
-  const [camp, setCamp] = useState(CAMPS[0]);
+  const [by, setBy] = useState("categories");
+  const [camp, setCamp] = useState(""); // "" = sab creators
   const [toast, say] = useToast();
-  const rows = useMemo(() => GROUPS[by], [by]);
-  const head = [by === "Profile completion" ? "Profile" : by, ...HEAD];
+  const camps = useRpc("admin", "api.org_reports");
+  const campList = (Array.isArray(camps.data) ? camps.data : []).map((x) => ({ id: x.campaign_id || x.legacy_campaign_id || x.id, name: x.name, brand: x.brand }));
+  const res = useRpc("admin", "api.creator_trait_rows", { p_campaign: camp || null, p_brand: null, p_only: null });
+  const all = useMemo(() => res.data?.rows || [], [res.data]);
+  const groups = useMemo(() => ctrGroup(all, by), [all, by]);
+  const label = CTR_TRAITS.find((t) => t[0] === by)?.[1] || by;
+  const campName = campList.find((c) => String(c.id) === String(camp))?.name || "All campaigns";
+  const head = [label, ...HEAD];
+  const rows = groups.map((g) => [
+    <b key="v">{g.v}</b>,
+    g.n,
+    `${g.pct}%`,
+    fmtA(g.followers),
+    fmtA(g.eng, "%"),
+    g.profile == null ? "—" : `${Math.round(g.profile)}%`,
+    `${g.posted}`,
+    g.completed,
+  ]);
+  const tag = (campName === "All campaigns" ? "all" : campName).replace(/\s+/g, "-").toLowerCase();
 
-  const csv = (name) => {
-    downloadFile(name, toCsv(head, rows));
-    say("CSV downloaded");
+  const groupsCsv = () => {
+    if (!groups.length) return say("Nothing to download in this view.", true);
+    downloadFile(
+      `creator-traits-${label}-${tag}.csv`.replace(/\s+/g, "-").toLowerCase(),
+      toCsv(
+        [label, "Creators", "Share %", "Avg followers", "Avg engagement %", "Avg profile %", "Posted", "Completed", "Views", "Likes"],
+        groups.map((g) => [g.v, g.n, g.pct, g.followers == null ? "" : Math.round(g.followers), g.eng == null ? "" : Math.round(g.eng * 10) / 10, g.profile == null ? "" : Math.round(g.profile), g.posted, g.completed, g.views, g.likes])
+      )
+    );
+    say("Groups CSV downloaded");
+  };
+  const rawCsv = () => {
+    const [h, ...b] = traitCsvRows(all);
+    if (!b.length) return say("No creators in this view yet.", true);
+    downloadFile(`creators-${tag}.csv`, toCsv(h, b));
+    say("Creators CSV downloaded");
   };
 
   return (
     <AdminShell>
       <PageHead title="Reports" sub="Cross-campaign performance with source-aware analytics.">
-        <button type="button" className="rt-dl" onClick={() => csv("geek-os-creator-traits.csv")}>
+        <button type="button" className="rt-dl" onClick={rawCsv}>
           ⬇️ Download CSV
         </button>
       </PageHead>
@@ -61,7 +69,7 @@ export default function ReportsTraits() {
         title="🧩 Creator traits report"
         sub="Group creators by what they have in common — category, city, followers, profile completion."
         action={
-          <button type="button" className="rt-dl rt-dl--in" onClick={() => csv(`geek-os-groups-${by.toLowerCase().replace(/\s+/g, "-")}.csv`)}>
+          <button type="button" className="rt-dl rt-dl--in" onClick={groupsCsv}>
             ⬇️ Groups CSV
           </button>
         }
@@ -69,23 +77,35 @@ export default function ReportsTraits() {
       >
         <div className="rt-filters">
           <label className="rt-sel">
-            <span className="rt-sel__txt">Group by: {by}</span>
+            <span className="rt-sel__txt">Group by: {label}</span>
             <select value={by} onChange={(e) => setBy(e.target.value)} aria-label="Group by">
-              {Object.keys(GROUPS).map((g) => (
-                <option key={g}>{g}</option>
+              {CTR_TRAITS.map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
               ))}
             </select>
           </label>
           <label className="rt-sel rt-sel--w">
-            <span className="rt-sel__txt">{camp}</span>
+            <span className="rt-sel__txt">{campName}</span>
             <select value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
-              {CAMPS.map((c) => (
-                <option key={c}>{c}</option>
+              <option value="">All campaigns</option>
+              {campList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.brand ? ` · ${c.brand}` : ""}
+                </option>
               ))}
             </select>
           </label>
         </div>
-        <Table rowH={48} minW={820} cols={[124, 121, 88, 175, 191, 142, 99, 136].map((w, i) => ({ w, label: head[i] }))} rows={rows} />
+        <Table
+          rowH={48}
+          minW={820}
+          empty={emptyState({ loading: res.loading, error: res.error, reload: res.reload, empty: "No creators in this view yet." })}
+          cols={[124, 121, 88, 175, 191, 142, 99, 136].map((w, i) => ({ w, label: head[i] }))}
+          rows={rows}
+        />
       </Panel>
       {toast}
 

@@ -1,49 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PageHead, Stats } from "@/components/admin/ui";
-import { BRANDS } from "@/components/admin/data";
 import PTable from "@/components/admin/brand/PTable";
-import { getAdded, liveBrands, setAdded } from "@/components/admin/brand/store";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { num, useToast } from "@/components/admin/brand/util";
 
 /**
  * Brand CRM ka main view (Figma 056). /admin/brands par aur brand panel ke peeche dono jagah.
+ * Data: api.brand_list (purane app jaisa). Add brand → api.brand_save.
  * interactive=false → sirf peeche dikhane ke liye (panel khula ho tab).
  */
 export default function BrandCrm({ interactive = true }) {
-  const [list, setList] = useState(BRANDS);
+  const router = useRouter();
+  const { data, error, loading, reload } = useRpc("admin", "api.brand_list", { p_q: null });
+  const list = Array.isArray(data) ? data : [];
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ name: "", website: "", category: "" });
-  const [toast, setToast] = useState("");
+  const [toast, say] = useToast();
 
-  useEffect(() => {
-    const sync = () => setList(liveBrands());
-    sync();
-    window.addEventListener("geek-brands", sync);
-    return () => window.removeEventListener("geek-brands", sync);
-  }, []);
+  const qq = q.trim().toLowerCase();
+  const shown = list.filter((b) => !qq || [b.name, b.category, b.website, b.instagram].join(" ").toLowerCase().includes(qq));
+  const sum = (k) => list.reduce((s, b) => s + (Number(b[k]) || 0), 0);
+  const withLogin = list.filter((b) => Number(b.logins) > 0).length;
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const shown = list.filter((b) => b.name.toLowerCase().includes(q.trim().toLowerCase()));
-  const live = list.filter((b) => b.live !== "0 live").length;
-
-  const add = (e) => {
+  const add = async (e) => {
     e.preventDefault();
     const name = form.name.trim();
-    if (!name) return;
-    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `brand-${list.length + 1}`;
-    if (list.some((b) => b.id === id)) return setToast(`${name} is already in the CRM`);
-    setAdded([...getAdded(), { id, name, campaigns: 0, live: "0 live", creators: 0, posts: 0, login: false, website: form.website.trim() || "—", category: form.category.trim() || "—" }]);
+    if (!name || busy) return;
+    setBusy(true);
+    const p = { name, website: form.website.trim(), category: form.category.trim(), status: "active" };
+    const r = await rpc("admin", "api.brand_save", { p });
+    setBusy(false);
+    if (r.error) return say(errText(r.error));
     setForm({ name: "", website: "", category: "" });
     setAdding(false);
-    setToast(`${name} added to the CRM`);
+    say(`${name} added to the CRM`);
+    reload(true);
+    if (r.data?.brand_id) router.push(`/admin/brands/${r.data.brand_id}/overview`);
   };
 
   return (
@@ -59,11 +57,11 @@ export default function BrandCrm({ interactive = true }) {
 
       <Stats
         items={[
-          { value: list.length, label: "Brands in CRM", note: "Including one test account" },
-          { value: 8, label: "All brand campaigns", href: "/admin/campaigns" },
-          { value: live > 5 ? 5 : live, label: "Live now", note: "Running promotions", href: "/admin/campaigns/live" },
-          { value: 151, label: "Creators approved", note: "Cross-campaign", href: "/admin/creators" },
-          { value: 63, label: "Posts live", note: "Publishing history", href: "/admin/reports" },
+          { value: loading ? "—" : list.length, label: "Brands in CRM", note: `${withLogin} with a brand login` },
+          { value: loading ? "—" : sum("campaigns"), label: "All brand campaigns", href: "/admin/campaigns" },
+          { value: loading ? "—" : sum("active"), label: "Live now", note: "Running promotions", href: "/admin/campaigns/live" },
+          { value: loading ? "—" : sum("creators"), label: "Creators approved", note: "Cross-campaign", href: "/admin/creators" },
+          { value: loading ? "—" : sum("posted"), label: "Posts live", note: "Publishing history", href: "/admin/reports" },
         ]}
       />
 
@@ -91,8 +89,8 @@ export default function BrandCrm({ interactive = true }) {
             </div>
           </div>
           <div className="bc-add__act">
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={!form.name.trim()}>
-              Add brand
+            <button type="submit" className="ad-btn ad-btn--primary" disabled={!form.name.trim() || busy}>
+              {busy ? "Adding…" : "Add brand"}
             </button>
             <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAdding(false)}>
               Cancel
@@ -106,6 +104,16 @@ export default function BrandCrm({ interactive = true }) {
           <h2 className="ad-h2">Brands</h2>
           <input className="ad-input bc-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search brand…" aria-label="Search brand" tabIndex={interactive ? 0 : -1} />
         </div>
+        {loading || error ? (
+          <p className={`bc-state ${error ? "is-err" : ""}`}>
+            {loading ? "Loading brands…" : `Couldn’t load brands: ${errText(error)}`}{" "}
+            {error && (
+              <button type="button" onClick={() => reload()}>
+                Retry
+              </button>
+            )}
+          </p>
+        ) : (
         <PTable
           minW={720}
           cols={[
@@ -118,23 +126,24 @@ export default function BrandCrm({ interactive = true }) {
             { label: "", w: "11%" },
           ]}
           rows={shown.map((b) => [
-            <b key="n">{b.name}</b>,
-            b.campaigns,
-            b.live,
-            b.creators,
-            b.posts,
-            <span key="a" className={`ad-badge ${b.login ? "ad-badge--green" : ""}`}>
-              {b.login ? "Brand login" : "No login"}
+            <b key="n" title={b.name}>{b.name}</b>,
+            num(b.campaigns),
+            `${num(b.active)} live`,
+            num(b.creators),
+            num(b.posted),
+            <span key="a" className={`ad-badge ${Number(b.logins) > 0 ? "ad-badge--green" : ""}`}>
+              {Number(b.logins) > 0 ? (Number(b.logins) > 1 ? `${b.logins} brand logins` : "Brand login") : "No login"}
             </span>,
-            <Link key="o" href={`/admin/brands/${b.id}/overview`} className="pt-link" tabIndex={interactive ? 0 : -1}>
+            <Link key="o" href={`/admin/brands/${b.brand_id}/overview`} className="pt-link" tabIndex={interactive ? 0 : -1}>
               Open →
             </Link>,
           ])}
-          empty={`No brand matches “${q}”`}
+          empty={q ? `No brand matches “${q}”` : "No brands yet — ＋ Add brand, or create a campaign (its brand is added here)."}
         />
+        )}
       </section>
 
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && interactive && <div className="ad-toast">{toast}</div>}
 
       <style>{`
         .bc-del { display: inline-flex; align-items: center; height: 42px; padding: 0 6px; font-size: 14px; font-weight: 800; color: #6657e9; }
@@ -144,6 +153,9 @@ export default function BrandCrm({ interactive = true }) {
         .bc-search { width: 173px; height: 42px; }
         .bc-card .pt td:first-child, .bc-card .pt th:first-child { padding-left: 11px; }
         .bc-add { padding: 22px; margin-bottom: 20px; }
+        .bc-state { padding: 18px 11px; font-size: 13px; color: var(--ad-muted); }
+        .bc-state.is-err { color: var(--ad-red); }
+        .bc-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
         .bc-add__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
         .bc-add__act { display: flex; gap: 10px; margin-top: 16px; }
         @media (max-width: 640px) {

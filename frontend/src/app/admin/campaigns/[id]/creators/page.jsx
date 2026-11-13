@@ -1,37 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { campaignById } from "@/components/admin/data";
-import { CreatorRow, WS_CREATORS } from "@/components/admin/campaign/journey";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { useCampaign, useToast } from "@/components/admin/campaign/live";
+import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, loadTemplates, rejectionReasons } from "@/components/admin/campaign/journey";
 
-/* Journey boxes — tap karo to list filter hoti hai */
+/* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
-  { n: 66, l: "Total", s: "everyone active", f: () => true },
-  { n: 12, l: "Invited", s: "not registered", f: (c) => !c.registered },
-  { n: 54, l: "Registered", s: "on Geek OS", f: (c) => c.registered },
-  { n: 6, l: "No Instagram", s: "signed up, not linked", f: (c) => c.registered && !c.ig },
-  { n: 48, l: "Instagram", s: "media kit connected", f: (c) => c.ig },
-  { n: 9, l: "Applied", s: "waiting", f: (c) => c.step === 3 },
-  { n: 31, l: "Approved", s: "brand said yes", f: (c) => c.step >= 4 },
-  { n: 28, l: "Contract signed", f: (c) => c.step >= 5 },
-  { n: 26, l: "Address confirmed", s: "brief sent", f: (c) => c.step >= 6 },
-  { n: 24, l: "Courier sent", f: (c) => c.step >= 7 },
-  { n: 20, l: "Delivered", f: (c) => c.step >= 9 },
-  { n: 14, l: "Video submitted", f: (c) => c.step >= 11 },
-  { n: 6, l: "No video yet", s: "got product", f: (c) => c.step >= 9 && c.step < 11 },
-  { n: 11, l: "Client approved", f: (c) => c.step >= 12 },
-  { n: 10, l: "Done", s: "every post up", f: (c) => c.step >= 12 },
+  { l: "Total", s: "everyone active", f: (c) => !c.failed },
+  { l: "Invited", s: "not registered", f: (c) => !c.registered },
+  { l: "Registered", s: "on Geek OS", f: (c) => c.registered },
+  { l: "No Instagram", s: "signed up, not linked", f: (c) => c.registered && !c.ig },
+  { l: "Instagram", s: "media kit connected", f: (c) => c.ig },
+  { l: "Applied", s: "waiting", f: (c) => c.applied && c.registered && !c.failed },
+  { l: "Approved", s: "brand said yes", f: (c) => c.approved },
+  { l: "Contract signed", f: (c) => c.step >= 5 },
+  { l: "Address confirmed", s: "brief sent", f: (c) => c.step >= 6 },
+  { l: "Courier sent", f: (c) => c.step >= 7 },
+  { l: "Delivered", f: (c) => c.step >= 9 },
+  { l: "Video submitted", f: (c) => c.step >= 11 },
+  { l: "No video yet", s: "got product", f: (c) => c.step >= 9 && c.step < 11 },
+  { l: "Client approved", f: (c) => c.step >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage)) },
+  { l: "Done", s: "every post up", f: (c) => c.posted },
 ];
 
-/* Figma: Campaign workspace — Creators (journey + rows) */
+/* Figma: Campaign workspace — Creators (journey + rows) — barter_tracker + campaign_people */
 export default function WorkspaceCreators() {
   const { id } = useParams();
   const router = useRouter();
-  const c = campaignById(id);
+  const c = { id };
+  const { c: camp } = useCampaign(id);
+  const on = !!id && id !== "sample";
+  const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  const prog = useRpc("admin", "api.campaign_deliverable_progress", { p_campaign: id }, { skip: !on });
   const [box, setBox] = useState(0);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Sort: furthest step");
@@ -39,46 +45,115 @@ export default function WorkspaceCreators() {
   const [size, setSize] = useState("Any size");
   const [posted, setPosted] = useState("Posted or not");
   const [sel, setSel] = useState([]);
-  const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState("");
+  const [toast, setToast] = useToast(3200);
+  const [askEl, ask] = useAsk();
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const reload = () => {
+    bt.reload(true);
+    people.reload(true);
+    prog.reload(true);
+  };
+  const all = useMemo(() => buildRows({ tracker: bt.data, people: people.data, progress: prog.data || {}, kind: camp?.campaign_type || "barter" }), [bt.data, people.data, prog.data, camp]);
+  const counts = BOXES.map((b) => all.filter(b.f).length);
 
   const rows = useMemo(() => {
-    const n = (s) => Number(s.replace(/,/g, ""));
-    let r = WS_CREATORS.filter(BOXES[box].f).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city}`.toLowerCase().includes(q.trim().toLowerCase()));
-    if (who === "Creator’s turn") r = r.filter((x) => x.turn.includes("Creator’s turn"));
-    if (who === "Our turn") r = r.filter((x) => x.turn.includes("Our turn"));
-    if (size === "Under 10k") r = r.filter((x) => n(x.followers) < 10000);
-    if (size === "10k – 50k") r = r.filter((x) => n(x.followers) >= 10000 && n(x.followers) <= 50000);
+    let r = all.filter(BOXES[box].f).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
+    if (who === "Creator’s turn") r = r.filter((x) => x.turnWho === "creator");
+    if (who === "Our turn") r = r.filter((x) => x.turnWho === "you");
+    if (size === "Under 10k") r = r.filter((x) => x.followersN < 10000);
+    if (size === "10k – 50k") r = r.filter((x) => x.followersN >= 10000 && x.followersN <= 50000);
     if (posted === "Posted") r = r.filter((x) => x.posted);
     if (posted === "Not posted") r = r.filter((x) => !x.posted);
     r = [...r];
-    if (sort === "Sort: furthest step") r.sort((a, b) => b.step - a.step);
+    if (sort === "Sort: furthest step") r.sort((a, b) => b.step - a.step || b.sortStep - a.sortStep);
     if (sort === "Sort: name") r.sort((a, b) => a.name.localeCompare(b.name));
-    if (sort === "Sort: followers") r.sort((a, b) => n(b.followers) - n(a.followers));
-    // Figma order (furthest step se nahi) — default view jaisa design mein
-    if (sort === "Sort: furthest step" && box === 0 && !q) r = WS_CREATORS.filter((x) => rows0(x, who, size, posted, n));
+    if (sort === "Sort: followers") r.sort((a, b) => b.followersN - a.followersN);
     return r;
-  }, [box, q, sort, who, size, posted]);
+  }, [all, box, q, sort, who, size, posted]);
 
   const allIds = rows.map((r) => r.id);
   const allOn = allIds.length > 0 && allIds.every((x) => sel.includes(x));
   const toggle = (cid) => setSel((s) => (s.includes(cid) ? s.filter((x) => x !== cid) : [...s, cid]));
+  const keyOf = (rid) => (rid[0] === "p" ? "p:" : "i:") + rid.slice(2);
+  const ctx = { campaignId: id, ask, say: setToast, reload, router };
 
-  const act = (x) => {
-    if (x.action.includes("Resend")) return setToast(`↻ Invite re-sent to ${x.name}`);
-    if (x.action.includes("Remind")) return setToast(`▶ Reminder sent to ${x.name} on WhatsApp`);
-    if (x.action.includes("Approve")) return setToast(`✅ ${x.name}’s video approved — client notified`);
-    setToast(`📸 Connect-Instagram link sent to ${x.name}`);
+  const act = async (x) => {
+    if (!x.act) return;
+    setBusy(x.id);
+    await runAction(x.act.key, x, ctx);
+    setBusy("");
   };
+
+  /* 💬 WhatsApp to selected — template ya apna message (purana ccWaSend) */
+  const waSelected = async () => {
+    const tpls = await loadTemplates();
+    const v = await ask({
+      title: `💬 WhatsApp to ${sel.length} creator${sel.length > 1 ? "s" : ""}`,
+      text: "Pick a template, or type your own message (typed messages only reach creators who wrote to you in the last 24 hours).",
+      ok: "Send on WhatsApp",
+      fields: [
+        { k: "tpl", label: "Template", options: tpls.map((t) => [t.name, t.name.replace(/^geek_/, "").replace(/_/g, " ")]) },
+        { k: "text", label: "…or your own message", area: true, placeholder: "Leave empty to send the template" },
+      ],
+    });
+    if (!v) return;
+    if (!v.tpl && !v.text.trim()) return setToast("Pick a template or type a message.");
+    setBusy("wa");
+    const r = await sendWhatsApp({ campaignId: id, keys: sel.map(keyOf), template: v.text.trim() ? null : v.tpl, text: v.text.trim() });
+    setBusy("");
+    if (r.cancelled) return;
+    setToast(r.msg);
+    if (!r.bad?.length && r.ok) setSel([]);
+    reload();
+  };
+
+  /* ✖ Decline selected — sirf Applied / Screened wale (screen_participation, ek reason sabko) */
+  const declinable = sel.map((rid) => all.find((x) => x.id === rid)).filter((x) => x && x.kind === "p" && ["applied", "eligible"].includes(x.x.stage));
+  const declineSel = async () => {
+    if (!declinable.length) return setToast("Tick creators who are on Applied first.");
+    const reasons = await rejectionReasons();
+    const v = await ask({ title: `Decline ${declinable.length} creator${declinable.length > 1 ? "s" : ""} — why don't they fit the brief?`, text: "The same reason and message go to each of them on WhatsApp, email and in the app.", ok: "Decline & send message", danger: true, fields: [{ k: "code", label: "Reason", options: reasons.map((r) => [r.code, r.label]), required: true }, { k: "note", label: "Message to the creator", area: true, required: true }] });
+    if (!v) return;
+    setBusy("decl");
+    let ok = 0;
+    const bad = [];
+    for (const x of declinable) {
+      const { error } = await rpc("admin", "api.screen_participation", { p_participation: x.pid, p_eligible: false, p_reason: v.note || v.code });
+      if (error) bad.push(`${x.handle || x.name}: ${errText(error)}`);
+      else ok++;
+    }
+    setBusy("");
+    setToast(`✓ ${ok} declined — the message went to each of them${bad.length ? ` · ${bad.length} couldn't be declined (${bad[0]})` : ""}`);
+    setSel([]);
+    reload();
+  };
+
+  /* ↻ Resend invite to not-registered (bulk_resend_invite har invite par) */
+  const notReg = all.filter((x) => x.kind === "i" && !x.registered);
+  const resendAll = async () => {
+    if (!notReg.length) return setToast("Everyone has registered — nobody to re-invite.");
+    if (!window.confirm(`Resend the invite to ${notReg.length} creator${notReg.length > 1 ? "s" : ""} who haven’t registered yet?`)) return;
+    setBusy("re");
+    let ok = 0;
+    let last = null;
+    for (const x of notReg) {
+      const { error } = await rpc("admin", "api.bulk_resend_invite", { p_invite: x.iid });
+      if (error) last = error;
+      else ok++;
+    }
+    setBusy("");
+    setToast(last ? `${ok} re-sent · ${errText(last)}` : `↻ Invite re-sent to ${ok} not-registered creator${ok > 1 ? "s" : ""}`);
+    reload();
+  };
+
+  const loading = bt.loading || people.loading;
+  const err = bt.error || people.error;
+  const n = (i) => (loading ? "…" : counts[i]);
 
   return (
     <AdminShell>
-      <WorkspaceHead id={c.id} />
+      <WorkspaceHead id={id} campaign={camp} />
 
       <section className="ad-card wcr-card">
         <div className="wcr-head">
@@ -98,7 +173,7 @@ export default function WorkspaceCreators() {
         <div className="wcr-boxes">
           {BOXES.map((b, i) => (
             <button key={b.l} type="button" className={`wcr-box ${box === i ? "is-on" : ""}`} onClick={() => setBox(i)} aria-pressed={box === i}>
-              <strong>{b.n}</strong>
+              <strong>{n(i)}</strong>
               <span>{b.l}</span>
               {b.s && <small>{b.s}</small>}
             </button>
@@ -107,7 +182,7 @@ export default function WorkspaceCreators() {
       </section>
 
       <section className="ad-card wcr-card wcr-list">
-        <h2 className="ad-h2">Creators · {box === 0 ? 66 : `${BOXES[box].n} ${BOXES[box].l.toLowerCase()}`}</h2>
+        <h2 className="ad-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${BOXES[box].l.toLowerCase()}`}</h2>
         <p className="wcr-sub">Tap a creator to open every step, chat and action.</p>
 
         <div className="wcr-filters">
@@ -130,19 +205,19 @@ export default function WorkspaceCreators() {
           <label className="wcr-all">
             <input type="checkbox" checked={allOn} onChange={() => setSel(allOn ? [] : allIds)} />
             <span className="wcr-allbox" aria-hidden="true" />
-            Select all ({box === 0 ? 66 : rows.length})
+            Select all ({rows.length})
           </label>
-          <button type="button" className="ad-btn ad-btn--ghost wcr-wa" disabled={!sel.length} onClick={() => (setToast(`💬 WhatsApp sent to ${sel.length} creator(s)`), setSel([]))}>
-            💬 WhatsApp to selected ({sel.length})
+          <button type="button" className="ad-btn ad-btn--ghost wcr-wa" disabled={!sel.length || busy === "wa"} onClick={waSelected}>
+            {busy === "wa" ? "Sending…" : `💬 WhatsApp to selected (${sel.length})`}
           </button>
-          <button type="button" className="wcr-txt" disabled={!sel.length} onClick={() => (setToast(`✖ ${sel.length} creator(s) declined`), setSel([]))}>
-            ✖ Decline selected ({sel.length})
+          <button type="button" className="wcr-txt" disabled={!declinable.length || busy === "decl"} onClick={declineSel}>
+            ✖ Decline selected ({declinable.length})
           </button>
-          <button type="button" className="wcr-txt" onClick={() => setToast("↻ Invite re-sent to 12 not-registered creators")}>
-            ↻ Resend invite to not-registered (12)
+          <button type="button" className="wcr-txt" disabled={!notReg.length || busy === "re"} onClick={resendAll}>
+            {busy === "re" ? "Sending…" : `↻ Resend invite to not-registered (${notReg.length})`}
           </button>
         </div>
-        <button type="button" className="wcr-txt wcr-pick" onClick={() => setSel(WS_CREATORS.filter((x) => !x.ig).map((x) => x.id))}>
+        <button type="button" className="wcr-txt wcr-pick" onClick={() => (setBox(3), setSel(all.filter((x) => x.registered && !x.ig).map((x) => x.id)))}>
           📸 Pick everyone without Instagram
         </button>
 
@@ -155,12 +230,31 @@ export default function WorkspaceCreators() {
               checked={sel.includes(x.id)}
               onCheck={() => toggle(x.id)}
               onAction={() => act(x)}
+              busy={busy === x.id}
               onChat={() => router.push(`/admin/campaigns/${c.id}/creators/${x.id}`)}
             />
           ))}
-          {!rows.length && <p className="wcr-empty">No creators on this step right now.</p>}
+          {!rows.length && (
+            <p className="wcr-empty">
+              {err ? (
+                <>
+                  {errText(err)}{" "}
+                  <button type="button" className="wcr-txt" onClick={reload}>
+                    Retry
+                  </button>
+                </>
+              ) : loading ? (
+                "Loading creators…"
+              ) : all.length ? (
+                "No creators on this step right now."
+              ) : (
+                "No creators in this campaign yet — add them from Bulk sheet or Find matching creators."
+              )}
+            </p>
+          )}
         </div>
       </section>
+      {askEl}
       {toast && <div className="ad-toast">{toast}</div>}
 
       <style>{`
@@ -220,15 +314,4 @@ export default function WorkspaceCreators() {
       `}</style>
     </AdminShell>
   );
-}
-
-/* Default view: Figma wali order, sirf baaki filters lagao */
-function rows0(x, who, size, posted, n) {
-  if (who === "Creator’s turn" && !x.turn.includes("Creator’s turn")) return false;
-  if (who === "Our turn" && !x.turn.includes("Our turn")) return false;
-  if (size === "Under 10k" && n(x.followers) >= 10000) return false;
-  if (size === "10k – 50k" && (n(x.followers) < 10000 || n(x.followers) > 50000)) return false;
-  if (posted === "Posted" && !x.posted) return false;
-  if (posted === "Not posted" && x.posted) return false;
-  return true;
 }

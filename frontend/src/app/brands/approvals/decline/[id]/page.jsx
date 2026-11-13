@@ -1,25 +1,87 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import BrandShell from "@/components/brands/BrandShell";
-import { getCreator, DECLINE_REASONS, APPROVAL_CREATORS } from "@/components/brands/data";
+import { BrLoading, BrEmpty, BrError } from "@/components/brands/BrandStates";
+import { useApprovals, useRejectionReasons, declineCreator, bWho, BRIEF_REASON } from "@/services/brand";
 import { ArrowLeft, Info, Check, Users } from "@/components/ui/Icons";
 
-/** /brands/approvals/decline/[id] — creator ko decline karo, wajah ke saath */
+/**
+ * /brands/approvals/decline/[id] — creator ko decline karo, wajah ke saath
+ * (purana data-bpxno → app.js openReasonModal: api.rejection_reasons se wajah + creator ke liye message → org_decide_applicant p_approve:false).
+ * id = participation_id. "?more=id2,id3" = bulk decline — wahi wajah + message sab ko (app.js opt.count).
+ */
 export default function DeclineCreator() {
   const { id } = useParams();
-  const c = getCreator(id);
-  const [reason, setReason] = useState(DECLINE_REASONS[0]);
+  const a = useApprovals();
+  const rs = useRejectionReasons();
+  const [more, setMore] = useState([]);
+  const [code, setCode] = useState("");
   const [note, setNote] = useState("");
-  const [done, setDone] = useState(false);
+  const [auto, setAuto] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [done, setDone] = useState(null); // { n, bad: [] }
+  const [snap, setSnap] = useState(null);
 
-  if (!c || !APPROVAL_CREATORS.includes(id)) notFound();
+  // ?more= sirf browser mein padho (render mein window nahi)
+  useEffect(() => {
+    const m = new URLSearchParams(window.location.search).get("more") || "";
+    setMore(m.split(",").filter(Boolean));
+  }, []);
+  const x = a.toApprove.find((r) => r.participation_id === id);
+  useEffect(() => {
+    if (x) setSnap(x);
+  }, [x]);
+  const row = x || snap;
+  const ids = [id, ...more.filter((m) => m !== id && a.toApprove.some((r) => r.participation_id === m))];
+  const c = bWho(row ? row.creator : null);
+  const brief = rs.list.filter((r) => BRIEF_REASON.test(r.code));
+  const rest = rs.list.filter((r) => !BRIEF_REASON.test(r.code));
+  const pickLabel = (rs.list.find((r) => r.code === code) || {}).label || "";
+
+  // wajah chuno → message mein ready line (app.js jaisa — badal sakte ho)
+  const pick = (r) => {
+    setCode(r.code);
+    setErr("");
+    if (!note.trim() || note === auto) {
+      const t = r.code === "other" ? "" : `${r.label}.`;
+      setAuto(t);
+      setNote(t);
+    }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!code) return setErr("Pick a reason.");
+    if (!note.trim()) return setErr("Write a short message for the creator.");
+    setBusy(true);
+    setErr("");
+    const bad = [];
+    for (const pid of ids) {
+      const r = await declineCreator(pid, code, note.trim());
+      if (r.error) bad.push(r.error.message);
+    }
+    setBusy(false);
+    if (bad.length === ids.length) return setErr(bad[0]);
+    setDone({ n: ids.length - bad.length, bad });
+    a.reload();
+  };
+
+  const radios = (L) =>
+    L.map((r) => (
+      <label key={r.code} className={`dc-reason ${code === r.code ? "is-on" : ""}`}>
+        <input type="radio" name="reason" value={r.code} checked={code === r.code} onChange={() => pick(r)} />
+        <i />
+        {r.label}
+      </label>
+    ));
 
   return (
-    <BrandShell crumbs={[{ label: "Approvals", href: "/brands/approvals" }, { label: `Decline ${c.name}` }]}>
-      <title>{`Decline ${c.name} — Geek OS Brand`}</title>
+    <BrandShell crumbs={[{ label: "Approvals", href: "/brands/approvals" }, { label: `Decline ${row ? c.name : "creator"}` }]}>
+      <title>{`Decline ${row ? c.name : "creator"} — Geek OS Brand`}</title>
 
       <Link href="/brands/approvals" className="br-back">
         <span>
@@ -28,81 +90,102 @@ export default function DeclineCreator() {
         Back to Approvals
       </Link>
 
-      <div className="br-card dc">
-        {done ? (
-          <div className="dc-done">
-            <span className="dc-done__ic">
-              <Check size={20} />
-            </span>
-            <h1>{c.name} declined</h1>
-            <p>
-              Reason: <strong>{reason}</strong>. Geek reads your note and suggests a better-matched creator within 24 hours — you’ll see them in
-              Approvals.
-            </p>
-            <div className="dc-done__btns">
-              <Link href="/brands/approvals" className="br-btn br-btn--primary">
-                <Users size={14} /> Back to Approvals
-              </Link>
-              <button type="button" className="br-btn br-btn--ghost" onClick={() => setDone(false)}>
-                Undo
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setDone(true);
-            }}
-          >
-            <div className="dc-head">
-              <span className="br-av br-av--lg" style={{ background: c.av }}>
-                {c.initials}
+      {a.loading ? (
+        <BrLoading rows={5} />
+      ) : a.error ? (
+        <BrError error={a.error} onRetry={a.reload} />
+      ) : !row && !done ? (
+        <BrEmpty title="This creator isn’t waiting for approval" text="They were already approved or declined — or the link is old.">
+          <Link href="/brands/approvals" className="br-btn br-btn--primary br-btn--sm">
+            Back to Approvals
+          </Link>
+        </BrEmpty>
+      ) : !a.can ? (
+        <BrEmpty title="View-only login" text="Approvals are done by your team’s approvers." />
+      ) : (
+        <div className="br-card dc">
+          {done ? (
+            <div className="dc-done">
+              <span className="dc-done__ic">
+                <Check size={20} />
               </span>
-              <div>
-                <h1>Decline {c.name}?</h1>
-                <p>{c.handle} · Festive Glow Edit</p>
+              <h1>{done.n > 1 ? `${done.n} creators declined` : `${c.name} declined`}</h1>
+              <p>
+                Reason: <strong>{pickLabel}</strong>. They get your message on WhatsApp, by email and in the app.
+                {done.bad.length ? ` ${done.bad.length} couldn’t be declined: ${done.bad[0]}` : ""}
+              </p>
+              <div className="dc-done__btns">
+                <Link href="/brands/approvals" className="br-btn br-btn--primary">
+                  <Users size={14} /> Back to Approvals
+                </Link>
               </div>
             </div>
+          ) : (
+            <form onSubmit={submit} noValidate>
+              <div className="dc-head">
+                <span className="br-av br-av--lg" style={{ background: c.av }}>
+                  {c.initials}
+                </span>
+                <div>
+                  <h1>{ids.length > 1 ? `Decline ${ids.length} creators?` : `Decline ${c.name}?`}</h1>
+                  <p>{[c.handle, row && row.campaign].filter(Boolean).join(" · ")}</p>
+                </div>
+              </div>
 
-            <p className="dc-q">Why isn’t this creator right for the campaign?</p>
-            <div className="dc-reasons" role="radiogroup">
-              {DECLINE_REASONS.map((r) => (
-                <label key={r} className={`dc-reason ${reason === r ? "is-on" : ""}`}>
-                  <input type="radio" name="reason" value={r} checked={reason === r} onChange={() => setReason(r)} />
-                  <i />
-                  {r}
-                </label>
-              ))}
-            </div>
+              <p className="dc-q">Why isn’t this creator right for the campaign?</p>
+              {rs.loading ? (
+                <BrLoading rows={3} />
+              ) : rs.error ? (
+                <BrError error={rs.error.message} />
+              ) : (
+                <>
+                  {brief.length > 0 && <p className="dc-grp">Doesn’t match the brief</p>}
+                  {brief.length > 0 && (
+                    <div className="dc-reasons" role="radiogroup">
+                      {radios(brief)}
+                    </div>
+                  )}
+                  {brief.length > 0 && rest.length > 0 && <p className="dc-grp">Other reasons</p>}
+                  <div className="dc-reasons" role="radiogroup">
+                    {radios(rest)}
+                  </div>
+                </>
+              )}
 
-            <label className="br-label" htmlFor="dc-note">
-              Anything to add? (optional)
-            </label>
-            <textarea
-              id="dc-note"
-              className="br-input"
-              rows={3}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="We need more 25–34 working women — her audience skews college."
-            />
+              <label className="br-label" htmlFor="dc-note">
+                Message to the creator — why they weren’t selected
+              </label>
+              <textarea
+                id="dc-note"
+                className="br-input"
+                rows={3}
+                maxLength={400}
+                value={note}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  setErr("");
+                }}
+                placeholder="e.g. The brand needs creators based in Jaipur for this campaign."
+              />
+              {err && <p className="dc-err">{err}</p>}
 
-            <p className="dc-info">
-              <Info size={14} /> Geek reads this and suggests a better-matched creator within 24 hours.
-            </p>
+              <p className="dc-info">
+                <Info size={14} /> Sent as it is on WhatsApp, by email and in the app: “You were not selected for this campaign. Reason: …”
+                {ids.length > 1 ? ` The same reason and message go to all ${ids.length} creators.` : ""}
+              </p>
 
-            <div className="dc-foot">
-              <Link href="/brands/approvals" className="br-btn br-btn--ghost">
-                Cancel
-              </Link>
-              <button type="submit" className="br-btn br-btn--danger">
-                Decline creator
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
+              <div className="dc-foot">
+                <Link href="/brands/approvals" className="br-btn br-btn--ghost">
+                  Cancel
+                </Link>
+                <button type="submit" className="br-btn br-btn--danger" disabled={busy}>
+                  {busy ? "Declining…" : ids.length > 1 ? `Decline ${ids.length} creators` : "Decline creator"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
 
       <style>{`
         .dc { padding: 24px; }
@@ -136,7 +219,9 @@ export default function DeclineCreator() {
           .dc { padding: 18px; }
           .dc-foot .br-btn { flex: 1; }
         }
-      `}</style>
+              .dc-grp { margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--br-faint); }
+        .dc-err { margin: 8px 0 0; font-size: 12.5px; font-weight: 600; color: var(--br-red); }
+`}</style>
     </BrandShell>
   );
 }

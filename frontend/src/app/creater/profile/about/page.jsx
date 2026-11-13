@@ -1,33 +1,73 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
-import { CREATOR } from "@/components/creater/data";
+import { useCreator, saveSection } from "@/services/creator";
+
+// Screen ke words ↔ database values (purane profile.js jaisa)
+const GENDER = { Male: "male", Female: "female", "Non-binary": "non_binary", "Prefer not to say": "prefer_not_to_say" };
+const MARRIED = { Unmarried: "single", Married: "married", "Prefer not to say": "prefer_not_to_say" };
+const PET = { Dog: "dog", Cat: "cat", "Other pet": "other" };
+const back = (map, v) => Object.keys(map).find((k) => map[k] === v) || "";
 import { Check } from "@/components/ui/Icons";
 
 /** /creater/profile/about — personal details (private, brands ko nahi dikhte) */
 export default function AboutYou() {
-  const [s, update] = useSession();
-  const [f, setF] = useState({ first: CREATOR.first.toLowerCase(), last: "Rathore", gender: "", dob: "", married: "", pets: "No" });
+  const c = useCreator();
+  const [f, setF] = useState({ first: "", last: "", gender: "", dob: "", married: "", pets: "" });
+  const loaded = useRef(false);
   const [today, setToday] = useState("");
   const [toast, setToast] = useState("");
 
   // Session mein pehle se saved ho to wahi bharo; aaj ki date browser mein (prerender par Date nahi)
   useEffect(() => {
-    if (s.about) setF((x) => ({ ...x, ...s.about }));
-  }, [s.about]);
+    if (loaded.current || !c.ready || !c.profile) return;
+    loaded.current = true;
+    const p = c.profile.personal || {};
+    setF({
+      first: p.first_name || "",
+      last: p.last_name || "",
+      gender: back(GENDER, p.gender),
+      dob: p.date_of_birth || "",
+      married: back(MARRIED, p.marital_status),
+      pets: p.has_pet === false ? "No" : p.has_pet ? back(PET, p.pet_type) || "Other pet" : "",
+    });
+  }, [c]);
   useEffect(() => setToday(new Date().toISOString().slice(0, 10)), []);
 
   // Figma mein Save button nahi — har badlav turant save (auto-save)
-  const set = (k) => (e) => {
-    const next = { ...f, [k]: e.target.value };
-    setF(next);
-    update({ about: next });
-    setToast("Saved");
+  // har field ka patch (api.save_profile_section "personal")
+  const patchOf = (k, v) => {
+    if (k === "first") return { first_name: v.trim() || null };
+    if (k === "last") return { last_name: v.trim() || null };
+    if (k === "gender") return { gender: GENDER[v] || null };
+    if (k === "dob") return { date_of_birth: v || null };
+    if (k === "married") return { marital_status: MARRIED[v] || null, ...(v !== "Married" ? { marriage_anniversary: null } : {}) };
+    if (k === "pets") return v === "No" ? { has_pet: false, pet_name: null, pet_type: null } : v ? { has_pet: true, pet_type: PET[v] } : { has_pet: null };
+    return {};
+  };
+  const flash = (t) => {
+    setToast(t);
     clearTimeout(window.__abT);
-    window.__abT = setTimeout(() => setToast(""), 1400);
+    window.__abT = setTimeout(() => setToast(""), 1600);
+  };
+  const save = async (k, v) => {
+    if (k === "dob" && v && today && v > today) return flash("Birthday can't be in the future");
+    try {
+      await saveSection("personal", patchOf(k, v));
+      flash("Saved");
+    } catch (e) {
+      flash("Couldn't save: " + (e.message || e));
+    }
+  };
+  const set = (k) => (e) => {
+    const v = e.target.value;
+    setF({ ...f, [k]: v });
+    // naam type ho raha hai — rukne par save; baaki turant
+    clearTimeout(window.__abSave);
+    if (k === "first" || k === "last") window.__abSave = setTimeout(() => save(k, v), 700);
+    else save(k, v);
   };
 
   return (
@@ -83,6 +123,7 @@ export default function AboutYou() {
               Do you have pets? * <small>Private</small>
             </label>
             <select id="ab-pets" className="pf-input" value={f.pets} onChange={set("pets")}>
+              <option value="">Select…</option>
               <option>No</option>
               <option>Dog</option>
               <option>Cat</option>

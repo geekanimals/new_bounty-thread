@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PageHead } from "@/components/admin/ui";
-import { campaignById } from "@/components/admin/data";
+import { useCampaign, typeShort, campStatusPick } from "@/components/admin/campaign/live";
 
 /* Campaign workspace ke tabs (Figma) — har tab apna route */
 export const WS_TABS = [
@@ -18,24 +18,35 @@ export const WS_TABS = [
 
 /**
  * Campaign workspace ka upar wala hissa: title + "← All campaigns" + "Edit brief" + tabs.
- * id = campaign id (URL se). title/sub override kar sakte ho.
+ * id = campaign id (URL se) — public.campaigns.id YA intel campaign_id, dono chalte hain (useCampaign resolve karta hai). Campaign Supabase se aata hai (purane app jaisa).
+ * title/sub override kar sakte ho. `campaign` prop do to dobara load nahi hota.
  */
-export default function WorkspaceHead({ id, title, sub, actions }) {
+export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
   const pathname = usePathname() || "";
-  const c = campaignById(id);
+  const live = useCampaign(campaign ? null : id);
+  const row = campaign || live.c;
+  const type = row ? typeShort(row.campaign_type, row.barter_subtype) || row.type || "" : "";
+  const c = row
+    ? { id, name: row.name || "Campaign", brand: row.brand || "", type, status: campStatusPick(row.status) }
+    : { id, name: live.loading ? "Loading campaign…" : "Campaign not found", brand: "", type: "", status: "" };
   const seg = pathname.split("/")[4] || "overview";
   const active = WS_TABS.find((t) => t.k === seg || (t.also || []).includes(seg))?.k;
   return (
     <>
-      <PageHead title={title || `${c.name}${c.name.includes("·") ? "" : ` · ${c.type}`}`} sub={sub || `${c.brand} · ${c.type} · ${c.status}`}>
+      <PageHead
+        title={title || `${c.name}${c.name.includes("·") || !c.type ? "" : ` · ${c.type}`}`}
+        sub={sub || [c.brand, c.type, c.status].filter(Boolean).join(" · ") || "\u00a0"}
+      >
         {actions || (
           <>
             <Link href="/admin/campaigns" className="ad-btn ad-btn--ghost wh-back">
               ← All campaigns
             </Link>
-            <Link href={`/admin/campaigns/new?edit=${c.id}`} className="ad-btn ad-btn--primary">
-              Edit brief
-            </Link>
+            {(!row || row.id) && (
+              <Link href={`/admin/campaigns/new/basics?edit=${row?.id || id}`} className="ad-btn ad-btn--primary">
+                Edit brief
+              </Link>
+            )}
           </>
         )}
       </PageHead>

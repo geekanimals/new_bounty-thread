@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/creater/Logo";
-import { useSession, clearSession } from "@/components/creater/session";
+import { useSession, signOut as creatorSignOut, useCreatorGate, gateRoute, fmtFollowers, needsMe, profileProgress, STAGE_SHORT, hrefOf, iconOf, when, useMyCampaigns, useOpenCampaigns, groupOf, noteOf, engagement, useMyCampaignRows, useNotifications, markAllRead, setAvailability, getConsent, saveConsent } from "@/services/creator";
 import { useRumiTip } from "@/components/creater/rumiBus";
-import { CREATOR, ALERTS, CAMPAIGNS, MY_CAMPAIGNS, getSidekick } from "@/components/creater/data";
+import { getSidekick } from "@/components/creater/data";
+import BootLoader from "@/components/creater/BootLoader";
 import {
   Home, Megaphone, BarChart, User, Bell, Close, ArrowRight, Settings, LogOut,
   Compass, Layers, Chat, Instagram, ChevronRight, Send, FileText, Wallet, Heart,
@@ -68,13 +69,13 @@ const DRAWER = [
   { group: "Create & grow", items: [...NAV[2].items, { label: "Dream brand board", href: "/creater/profile/dream-brands", icon: "💙" }] },
 ];
 
-/* Rumi ke dummy jawab (Ask Rumi) */
+/* Ask Rumi ke jawab — sirf rasta batate hain (koi nakli campaign / amount nahi); asli data us page par */
 const RUMI_ANSWERS = [
-  { k: ["attention", "need", "pending", "todo"], a: "2 things need you: sign the Nykaa agreement, and fix the Beardo draft (show the face wash in the first 3 sec).", href: "/creater/my-campaigns" },
+  { k: ["attention", "need", "pending", "todo"], a: "Anything waiting on you shows up under “Action needed” in My campaigns — sign, confirm your address, send your draft or post.", href: "/creater/my-campaigns" },
   { k: ["brief", "help"], a: "Open any campaign → “Read full creative brief”. Tip: the deadline starts after delivery, not after selection.", href: "/creater/discover" },
-  { k: ["campaign", "find", "match"], a: "You match 3 open campaigns right now — Snuggles, Beardo and Nykaa. Paid ones fill fast!", href: "/creater/discover" },
-  { k: ["media", "kit", "improve"], a: "Add 1–2 more showcase posts and your city — brands open kits with a clear bio 2× more.", href: "/creater/media-kit" },
-  { k: ["pay", "money", "upi"], a: "₹6,000 is pending from Nykaa — it releases 7 days after your post is verified.", href: "/creater/payments" },
+  { k: ["campaign", "find", "match"], a: "Discover shows every open campaign — the ones you're eligible for are marked, and paid ones fill fast!", href: "/creater/discover" },
+  { k: ["media", "kit", "improve"], a: "Add 1–2 showcase posts and your city — brands open kits with a clear bio far more often.", href: "/creater/media-kit" },
+  { k: ["pay", "money", "upi"], a: "Payments shows every fee, what's paid and what's pending — add your UPI or bank once your agreement is signed.", href: "/creater/payments" },
 ];
 const answerFor = (q) => {
   const t = q.toLowerCase();
@@ -144,6 +145,8 @@ export default function BountyShell({ children, tone = "paper" }) {
   const pathname = usePathname() || "";
   const router = useRouter();
   const [session, update] = useSession();
+  // Guard: login + Instagram step + ek baar profile setup (purana bootOS) — warna sahi step par
+  const gateC = useCreatorGate("app", router, pathname);
   const [panel, setPanel] = useState(null); // notif | avatar | cmd | rumi | menu
   const [cmdQ, setCmdQ] = useState("");
   const [cmdI, setCmdI] = useState(0);
@@ -158,12 +161,45 @@ export default function BountyShell({ children, tone = "paper" }) {
   const cmdInput = useRef(null);
 
   const sk = getSidekick(session.sidekick);
-  const locked = !session.ig;
-  const nextMove = locked
+  // Locked mode = Instagram / WhatsApp connect baaki (purana __profileGate)
+  const locked = session.locked || !session.ig;
+  // "Your next move" — purane app jaisa: lock → Instagram; creator ki baari wala campaign → wahi; warna profile %
+  const mine = useMyCampaignRows({ skip: !gateC.loggedIn || locked });
+  const turn = locked ? null : needsMe(Array.isArray(mine.data) ? mine.data : [])[0];
+  const prog = profileProgress(gateC.req ? { items: gateC.req.items } : null, gateC.profile, gateC.hasIg);
+  const pct = prog ? prog.pct : session.profilePct;
+  // Lock ki wajah: Instagram nahi → media kit; sirf WhatsApp baaki → contact par link (purana __profileGate)
+  const needWaOnly = locked && session.ig && (session.joinNeeds || []).some((n) => /whatsapp/i.test(n));
+  const nextMove = needWaOnly
+    ? { title: "Unlock campaigns · Link WhatsApp", short: "Link WhatsApp", sub: "· unlock campaigns", href: "/creater/profile/contact" }
+    : locked
     ? { title: "Unlock campaigns · Connect Instagram", short: "Connect Instagram", sub: "· unlock campaigns", href: "/creater/media-kit" }
-    : { title: `Finish your profile · ${CREATOR.profilePct}% complete`, short: "Finish your profile", sub: `· ${CREATOR.profilePct}% complete`, href: "/creater/profile/finish" };
+    : turn
+      ? (() => {
+          const t = `${turn.brand ? turn.brand + " · " : ""}${STAGE_SHORT[turn.stage] || turn.campaign || "Campaign"}`;
+          return { title: t, short: t, sub: "· action needed", href: `/creater/my-campaigns/${turn.participation_id || turn.campaign_id}` };
+        })()
+      : prog && prog.complete
+        ? { title: "Find your next campaign", short: "Discover campaigns", sub: "· profile complete", href: "/creater/discover" }
+        : { title: `Finish your profile · ${pct}% complete`, short: "Finish your profile", sub: `· ${pct}% complete`, href: "/creater/profile/finish" };
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + "/");
+
+  // Dashboard ka Instagram (active account) + availability (purane profile.js jaisa)
+  const igRow = (gateC.igAccounts || [])[0] || null;
+  const igSynced = igRow?.updated_at ? new Date(igRow.updated_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  const igMedia = Array.isArray(igRow?.recent_media) ? igRow.recent_media : [];
+  const igEngV = engagement(igRow);
+  const igEng = igEngV == null ? "—" : igEngV.toFixed(1) + "%";
+  const [avail, setAvailState] = useState(null);
+  const setAvail = async (k) => {
+    setAvailState(k);
+    try {
+      await setAvailability(k, { reload: false });
+    } catch {
+      setAvailState(null);
+    }
+  };
 
   // Bahar click / Escape par panel band; ⌘K se command bar
   useEffect(() => {
@@ -198,7 +234,6 @@ export default function BountyShell({ children, tone = "paper" }) {
 
   // Pehli baar setup ke baad cookie popup + mobile tip
   useEffect(() => {
-    if (session.setupDone && session.cookie === null) setCookieOpen(true);
     let seen = false;
     try {
       seen = window.sessionStorage.getItem("bounty_tip") === "1";
@@ -206,7 +241,22 @@ export default function BountyShell({ children, tone = "paper" }) {
       seen = true;
     }
     if (!seen) setTip(true);
-  }, [session.setupDone, session.cookie]);
+  }, [session.setupDone]);
+
+  // Cookie choice: har account se ek baar (purana ensureConsent) — device par nahi to server (my_consent) se, warna popup
+  useEffect(() => {
+    if (!gateC.loggedIn || !session.setupDone || session.cookie) return;
+    let off = false;
+    (async () => {
+      const v = await getConsent();
+      if (off) return;
+      if (v) update({ cookie: v });
+      else setCookieOpen(true);
+    })();
+    return () => {
+      off = true;
+    };
+  }, [gateC.loggedIn, session.setupDone, session.cookie]);
 
   useEffect(() => {
     if (panel === "cmd") {
@@ -221,23 +271,44 @@ export default function BountyShell({ children, tone = "paper" }) {
   }, [panel]);
 
   const cmds = useMemo(() => COMMANDS.filter((c) => c.label.toLowerCase().includes(cmdQ.toLowerCase())), [cmdQ]);
-  const alerts = read ? [] : ALERTS;
-  const unread = read ? 0 : ALERTS.filter((a) => a.unread).length;
-
-  // Avatar dashboard ke numbers
-  const dash = {
-    open: CAMPAIGNS.length,
-    paid: CAMPAIGNS.filter((c) => c.type !== "barter").length,
-    barter: CAMPAIGNS.filter((c) => c.type !== "paid").length,
-    waiting: locked ? 0 : MY_CAMPAIGNS.filter((m) => m.group === "waiting").length,
-    running: locked ? 0 : MY_CAMPAIGNS.filter((m) => m.group === "running").length,
-    done: locked ? 0 : MY_CAMPAIGNS.filter((m) => m.group === "done").length,
+  // 🔔 alerts — purane bell jaisa: get_my_notifications har 20 sec
+  const signedIn = !!gateC?.loggedIn;
+  const notes = useNotifications({ skip: !signedIn, refreshMs: 20000 });
+  const [now, setNow] = useState(0);
+  useEffect(() => setNow(Date.now()), [notes.data]);
+  const alertList = (Array.isArray(notes.data) ? notes.data : []).map((n) => ({
+    id: n.notification_id,
+    unread: !n.read,
+    href: hrefOf(n) || "/creater/messages",
+    icon: iconOf(n),
+    title: n.title || "Update",
+    text: n.body || "",
+    time: when(n.created_at, now),
+  }));
+  const alerts = read ? alertList.map((a) => ({ ...a, unread: false })) : alertList;
+  const unread = alerts.filter((a) => a.unread).length;
+  const onMarkAll = async () => {
+    setRead(true);
+    await markAllRead();
+    notes.reload();
   };
-  const runningList = locked ? [] : MY_CAMPAIGNS.filter((m) => m.group === "running");
 
-  const signOut = () => {
-    clearSession();
-    router.push("/creater");
+  // Avatar dashboard ke numbers (asli campaigns)
+  const open = useOpenCampaigns({ skip: !signedIn || panel !== "avatar" });
+  const myAll = useMyCampaigns({ skip: !signedIn || locked || panel !== "avatar", live: false });
+  const dash = {
+    open: open.list.length,
+    paid: open.list.filter((c) => (c.campaign_type || c.comp_type) !== "barter").length,
+    barter: open.list.filter((c) => !["paid", "cash"].includes(c.campaign_type || c.comp_type)).length,
+    waiting: locked ? 0 : myAll.list.filter((m) => groupOf(m) === "waiting").length,
+    running: locked ? 0 : myAll.list.filter((m) => groupOf(m) === "running").length,
+    done: locked ? 0 : myAll.list.filter((m) => groupOf(m) === "done").length,
+  };
+  const runningList = locked ? [] : myAll.list.filter((m) => groupOf(m) === "running").map((m) => ({ id: m.participation_id, note: `${m.campaign || m.name || "Campaign"} — ${noteOf(m)}` }));
+
+  const signOut = async () => {
+    await creatorSignOut();
+    router.replace("/creater/login");
   };
   const closeTip = () => {
     setTip(false);
@@ -248,9 +319,11 @@ export default function BountyShell({ children, tone = "paper" }) {
       /* ignore */
     }
   };
+  // Choice device par + server log (purana Tracker.consentChanged → log_activity kind "consent") — Super Admin har device par dekhta hai
   const setCookie = (v) => {
     update({ cookie: v });
     setCookieOpen(false);
+    saveConsent(v);
   };
   const sendAsk = (q) => {
     const text = (q ?? ask).trim();
@@ -268,7 +341,20 @@ export default function BountyShell({ children, tone = "paper" }) {
     </Link>
   );
 
-  const avatarImg = locked ? <span className="bs-avatar__c">C</span> : <img src={CREATOR.avatar} alt="" />;
+  const avatarImg = session.useSidekickPic ? (
+    <img src={sk.img} alt="" style={{ background: sk.bg }} />
+  ) : session.avatar ? (
+    <img src={session.avatar} alt="" referrerPolicy="no-referrer" />
+  ) : (
+    <span className="bs-avatar__c">{(session.name || "C")[0].toUpperCase()}</span>
+  );
+
+  // Login / gate check chal raha hai ya doosre step par bhej rahe hain — page mat dikhao
+  if (!gateC.ready || !gateC.loggedIn || gateRoute(gateC, "app", pathname)) {
+    return (
+      <BootLoader kid={gateC.loggedIn ? gateC.prefs?.kid : ""} />
+    );
+  }
 
   return (
     <div className={`bs bs--${tone}`}>
@@ -302,9 +388,9 @@ export default function BountyShell({ children, tone = "paper" }) {
               <small>Help with anything</small>
             </span>
           </button>
-          <Link href="/creater/profile" className="bs-me" title={locked ? "My profile" : CREATOR.handle}>
+          <Link href="/creater/profile" className="bs-me" title={locked ? "My profile" : session.handle}>
             {locked ? <img src={sk.img} alt="" className="bs-me__sk" /> : avatarImg}
-            <span>{locked ? "My profile" : CREATOR.handle}</span>
+            <span>{locked ? "My profile" : session.handle || "My profile"}</span>
           </Link>
         </div>
       </aside>
@@ -337,7 +423,7 @@ export default function BountyShell({ children, tone = "paper" }) {
                 <div className="bs-alerts" role="dialog" aria-label="Alerts">
                   <div className="bs-alerts__head">
                     <strong>Alerts</strong>
-                    <button type="button" onClick={() => setRead(true)}>
+                    <button type="button" onClick={onMarkAll}>
                       Mark all read
                     </button>
                     <Link href="/creater/messages" className="bs-alerts__all">
@@ -390,7 +476,7 @@ export default function BountyShell({ children, tone = "paper" }) {
                     {avatarImg}
                     <span className="bs-dof__txt">
                       <small>Dashboard of</small>
-                      <strong>{CREATOR.handle}</strong>
+                      <strong>{session.handle || session.name || "Creator"}</strong>
                     </span>
                     <Link href="/creater/onboarding/meta" className="bs-dof__add">
                       + Add account
@@ -404,9 +490,9 @@ export default function BountyShell({ children, tone = "paper" }) {
                     {[
                       ["available", "🟢 Available"],
                       ["limited", "🟡 Limited"],
-                      ["off", "🔴 Unavailable"],
+                      ["unavailable", "🔴 Unavailable"],
                     ].map(([k, l]) => (
-                      <button key={k} type="button" className={session.available === k ? "is-on" : ""} onClick={() => update({ available: k })}>
+                      <button key={k} type="button" className={(avail || session.available) === k ? "is-on" : ""} onClick={() => setAvail(k)}>
                         {l}
                       </button>
                     ))}
@@ -416,10 +502,10 @@ export default function BountyShell({ children, tone = "paper" }) {
 
               <section className="bs-dcard bs-dprof">
                 <div className="bs-dprof__txt">
-                  <h3>📝 Your profile is {CREATOR.profilePct}% complete</h3>
-                  <p className="bs-dcard__sub">Optional — complete profiles get picked by brands first · next: Dream brands (at least 1)</p>
+                  <h3>📝 Your profile is {session.profilePct}% complete</h3>
+                  <p className="bs-dcard__sub">Optional — complete profiles get picked by brands first{session.req?.missing?.[0] ? ` · next: ${session.req.missing[0]}` : ""}</p>
                   <span className="bs-dprof__bar">
-                    <i style={{ width: `${CREATOR.profilePct}%` }} />
+                    <i style={{ width: `${session.profilePct}%` }} />
                   </span>
                 </div>
                 <Link href="/creater/profile/finish" className="bs-dprof__btn">
@@ -428,14 +514,14 @@ export default function BountyShell({ children, tone = "paper" }) {
               </section>
 
               <p className="bs-dhead">
-                <b>📸 Instagram</b> {CREATOR.handle} · synced 11 Nov, 02:02 pm
+                <b>📸 Instagram</b> {igRow ? `@${igRow.username} · synced ${igSynced}` : "Not connected"}
               </p>
               <div className="bs-dtiles">
                 {[
-                  [locked ? "—" : CREATOR.followers, "Followers"],
-                  [locked ? "—" : CREATOR.posts, "Posts"],
-                  [locked ? "—" : CREATOR.reach, "Avg reach / post"],
-                  [locked ? "—" : CREATOR.eng, "Engagement"],
+                  [igRow ? fmtFollowers(igRow.followers_count) : "—", "Followers"],
+                  [igRow ? fmtFollowers(igRow.media_count) : "—", "Posts"],
+                  [igRow?.avg_reach ? fmtFollowers(igRow.avg_reach) : "—", "Avg reach / post"],
+                  [igEng, "Engagement"],
                   ["0", "Live stories"],
                 ].map(([v, l]) => (
                   <div key={l} className="bs-dtile">
@@ -524,7 +610,7 @@ export default function BountyShell({ children, tone = "paper" }) {
 
         {/* Sidekick ki baat — mobile par footer wale Rumi se, desktop par sidebar wale Rumi se (page par alag Rumi nahi) */}
         {!tipHidden && (pageTip || tip) && (
-          <div className="bs-tip" role="status">
+          <div className={`bs-tip ${pathname.startsWith("/creater/messages") ? "bs-tip--msg" : ""}`} role="status">
             <p>
               {pageTip ? (
                 <>
@@ -533,7 +619,7 @@ export default function BountyShell({ children, tone = "paper" }) {
               ) : (
                 <>
                   <b>Tip:</b>
-                  {locked ? "connect Instagram — brands check real reach when you apply." : "finish your profile — brands pick complete profiles first."}
+                  {needWaOnly ? "link WhatsApp — campaign updates come there, and it unlocks applying." : locked ? "connect Instagram — brands check real reach when you apply." : "finish your profile — brands pick complete profiles first."}
                 </>
               )}
             </p>
@@ -688,7 +774,7 @@ export default function BountyShell({ children, tone = "paper" }) {
               </button>
             </div>
             <div className="bs-sheet__body">
-              <p className="bs-sheet__hey">Hey {CREATOR.first}! What can we tackle today?</p>
+              <p className="bs-sheet__hey">Hey {session.first || "there"}! What can we tackle today?</p>
               <div className="bs-sheet__quick">
                 {[
                   [Bell, "What needs my attention?"],
@@ -921,6 +1007,11 @@ export default function BountyShell({ children, tone = "paper" }) {
           box-shadow: 0 14px 30px -16px rgba(0,0,0,.6); animation: bxPop .2s ease;
         }
         .bs-tip::before { content: ""; position: absolute; right: -8px; bottom: 18px; width: 13px; height: 13px; background: #fff8e6; border-right: 1.5px solid #e8b04a; border-top: 1.5px solid #e8b04a; transform: rotate(45deg); }
+        /* Messages par neeche send button hai — bubble upar header ke paas (sidekick bhi upar) */
+        @media (min-width: 768px) {
+          .bs-tip--msg { bottom: auto; top: 86px; right: 24px; }
+          .bs-tip--msg::before { display: none; }
+        }
         .bs-tip p { flex: 1; margin: 0; font-family: var(--bx-serif); font-style: italic; font-size: 13.5px; line-height: 18.2px; color: #14231a; }
         .bs-tip b { margin-right: 3px; font-style: normal; font-weight: 700; color: #b8452f; }
         .bs-tip button { border: 0; background: none; color: #8a7a5a; padding: 0 2px; font-family: var(--bx-jak); font-size: 20px; line-height: 18px; }

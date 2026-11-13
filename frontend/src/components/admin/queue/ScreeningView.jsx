@@ -1,57 +1,83 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
 import Drawer from "@/components/admin/queue/Drawer";
 import DecisionPanel from "@/components/admin/queue/DecisionPanel";
-import { SCREENING, queueItem } from "@/components/admin/queue/queueData";
+import QueueRecords from "@/components/admin/queue/QueueRecords";
+import { useRpc } from "@/lib/supabase";
+import { useToast, useReason, campId, typeLabel, StateBox } from "@/components/admin/queue/live";
 
-const KEY = "geek_aq_done";
 const BASE = "/admin/applications/screening";
 const TABS = ["Pending screening", "Shortlisted", "Approved"];
+const DECLINED = ["ineligible", "brand_declined", "dropped", "rejected"];
+/* tab → kaunse stage (purane APPLICANT_STAGE jaisa) */
+const tabOf = (st) => (st === "applied" || st === "Applied" ? TABS[0] : st === "eligible" || st === "sent_to_brand" ? TABS[1] : DECLINED.includes(st) || st === "Declined" ? null : TABS[2]);
+const slug = (s) =>
+  String(s || "x")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || "x";
+const daysSince = (t) => {
+  if (!t) return "Today";
+  const d = Math.floor((Date.now() - new Date(t).getTime()) / 86400000);
+  return d <= 0 ? "Today" : d === 1 ? "1 day" : `${d} days`;
+};
 
 /**
- * Applications → screening queue (Figma 005).
- * openId = drawer wala item ("Decision workspace"), apne route par.
+ * Applications → screening queue (Figma 005) — applicants campaign-wise groups mein.
+ * Data: api.org_applicants + admin_applications. openId = group ("c-<campaign>-<tab>") ka drawer.
  */
 export default function ScreeningView({ openId }) {
-  const router = useRouter();
+  const pr = useRpc("admin", "api.org_applicants", { p_campaign: null, p_stage: null }, { refreshMs: 30000 });
+  const ar = useRpc("admin", "admin_applications", { p_campaign: null, p_status: null }, { refreshMs: 30000 });
   const [tab, setTab] = useState(TABS[0]);
-  const [done, setDone] = useState([]);
-  const [toast, setToast] = useState("");
+  const [toastNode, toast] = useToast();
+  const [reasonNode, ask] = useReason();
 
-  useEffect(() => {
-    try {
-      setDone(JSON.parse(window.sessionStorage.getItem(KEY) || "[]"));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2600);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const finish = (id) => {
-    const next = [...new Set([...done, id])];
-    setDone(next);
-    try {
-      window.sessionStorage.setItem(KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-    setToast("Marked reviewed (demo)");
+  const recs = [
+    ...(Array.isArray(pr.data) ? pr.data : []),
+    ...(Array.isArray(ar.data) ? ar.data : []).map((x) => ({ ...x, _legacy: true, stage: x.status, applied_at: x.created_at })),
+  ];
+  // groups: campaign + tab
+  const groups = {};
+  recs.forEach((x) => {
+    const t = tabOf(x.stage);
+    if (!t) return;
+    const name = x.campaign_name || "Campaign";
+    const id = `c-${slug(name)}-${TABS.indexOf(t)}`;
+    if (!groups[id]) groups[id] = { id, tab: t, name, items: [], ctype: x.campaign_type, cid: x._legacy ? x.campaign_id : campId(x) };
+    groups[id].items.push(x);
+  });
+  const all = Object.values(groups).map((g) => {
+    const since = g.items.reduce((m, x) => (!m || (x.applied_at && x.applied_at < m) ? x.applied_at : m), null);
+    const n = g.items.length;
+    return {
+      ...g,
+      count: n,
+      icon: g.tab === TABS[0] ? "✍️" : g.tab === TABS[1] ? "♙" : "✓",
+      title: g.tab === TABS[0] ? `Screen new creators for ${g.name}` : g.tab === TABS[1] ? `Confirm shortlisted creators for ${g.name}` : `Approved creators for ${g.name}`,
+      campaign: [g.name, typeLabel(g.ctype) !== "—" ? typeLabel(g.ctype) : ""].filter(Boolean).join(" · "),
+      reason: g.tab === TABS[2] ? `${n} creator${n > 1 ? "s" : ""} selected` : `${n} applicant${n > 1 ? "s" : ""} waiting for a decision`,
+      pri: g.tab === TABS[2] ? "Done" : n >= 10 ? "High" : "Medium",
+      tone: g.tab === TABS[2] ? "green" : n >= 10 ? "orange" : "violet",
+      when: daysSince(since),
+      since,
+    };
+  });
+  all.sort((a, b) => b.count - a.count);
+  const items = all.filter((g) => g.tab === tab);
+  const open = openId ? all.find((g) => g.id === decodeURIComponent(openId)) : null;
+  const pending = recs.filter((x) => tabOf(x.stage) === TABS[0]).length;
+  const shortlisted = recs.filter((x) => tabOf(x.stage) === TABS[1]).length;
+  const loading = pr.loading && !pr.data;
+  const reload = () => {
+    pr.reload(true);
+    ar.reload(true);
   };
-
-  const all = SCREENING.map(queueItem).filter(Boolean);
-  const pending = all.filter((q) => !done.includes(q.id));
-  const reviewed = all.filter((q) => done.includes(q.id));
-  const items = tab === "Pending screening" ? pending : tab === "Shortlisted" ? reviewed : [];
-  const open = openId ? queueItem(openId) : null;
 
   return (
     <AdminShell>
@@ -59,9 +85,9 @@ export default function ScreeningView({ openId }) {
 
       <Stats
         items={[
-          { value: 60, label: "Pending screening", note: "Illustrative reference" },
-          { value: "●", label: "Safe design mode", note: "No writes to production" },
-          { value: "—", label: "Data sync", note: "Not connected to backend" },
+          { value: pending, label: "Pending screening", note: "Waiting for a decision" },
+          { value: shortlisted, label: "Shortlisted", note: "Screened · awaiting brand" },
+          { value: "●", label: "Live data", note: "Refreshes every 30s" },
         ]}
       />
 
@@ -75,6 +101,7 @@ export default function ScreeningView({ openId }) {
         </div>
 
         <div className="sq-list">
+          <StateBox loading={loading} error={!pr.data && pr.error} onRetry={reload} />
           {items.map((q) => (
             <div key={q.id} className="sq-row">
               <span className="sq-ic">{q.icon}</span>
@@ -95,10 +122,10 @@ export default function ScreeningView({ openId }) {
               </div>
             </div>
           ))}
-          {!items.length && (
+          {!loading && pr.data && !items.length && (
             <div className="sq-empty">
               <strong>{tab === "Approved" ? "No approvals yet" : "Nothing here yet"}</strong>
-              <span>{tab === "Approved" ? "Approve creators from the full applications list." : "Reviewed items show up here."}</span>
+              <span>{tab === "Approved" ? "Approve creators from the full applications list." : "New applicants show up here."}</span>
               <Link href="/admin/applications" className="sq-link">
                 Open all applications →
               </Link>
@@ -110,7 +137,7 @@ export default function ScreeningView({ openId }) {
       {open && (
         <Drawer eyebrow="Decision workspace" title={open.title} closeHref={BASE}>
           <DecisionPanel
-            meta={`${open.campaign} · ${open.when} · ${open.count} records`}
+            meta={`${open.campaign} · ${open.when} · ${open.count} record${open.count > 1 ? "s" : ""}`}
             badges={[
               { label: open.pri, tone: open.tone },
               { label: "Applications", tone: "violet" },
@@ -118,30 +145,29 @@ export default function ScreeningView({ openId }) {
             why={`${open.reason}. Review campaign brief and evidence before making a decision.`}
             actions={
               <>
-                <button
-                  type="button"
-                  className="ad-btn ad-btn--primary"
-                  onClick={() => {
-                    finish(open.id);
-                    router.push(BASE);
-                  }}
-                >
-                  Mark reviewed (demo)
-                </button>
-                <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
-                  Open campaign
+                <Link href="/admin/applications" className="ad-btn ad-btn--primary">
+                  Open applications
                 </Link>
+                {open.cid && (
+                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
+                    Open campaign
+                  </Link>
+                )}
               </>
             }
-          />
+          >
+            <QueueRecords group={{ ...open, f: open.tab === TABS[2] ? "approved" : "applications" }} ask={ask} toast={toast} onDone={reload} />
+          </DecisionPanel>
+        </Drawer>
+      )}
+      {openId && !open && !loading && (
+        <Drawer eyebrow="Decision workspace" title="Nothing waiting here" closeHref={BASE}>
+          <p className="sq-sub">These creators were already handled.</p>
         </Drawer>
       )}
 
-      {toast && (
-        <div className="ad-toast" role="status">
-          ✓ {toast}
-        </div>
-      )}
+      {reasonNode}
+      {toastNode}
 
       <style>{`
         .sq { padding: 22px 22px 30px; }

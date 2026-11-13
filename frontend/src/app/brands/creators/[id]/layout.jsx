@@ -1,8 +1,6 @@
-import { CREATORS } from "@/components/brands/data";
-
-// Har creator ka profile page build ke time ban jaata hai
+// Creator page: id = "p-<participation_id>" ya "i-<invite_id>" — build ke time ek sample page, asli id browser mein useParams se
 export function generateStaticParams() {
-  return CREATORS.map((c) => ({ id: c.id }));
+  return [{ id: "sample" }];
 }
 
 export default function CreatorLayout({ children }) {

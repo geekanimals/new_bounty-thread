@@ -3,24 +3,51 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import BrandShell, { ToneIcon } from "@/components/brands/BrandShell";
-import { USER, BRAND, DASH_STATS, WAITING, CAMPAIGNS, TOP_POSTS, STATUS } from "@/components/brands/data";
+import { BrEmpty, useToast } from "@/components/brands/BrandStates";
 import { CheckSquare, Plus, Zap, ChevronRight, TrendUp, Play, Eye, Facebook } from "@/components/ui/Icons";
+import {
+  useBrand,
+  brandView,
+  canAct,
+  useCampaignTotals,
+  useOpenBillsCount,
+  startFacebookLink,
+  short,
+  n,
+  fdate,
+  uniq,
+  isLive,
+  sumStep,
+  stepCount,
+  totalCreators,
+  STATUS_LABEL,
+  gradFor,
+} from "@/services/brand";
 
 const SORTS = [
   { key: "views", label: "Views" },
   { key: "eng", label: "Engagement" },
   { key: "clicks", label: "Clicks" },
 ];
-const num = (s) => {
-  const n = parseFloat(String(s).replace(/[^\d.]/g, "")) || 0;
-  return /K/i.test(s) ? n * 1000 : /M/i.test(s) ? n * 1e6 : n;
-};
 
-/** /brands/dashboard — aaj kya karna hai + saari campaigns ek nazar mein */
+/**
+ * /brands/dashboard — purana paintDash:
+ * KPIs (live campaigns, creators on board, posts, views, likes + comments), "Waiting for you" (to_approve / videos / bills / requests),
+ * campaigns (steps progress), 🏆 top posts, Facebook business. Data: brand store (api.brand_portal) + useCampaignTotals.
+ */
 export default function BrandDashboard() {
+  const b = useBrand();
+  const v = brandView(b);
+  const C = v.campaigns;
+  const tot = useCampaignTotals(b.loggedIn ? C : null);
+  const openBills = useOpenBillsCount();
+  const [toast, say] = useToast();
   const [sort, setSort] = useState("views");
-  const posts = [...TOP_POSTS].sort((a, b) => num(b[sort]) - num(a[sort]));
-  const mine = CAMPAIGNS.filter((c) => c.status !== "completed");
+  const posts = [...tot.top].sort((a, c) => (sort === "eng" ? (Number(c.er) || 0) - (Number(a.er) || 0) : (Number(c.views) || 0) - (Number(a.views) || 0)));
+  const mine = C.filter((c) => !/completed|closed/.test(c.status || ""));
+  const live = C.filter(isLive);
+  const reqs = ((b.portal && b.portal.requests) || []).filter((r) => !/done|approved|declined|rejected|created/i.test(r.status || ""));
+  const act = canAct(b);
   // Time sirf browser mein (server prerender par Date nahi chalana)
   const [greet, setGreet] = useState("Hello");
   const [today, setToday] = useState("Today");
@@ -31,6 +58,52 @@ export default function BrandDashboard() {
     setToday(d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }));
   }, []);
 
+  const nA = v.toApprove.length;
+  const nV = v.videos.length;
+  const STATS = [
+    { label: "Total views", value: tot.views == null ? "…" : short(tot.views), note: "across all campaigns", icon: "eye", dark: true },
+    { label: "Likes + comments", value: tot.engagement == null ? "…" : short(tot.engagement), note: "across all campaigns", icon: "heart", tone: "red" },
+    { label: "Posts live", value: n(C.reduce((a, c) => a + (Number(c.posts) || 0), 0)), note: `${sumStep(C, "posted")} creators posted`, icon: "play", tone: "violet" },
+    {
+      label: "Creators on board",
+      value: n(["approved", "shipped", "video_review", "posting", "posted"].reduce((a, k) => a + sumStep(C, k), 0)),
+      note: `${sumStep(C, "to_approve")} waiting for you`,
+      icon: "users",
+      tone: "green",
+    },
+    { label: "Live campaigns", value: n(live.length), note: `${C.length} in total`, icon: "megaphone", tone: "orange" },
+  ];
+  const WAIT = [
+    nA && {
+      icon: "users",
+      tone: "violet",
+      title: `${nA} creator${nA === 1 ? "" : "s"} to approve`,
+      text: uniq(v.toApprove.map((x) => x.campaign)).join(", "),
+      action: "Review",
+      href: "/brands/approvals",
+    },
+    nV && {
+      icon: "play",
+      tone: "orange",
+      title: `${nV} video${nV === 1 ? "" : "s"} to review`,
+      text: uniq(v.videos.map((x) => (x.creator && (x.creator.name || x.creator.username)) || x.campaign)).join(", "),
+      action: "Watch",
+      href: "/brands/approvals/videos",
+    },
+    openBills && { icon: "receipt", tone: "red", title: `${openBills} bill${openBills === 1 ? "" : "s"} to pay`, text: "Pay online or download the bill", action: "Pay", href: "/brands/billing" },
+    ...reqs.slice(0, 2).map((r) => ({
+      icon: "megaphone",
+      tone: "blue",
+      title: "Campaign request in review",
+      text: `${r.name} · sent ${fdate(r.created_at)}`,
+      action: "View",
+      href: "/brands/approvals/requests",
+    })),
+  ].filter(Boolean);
+  const fb = v.facebook;
+  const fbPage = fb && (fb.pages || [])[0];
+  const fbIg = fbPage && fbPage.instagram;
+
   return (
     <BrandShell>
       <title>Dashboard — Geek OS Brand</title>
@@ -40,26 +113,32 @@ export default function BrandDashboard() {
         <div className="bd-hero__text">
           <p className="bd-hero__date">{today}</p>
           <h1>
-            {greet}, {USER.first}
+            {greet}, {v.user.first}
           </h1>
-          <p>7 creators and 2 videos are waiting for your OK. Festive Glow Edit is beating its view goal by 18%.</p>
+          <p>
+            {nA || nV
+              ? `${nA} creator${nA === 1 ? "" : "s"} and ${nV} video${nV === 1 ? "" : "s"} ${nA + nV === 1 ? "is" : "are"} waiting for your OK.`
+              : `You're all caught up. ${live.length} campaign${live.length === 1 ? " is" : "s are"} live for ${v.name}.`}
+          </p>
         </div>
         <div className="bd-hero__btns">
           <Link href="/brands/approvals" className="bd-hero__light">
             <CheckSquare size={15} /> Review approvals
           </Link>
-          <Link href="/brands/campaigns/new" className="bd-hero__ghost">
-            <Plus size={15} /> Request a campaign
-          </Link>
+          {act && (
+            <Link href="/brands/campaigns/new" className="bd-hero__ghost">
+              <Plus size={15} /> Request a campaign
+            </Link>
+          )}
         </div>
       </section>
 
       {/* Stats */}
       <div className="bd-stats">
-        {DASH_STATS.map((s) => (
+        {STATS.map((s) => (
           <div key={s.label} className={`br-stat ${s.dark ? "br-stat--dark" : ""}`}>
             <p className="br-stat__label">
-              <ToneIcon icon={s.icon} tone={s.dark ? "dark" : ["red", "violet", "green", "orange"][DASH_STATS.indexOf(s) - 1] || "violet"} size={30} />
+              <ToneIcon icon={s.icon} tone={s.dark ? "dark" : s.tone} size={30} />
               {s.label}
             </p>
             <p className="br-stat__value">{s.value}</p>
@@ -81,11 +160,11 @@ export default function BrandDashboard() {
                 <p className="br-card__sub">Things only you can decide</p>
               </div>
             </div>
-            <span className="br-badge br-badge--red">9 items</span>
+            <span className={`br-badge br-badge--${WAIT.length ? "red" : "green"}`}>{WAIT.length ? `${WAIT.length} item${WAIT.length === 1 ? "" : "s"}` : "All clear"}</span>
           </div>
           <ul className="bd-wait">
-            {WAITING.map((w) => (
-              <li key={w.title}>
+            {WAIT.map((w) => (
+              <li key={w.title + w.text}>
                 <ToneIcon icon={w.icon} tone={w.tone} size={36} />
                 <span className="bd-wait__txt">
                   <strong>{w.title}</strong>
@@ -96,6 +175,15 @@ export default function BrandDashboard() {
                 </Link>
               </li>
             ))}
+            {!WAIT.length && (
+              <li>
+                <ToneIcon icon="check" tone="green" size={36} />
+                <span className="bd-wait__txt">
+                  <strong>Nothing waiting for you</strong>
+                  <small>New creators and videos to approve show up here.</small>
+                </span>
+              </li>
+            )}
           </ul>
         </section>
 
@@ -104,36 +192,52 @@ export default function BrandDashboard() {
           <div className="br-card__head">
             <div>
               <h2 className="br-card__title">Your campaigns</h2>
-              <p className="br-card__sub">3 live · 1 in review</p>
+              <p className="br-card__sub">
+                {live.length} live · {C.length} in total
+              </p>
             </div>
             <Link href="/brands/campaigns" className="br-link">
               See all
             </Link>
           </div>
-          <ul className="bd-camps">
-            {mine.map((c) => (
-              <li key={c.id}>
-                <Link href={`/brands/campaigns/${c.id}`}>
-                  <span className="bd-camps__thumb" style={{ background: c.gradient }} />
-                  <span className="bd-camps__body">
-                    <span className="bd-camps__title">
-                      <strong>{c.title}</strong>
-                      <span className={`br-badge br-badge--${STATUS[c.status].tone}`}>{STATUS[c.status].label}</span>
-                    </span>
-                    <span className="bd-camps__prog">
-                      <span className="br-bar">
-                        <i style={{ width: `${Math.max(4, (c.postsLive / c.postsPlanned) * 100)}%` }} />
+          {mine.length ? (
+            <ul className="bd-camps">
+              {mine.slice(0, 5).map((c) => {
+                const t = totalCreators(c);
+                const done = stepCount(c, "posted");
+                return (
+                  <li key={c.campaign_id}>
+                    <Link href={`/brands/campaigns/${c.campaign_id}`}>
+                      <span className="bd-camps__thumb" style={{ background: gradFor(c.name) }} />
+                      <span className="bd-camps__body">
+                        <span className="bd-camps__title">
+                          <strong>{c.name}</strong>
+                          <span className={`br-badge br-badge--${isLive(c) ? "green" : c.status === "draft" ? "orange" : "grey"}`}>{STATUS_LABEL[c.status] || c.status || ""}</span>
+                        </span>
+                        <span className="bd-camps__prog">
+                          <span className="br-bar">
+                            <i style={{ width: `${Math.max(4, t ? (done / t) * 100 : 0)}%` }} />
+                          </span>
+                          <small>
+                            {done}/{t} creators posted{c.ends_on ? ` · till ${fdate(c.ends_on)}` : ""}
+                          </small>
+                        </span>
                       </span>
-                      <small>
-                        {c.status === "review" ? "starts 15 Nov" : `${c.postsLive}/${c.postsPlanned} posts${c.ends ? ` · ${c.ends}` : ""}`}
-                      </small>
-                    </span>
-                  </span>
-                  <ChevronRight size={15} />
+                      <ChevronRight size={15} />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <BrEmpty title="No campaigns yet" text="Your campaigns show up here as soon as the Geek team sets them up.">
+              {act && (
+                <Link href="/brands/campaigns/new" className="br-btn br-btn--soft br-btn--sm">
+                  Request one
                 </Link>
-              </li>
-            ))}
-          </ul>
+              )}
+            </BrEmpty>
+          )}
         </section>
       </div>
 
@@ -145,54 +249,83 @@ export default function BrandDashboard() {
               <TrendUp size={16} />
             </span>
             <div>
-              <h2 className="br-card__title">Top posts this week</h2>
-              <p className="br-card__sub">Ranked by {SORTS.find((s) => s.key === sort).label.toLowerCase()} — tap a post to open it on Instagram</p>
+              <h2 className="br-card__title">Top posts</h2>
+              <p className="br-card__sub">Ranked by {SORTS.find((s) => s.key === sort).label.toLowerCase()} across your campaigns — tap a post to open it on Instagram</p>
             </div>
           </div>
           <div className="br-seg">
             {SORTS.map((s) => (
-              <button key={s.key} type="button" className={sort === s.key ? "is-on" : ""} onClick={() => setSort(s.key)}>
+              <button key={s.key} type="button" className={sort === s.key ? "is-on" : ""} onClick={() => (s.key === "clicks" ? say("Link clicks — coming soon") : setSort(s.key))}>
                 {s.label}
               </button>
             ))}
           </div>
         </div>
-        <div className="bd-posts" data-scroll>
-          {posts.map((p, i) => (
-            <a key={p.id} href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="bd-post">
-              <span className="br-thumb" style={{ background: p.g }}>
-                <span className="br-thumb__rank">#{i + 1}</span>
-                <span className="br-thumb__play">
-                  <Play size={11} />
-                </span>
-                <span className="br-thumb__views">
-                  {sort === "views" ? <Eye size={11} /> : null}
-                  {sort === "views" ? p.views : sort === "eng" ? `${p.eng} eng.` : `${p.clicks} clicks`}
-                </span>
-              </span>
-              <strong>{p.handle}</strong>
-              <small>{p.campaign} · Reel</small>
-            </a>
-          ))}
-        </div>
+        {posts.length ? (
+          <div className="bd-posts" data-scroll>
+            {posts.map((p, i) => {
+              const cr = p.creator || {};
+              const img = p.thumb || cr.profile_picture_url;
+              return (
+                <a key={(p.permalink || "") + i} href={p.permalink || "#"} target="_blank" rel="noreferrer" className="bd-post">
+                  <span className="br-thumb" style={{ background: gradFor(cr.username || p.campaign) }}>
+                    {img && <img src={img} alt="" loading="lazy" referrerPolicy="no-referrer" className="bd-post__img" onError={(e) => (e.currentTarget.style.display = "none")} />}
+                    <span className="br-thumb__rank">#{i + 1}</span>
+                    <span className="br-thumb__play">
+                      <Play size={11} />
+                    </span>
+                    <span className="br-thumb__views">
+                      {sort === "views" ? <Eye size={11} /> : null}
+                      {sort === "views" ? short(p.views) : p.er != null ? `${p.er}% eng.` : `${short((Number(p.likes) || 0) + (Number(p.comments) || 0))} eng.`}
+                    </span>
+                  </span>
+                  <strong>@{cr.username || cr.name || "creator"}</strong>
+                  <small>
+                    {p.campaign} · {p.type || "Post"}
+                  </small>
+                </a>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="bd-none">{tot.loading ? "Loading posts…" : "No posts yet — the best posts from your campaigns show up here once creators post."}</p>
+        )}
       </section>
 
-      {/* Facebook connected */}
+      {/* Facebook business */}
       <section className="br-card bd-fb">
         <span className="bd-fb__ic">
           <Facebook size={18} />
         </span>
         <div className="bd-fb__txt">
-          <strong>Facebook &amp; Instagram business connected</strong>
+          <strong>{fb ? "Facebook & Instagram business connected" : "Link your Facebook business"}</strong>
           <small>
-            {BRAND.name} · {BRAND.ig} — comments, posts, insights and ads are in Social
+            {fb
+              ? `${fbPage ? fbPage.name : fb.fb_name || v.name}${fbIg ? ` · @${fbIg.username}` : ""} — posts, comments, insights and ads are in Social`
+              : "Link Facebook (Business Manager) once — sign in with one tap and manage your Pages and ads from here."}
           </small>
         </div>
-        <span className="br-badge br-badge--green">Connected</span>
-        <Link href="/brands/facebook" className="br-btn br-btn--ghost br-btn--sm">
-          Open Facebook
-        </Link>
+        {fb ? (
+          <>
+            <span className="br-badge br-badge--green">Connected</span>
+            <Link href="/brands/facebook" className="br-btn br-btn--ghost br-btn--sm">
+              Open Facebook
+            </Link>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="br-btn br-btn--ghost br-btn--sm"
+            onClick={async () => {
+              const r = await startFacebookLink("settings");
+              if (r.error) say(r.error.message);
+            }}
+          >
+            Link Facebook business
+          </button>
+        )}
       </section>
+      {toast}
 
       <style>{`
         .bd-hero {
@@ -245,6 +378,8 @@ export default function BrandDashboard() {
         .bd-post:hover .br-thumb { transform: translateY(-2px); }
         .bd-post .br-thumb { transition: transform .2s; }
 
+        .bd-post__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .bd-none { margin: 0; padding: 8px 0 4px; font-size: 13px; color: var(--br-muted); }
         .bd-fb { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding: 16px 20px; flex-wrap: wrap; }
         .bd-fb__ic { width: 40px; height: 40px; border-radius: 11px; background: var(--br-fb); color: #fff; display: grid; place-items: center; flex-shrink: 0; }
         .bd-fb__txt { flex: 1; min-width: 200px; }
@@ -255,7 +390,7 @@ export default function BrandDashboard() {
           .bd-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
         @media (max-width: 1100px) {
-          .bd-grid { grid-template-columns: 1fr; }
+          .bd-grid { grid-template-columns: minmax(0, 1fr); }
           .bd-posts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
         @media (max-width: 900px) {

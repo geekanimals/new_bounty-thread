@@ -1,49 +1,77 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell, { RumiTip } from "@/components/creater/OnboardShell";
-import { readSession, writeSession } from "@/components/creater/session";
+import { useCreator, getCreator, saveSection, reloadProfile, ackTerms, termsOf, termsPatch, ratesOf, markOnbDone, needsManualDetails, saveRate } from "@/services/creator";
 import { COLLAB_TYPES, getSidekick } from "@/components/creater/data";
 
 const PRODUCT_VALUES = ["Any", "₹500+", "₹1,000+", "₹2,000+", "₹5,000+"];
+const PV_NUM = { Any: null, "₹500+": 500, "₹1,000+": 1000, "₹2,000+": 2000, "₹5,000+": 5000 };
+const pvLabel = (n) => (n == null ? "Any" : Object.keys(PV_NUM).find((k) => PV_NUM[k] === Number(n)) || "Any");
+// Rate card ke deliverable naam (purane app jaisa)
+const RATE_TYPE = { reel: "IG Reel", story: "IG Story", post: "IG Static Post" };
 
 /** /creater/onboarding/terms — Setup 3: kaunsi collabs + rates + tick box */
 export default function SetupTerms() {
   const router = useRouter();
-  const [types, setTypes] = useState(["barter", "paid"]);
-  const [rates, setRates] = useState({ reel: "1500", story: "", post: "", product: "Any" });
+  const [types, setTypes] = useState([]);
+  const [rates, setRates] = useState({ reel: "", story: "", post: "", product: "Any" });
+  const [busy, setBusy] = useState(false);
   const [agree, setAgree] = useState(false);
   const [err, setErr] = useState("");
-  const [sk, setSk] = useState(getSidekick("rumi"));
+  const c = useCreator();
+  const sk = getSidekick(c.prefs?.kid);
+  const loaded = useRef(false);
 
+  // Pichhli baar ke terms / rates tick karke kholo
   useEffect(() => {
-    const s = readSession();
-    setTypes(s.collab || []);
-    setRates({ reel: s.rates?.reel || "", story: s.rates?.story || "", post: s.rates?.post || "", product: s.rates?.product || "Any" });
-    setSk(getSidekick(s.sidekick));
-  }, []);
+    if (loaded.current || !c.ready || !c.loggedIn) return;
+    loaded.current = true;
+    const cp = c.profile?.commercial_preference || {};
+    const r = ratesOf(c.profile);
+    setTypes(termsOf(cp));
+    setRates({ reel: r["IG Reel"] ? String(r["IG Reel"]) : "", story: r["IG Story"] ? String(r["IG Story"]) : "", post: r["IG Static Post"] ? String(r["IG Static Post"]) : "", product: pvLabel(cp.min_product_value) });
+    if (c.meta?.bx_terms_ack) setAgree(true);
+  }, [c]);
 
   const toggle = (id) => setTypes(types.includes(id) ? types.filter((t) => t !== id) : [...types, id]);
   const rate = (k, v) => setRates({ ...rates, [k]: v.replace(/\D/g, "").slice(0, 7) });
 
-  // Instagram hai to seedha Home, nahi to aakhri step (details)
-  const go = () => {
-    if (readSession().ig) {
-      writeSession({ setupDone: true });
-      router.push("/creater/home");
-    } else router.push("/creater/onboarding/details");
+  // Purane onbFinish jaisa: IG nahi + manual details nahi → details step; warna onboarding done →
+  // "Find collaborations" = Discover, "Skip" = Home
+  const go = (explore) => {
+    if (needsManualDetails(getCreator())) return router.push("/creater/onboarding/details");
+    markOnbDone();
+    router.push(explore ? "/creater/discover" : "/creater/home");
   };
 
-  const submit = () => {
-    if (!types.length) return setErr("Pick at least one kind of collaboration.");
-    if (!agree) return setErr("Please tick the box to continue.");
-    writeSession({ collab: types, rates });
-    go();
+  // Purane bxoSave jaisa: tick zaroori → ackTerms → commercial_preference (terms + min product value)
+  // → har badla hua rate save_rate_card_item
+  const submit = async () => {
+    if (!agree) return setErr("Tick the box to confirm you've read this.");
+    setErr("");
+    ackTerms();
+    const old = ratesOf(getCreator().profile);
+    const changed = Object.entries(RATE_TYPE)
+      .map(([k, t]) => [t, rates[k] === "" ? null : Number(rates[k])])
+      .filter(([t, v]) => v != null && v > 0 && v !== old[t]);
+    const patch = { ...termsPatch(types) };
+    const min = PV_NUM[rates.product];
+    if (min != null) patch.min_product_value = min;
+    setBusy(true);
+    try {
+      if (Object.keys(patch).length) await saveSection("commercial_preference", patch, "ui-onboard");
+      for (const [t, v] of changed) await saveRate(t, v, { corr: "ui-onboard" });
+      go(true);
+    } catch (e) {
+      setErr("Couldn't save: " + (e.message || e));
+      setBusy(false);
+    }
   };
 
   return (
-    <OnboardShell tone="dark" step={6} stepText="06/06" avatar>
+    <OnboardShell tone="dark" step={6} stepText="06/06" avatar gate="member">
       <title>Your terms — Bounty</title>
       <div className="tm">
         <h2 className="tm-h">Your work. Your terms.</h2>
@@ -106,10 +134,10 @@ export default function SetupTerms() {
         {err && <p className="tm-err">{err}</p>}
 
         <RumiTip mobileDark className="tm-rumi" name={sk.name} img={sk.img} text="Pick all that fit — you can still say no to any offer." />
-        <button type="button" className="bx-btn bx-btn--cream bx-btn--lg bx-btn--block tm-cta" onClick={submit}>
-          Find collaborations for me →
+        <button type="button" className="bx-btn bx-btn--cream bx-btn--lg bx-btn--block tm-cta" onClick={submit} disabled={busy}>
+          {busy ? "Saving…" : "Find collaborations for me →"}
         </button>
-        <button type="button" className="tm-skip" onClick={go}>
+        <button type="button" className="tm-skip" onClick={() => go(false)}>
           Skip for now
         </button>
       </div>

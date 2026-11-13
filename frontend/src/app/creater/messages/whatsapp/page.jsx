@@ -1,44 +1,129 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
 import InboxTabs from "@/components/creater/InboxTabs";
-import { CREATOR, WA_CHATS } from "@/components/creater/data";
+import { errText, useCreatorUser, getWaContact, getWaConversations, getWaMessages, subscribeWaMessages, setWaOptOut, sendWa, hasRealtime } from "@/services/creator";
 import { ArrowLeft, Send, Search, ArrowRight } from "@/components/ui/Icons";
 
-/** /creater/messages/whatsapp — WhatsApp chats (campaign updates + Geek team) */
+const GEEK = "916398566704"; // Geek ka WhatsApp number
+const hhmm = (t) => {
+  if (!t) return "";
+  const d = new Date(t);
+  return isNaN(d) ? "" : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+};
+function ago(t, now) {
+  if (!t || !now) return "";
+  const m = Math.round((now - new Date(t).getTime()) / 60000);
+  return m < 1 ? "now" : m < 60 ? m + "m" : m < 1440 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d";
+}
+const TICKS = { queued: "…", sent: "✓", delivered: "✓✓", read: "✓✓ read", failed: "⚠ failed" };
+const nameOf = (c) => (String(c.contact_phone_e164 || "").replace(/\D/g, "") === GEEK ? "Geek team" : c.subject || c.contact_phone_e164 || "Chat");
+
+/**
+ * /creater/messages/whatsapp — WhatsApp chats (campaign updates + Geek team)
+ * Purane whatsapp.js jaisa: wa_contacts (number + pause) · wa_set_opt_out · wa_conversations · wa_messages · wa-send
+ * Naye message realtime (Supabase channel) — na mile to har 10 sec refresh.
+ */
 export default function InboxWhatsApp() {
-  const [chats, setChats] = useState(WA_CHATS);
+  const { user, ready } = useCreatorUser();
+  const [contact, setContact] = useState(undefined); // undefined = loading, null = link nahi
+  const [chats, setChats] = useState(null);
+  const [err, setErr] = useState("");
   const [active, setActive] = useState(null);
+  const [msgs, setMsgs] = useState([]);
   const [q, setQ] = useState("");
   const [text, setText] = useState("");
-  const [paused, setPaused] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [nName, setNName] = useState("");
   const [nNum, setNNum] = useState("");
+  const [now, setNow] = useState(0);
   const endRef = useRef(null);
-  const c = chats.find((x) => x.id === active);
-  const list = chats.filter((x) => (x.name + x.number).toLowerCase().includes(q.toLowerCase()));
+  const c = (chats || []).find((x) => x.id === active);
+  const list = (chats || []).filter((x) => [nameOf(x), x.contact_phone_e164, x.subject].join(" ").toLowerCase().includes(q.toLowerCase()));
   const numOk = /^\+?\d[\d\s]{9,14}$/.test(nNum.trim());
+  const paused = !!contact?.opt_out_at;
+
+  const loadStatus = async () => {
+    if (!user) return;
+    const { data, error } = await getWaContact(user.id);
+    setContact(error ? null : data || null);
+  };
+  const loadChats = async () => {
+    const { data, error } = await getWaConversations();
+    if (error) return setErr(errText(error));
+    setErr("");
+    setChats((old) => [...(data || []), ...(old || []).filter((x) => x.pending)]);
+  };
+  const loadMsgs = async (id) => {
+    if (!id || String(id).startsWith("new-")) return setMsgs([]);
+    const { data } = await getWaMessages(id);
+    setMsgs(data || []);
+  };
+
+  useEffect(() => {
+    setNow(Date.now());
+    if (!ready) return;
+    loadStatus();
+    loadChats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, user]);
+
+  // khule chat ke naye message: realtime (purane jaisa) ya 10 sec poll
+  useEffect(() => {
+    loadMsgs(active);
+    if (!active || String(active).startsWith("new-")) return;
+    const stop = subscribeWaMessages(active, {
+      onInsert: (row) => setMsgs((m) => (m.some((x) => x.id === row.id) ? m : [...m, row])),
+      onUpdate: (row) => setMsgs((m) => m.map((x) => (x.id === row.id ? row : x))),
+    });
+    const t = stop ? null : setInterval(() => loadMsgs(active), 10000);
+    return () => {
+      if (stop) stop();
+      if (t) clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   useEffect(() => {
     const box = endRef.current?.parentElement;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [active, chats]);
+  }, [active, msgs]);
 
-  const now = () => new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  const send = (e) => {
+  const togglePause = async () => {
+    const { error } = await setWaOptOut(!paused);
+    if (error) return setNote(errText(error));
+    loadStatus();
+  };
+
+  const send = async (e) => {
     e.preventDefault();
     const v = text.trim();
-    if (!v || !c) return;
-    setChats((all) => all.map((x) => (x.id === active ? { ...x, last: v, time: now(), msgs: [...x.msgs, { me: true, text: v, time: now() }] } : x)));
+    if (!v || !c || busy) return;
+    setBusy(true);
+    setNote("");
+    const body = c.pending ? { to_phone: c.contact_phone_e164, text: v } : { conversation_id: c.id, text: v };
+    const { data, error } = await sendWa(body);
+    setBusy(false);
+    if (error) {
+      const m = errText(error);
+      return setNote(/24-hour/.test(m) ? "WhatsApp only allows a reply within 24 hours of their last message — the Geek team will reach out to reopen the chat." : `Couldn't send: ${m}`);
+    }
     setText("");
+    if (c.pending) {
+      setChats((all) => (all || []).filter((x) => x.id !== c.id));
+      await loadChats();
+      if (data?.conversation_id) setActive(data.conversation_id);
+    } else if (!hasRealtime()) loadMsgs(c.id);
   };
   const create = (e) => {
     e.preventDefault();
     if (!nName.trim() || !numOk) return;
-    const id = `w${Date.now()}`;
-    setChats((all) => [{ id, name: nName.trim(), number: nNum.trim(), last: "New chat", time: now(), msgs: [] }, ...all]);
+    const id = `new-${Date.now()}`;
+    setChats((all) => [{ id, pending: true, subject: nName.trim(), contact_phone_e164: nNum.replace(/\s/g, ""), last_message_at: null }, ...(all || [])]);
     setActive(id);
     setNewOpen(false);
     setNName("");
@@ -50,14 +135,27 @@ export default function InboxWhatsApp() {
       <title>WhatsApp — Bounty</title>
       <InboxTabs />
 
-      <div className="bx-card wa-bar">
-        <span>
-          💬 WhatsApp <b>{CREATOR.phone}</b> {paused ? "· updates paused" : "receiving campaign updates"}
-        </span>
-        <button type="button" className={`bx-btn bx-btn--sm ${paused ? "bx-btn--dark" : "bx-btn--ghost"}`} onClick={() => setPaused(!paused)}>
-          {paused ? "Resume updates" : "Pause updates"}
-        </button>
-      </div>
+      {contact !== undefined && (
+        <div className="bx-card wa-bar">
+          {contact && contact.verified_at ? (
+            <>
+              <span>
+                💬 WhatsApp <b>{contact.phone_e164}</b> {paused ? "· updates paused" : "receiving campaign updates"}
+              </span>
+              <button type="button" className={`bx-btn bx-btn--sm ${paused ? "bx-btn--dark" : "bx-btn--ghost"}`} onClick={togglePause}>
+                {paused ? "Resume updates" : "Pause updates"}
+              </button>
+            </>
+          ) : (
+            <>
+              <span>💬 Get campaign updates on WhatsApp.</span>
+              <Link href="/creater/profile/contact" className="bx-btn bx-btn--sm bx-btn--dark">
+                Link WhatsApp
+              </Link>
+            </>
+          )}
+        </div>
+      )}
 
       <div className={`wa ${c ? "is-open" : ""}`}>
         <aside className="bx-card wa-list">
@@ -83,19 +181,21 @@ export default function InboxWhatsApp() {
             <Search size={13} />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or number…" aria-label="Search chats" />
           </label>
-          {list.length === 0 ? (
-            <p className="wa-none">No conversations yet. Tap “New”.</p>
+          {chats === null ? (
+            <p className="wa-none">{err ? `Couldn't load conversations: ${err}` : "Loading…"}</p>
+          ) : list.length === 0 ? (
+            <p className="wa-none">{chats.length ? "No chat matches." : "No conversations yet. Tap “New”."}</p>
           ) : (
             <ul>
               {list.map((x) => (
                 <li key={x.id}>
                   <button type="button" className={x.id === active ? "is-on" : ""} onClick={() => setActive(x.id)}>
-                    <span className="wa-av">{x.name[0]}</span>
+                    <span className="wa-av">{nameOf(x).replace(/^[@+]/, "")[0]}</span>
                     <span className="wa-txt">
-                      <strong>{x.name}</strong>
-                      <small>{x.last}</small>
+                      <strong>{nameOf(x)}</strong>
+                      <small>{x.pending ? "New chat" : nameOf(x) !== x.contact_phone_e164 ? x.contact_phone_e164 : x.subject || ""}</small>
                     </span>
-                    <span className="wa-time">{x.time}</span>
+                    <span className="wa-time">{ago(x.last_message_at, now)}</span>
                   </button>
                 </li>
               ))}
@@ -112,34 +212,39 @@ export default function InboxWhatsApp() {
                 <button type="button" className="wa-back" onClick={() => setActive(null)} aria-label="Back to chats">
                   <ArrowLeft size={15} />
                 </button>
-                <span className="wa-av">{c.name[0]}</span>
+                <span className="wa-av">{nameOf(c).replace(/^[@+]/, "")[0]}</span>
                 <span>
-                  <strong>{c.name}</strong>
-                  <small>{c.number}</small>
+                  <strong>{nameOf(c)}</strong>
+                  <small>{c.contact_phone_e164}</small>
                 </span>
               </div>
               <div className="wa-msgs">
-                {c.msgs.length === 0 && <p className="wa-hint">Say hi 👋 — messages send from your WhatsApp number.</p>}
-                {c.msgs.map((m, i) => (
-                  <p key={i} className={m.me ? "is-me" : ""}>
-                    {m.text}
-                    <small>{m.time}</small>
+                {msgs.length === 0 && <p className="wa-hint">Say hi 👋 — messages send from your WhatsApp number.</p>}
+                {msgs.map((m) => (
+                  <p key={m.id} className={m.direction === "outbound" ? "is-me" : ""}>
+                    {m.body}
+                    <small>
+                      {hhmm(m.created_at)}
+                      {m.direction === "outbound" ? ` · ${TICKS[m.status] || m.status || ""}` : ""}
+                    </small>
                   </p>
                 ))}
                 <span ref={endRef} />
               </div>
               <form className="wa-send" onSubmit={send}>
                 <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message…" aria-label="Message" />
-                <button type="submit" disabled={!text.trim()} aria-label="Send">
+                <button type="submit" disabled={!text.trim() || busy} aria-label="Send">
                   <Send size={15} />
                 </button>
               </form>
+              {note && <p className="wa-note">{note}</p>}
             </>
           )}
         </section>
       </div>
 
       <style>{`
+        .wa-note { margin: 6px 4px 0; font-size: 12.5px; color: #b8401f; }
         .wa-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; max-width: 720px; margin: 0 auto 12px; padding: 8px 8px 8px 14px; font-size: 14px; }
         .wa-bar span { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--bx-text); }
         .wa-bar span svg { color: #1c8f4e; }

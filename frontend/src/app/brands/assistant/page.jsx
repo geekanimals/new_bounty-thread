@@ -3,59 +3,60 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
-import { USER, CAMPAIGNS, getCampaign, CREATORS } from "@/components/brands/data";
+import { useBrand, brandView, uniq, stepCount, totalCreators, isLive, STATUS_LABEL, fdate } from "@/services/brand";
 import { Sparkle, Send, ArrowRight, Megaphone, CheckSquare, BarChart, Rupee } from "@/components/ui/Icons";
 
-const SUGGESTIONS = [
-  { q: "Which creator gave the cheapest views?", icon: Rupee },
-  { q: "Summarise Festive Glow Edit", icon: Megaphone },
-  { q: "What should I approve first?", icon: CheckSquare },
-  { q: "How are my campaigns doing this week?", icon: BarChart },
-];
-
-// Dummy jawab — backend banne par yahan AI se jawab aayega
-function answer(q) {
+// Purane brand portal mein AI nahi tha — ye jawab brand ke LIVE numbers (api.brand_portal) se banaye jaate hain, koi AI call nahi.
+function answer(q, v) {
   const s = q.toLowerCase();
+  const C = v.campaigns;
+  const live = C.filter(isLive);
   if (s.includes("cheap") || s.includes("cost") || s.includes("views per")) {
     return {
-      text: "Pooja Nair gives the cheapest views right now — about ₹383 per 1K views (₹31K fee, 81K avg reel views). Meera Iyer is close at ₹396 and has already done 2.1M views for Nykaa.",
-      link: { href: "/brands/discovery/compare", label: "Compare them side by side" },
+      text: "Cost per view needs each creator's fee, which isn't in your portal yet — coming soon. Meanwhile, campaign analytics show views and likes for every creator.",
+      link: { href: "/brands/campaigns", label: "Open campaigns" },
     };
   }
-  if (s.includes("festive") || s.includes("summar")) {
-    const c = getCampaign("festive-glow-edit");
+  const c = C.find((x) => s.includes(String(x.name || "").toLowerCase())) || (s.includes("summar") ? C[0] : null);
+  if (c) {
+    const t = totalCreators(c);
     return {
-      text: `${c.title} is live with ${c.postsLive}/${c.postsPlanned} posts up. ${c.views} views (18% ahead of the 1.37M goal), ${c.eng} engagement and ${c.sales} in tracked sales. Meera Iyer’s reel leads with 842K views. 2 videos still need your OK.`,
-      link: { href: "/brands/campaigns/festive-glow-edit/analytics", label: "Open analytics" },
+      text: `${c.name} — ${STATUS_LABEL[c.status] || c.status || ""}. ${t} creator${t === 1 ? "" : "s"}: ${stepCount(c, "to_approve")} to approve, ${stepCount(c, "approved")} approved, ${stepCount(c, "shipped")} making videos, ${stepCount(c, "video_review")} video${stepCount(c, "video_review") === 1 ? "" : "s"} to review, ${stepCount(c, "posted")} posted (${Number(c.posts) || 0} posts live)${c.ends_on ? `. Runs till ${fdate(c.ends_on)}` : ""}.`,
+      link: { href: `/brands/campaigns/${c.campaign_id}`, label: "Open campaign" },
     };
   }
-  if (s.includes("approve") || s.includes("first")) {
+  if (s.includes("approve") || s.includes("first") || s.includes("waiting")) {
+    const nV = v.videos.length;
+    const nA = v.toApprove.length;
+    if (!nA && !nV) return { text: "Nothing is waiting for you right now — you're all caught up.", link: { href: "/brands/approvals", label: "Open approvals" } };
     return {
-      text: "Start with the 2 videos due today (Meera Iyer and Tanvi Shah) — nothing posts without your OK. Then the 7 creators for Festive Glow Edit: Aisha Khan and Meera Iyer are the strongest fit for your buyers.",
-      link: { href: "/brands/approvals/videos", label: "Review videos" },
+      text: `${nV ? `Start with the ${nV} video${nV === 1 ? "" : "s"} to review (${uniq(v.videos.map((x) => (x.creator && (x.creator.name || x.creator.username)) || "")).join(", ")}) — nothing posts without your OK. ` : ""}${nA ? `Then ${nA} creator${nA === 1 ? "" : "s"} to approve for ${uniq(v.toApprove.map((x) => x.campaign)).join(", ")}.` : ""}`,
+      link: { href: nV ? "/brands/approvals/videos" : "/brands/approvals", label: nV ? "Review videos" : "Review creators" },
     };
   }
   if (s.includes("week") || s.includes("doing") || s.includes("campaign")) {
-    const live = CAMPAIGNS.filter((c) => c.status === "live");
     return {
-      text: `${live.length} campaigns are live: ${live.map((c) => `${c.title} (${c.views} views)`).join(", ")}. Total views are up 31% this week and link clicks hit 14.2K. Wedding Season Looks is with Geek — plan and quote are ready for you.`,
+      text: live.length
+        ? `${live.length} campaign${live.length === 1 ? " is" : "s are"} live: ${live.map((x) => `${x.name} (${Number(x.posts) || 0} posts, ${stepCount(x, "posted")}/${totalCreators(x)} creators posted)`).join(", ")}.`
+        : `No campaign is live right now — ${C.length} in total.`,
       link: { href: "/brands/campaigns", label: "See all campaigns" },
     };
   }
-  const match = CREATORS.find((c) => s.includes(c.name.split(" ")[0].toLowerCase()));
-  if (match) {
-    return {
-      text: `${match.name} (${match.handle}) — ${match.followers} followers, ${match.eng} engagement, ${match.women} women audience, fee ${match.feeFull} for 1 Reel + 2 Stories. ${match.why}`,
-      link: { href: `/brands/creators/${match.id}`, label: `Open ${match.name.split(" ")[0]}’s profile` },
-    };
-  }
   return {
-    text: "I can answer questions about your campaigns, creators, approvals, sales and bills. Try asking which creator drove the most sales, or what’s waiting for you today.",
+    text: "I can answer from your live numbers: how your campaigns are doing, what's waiting for your approval, or a summary of any campaign — type its name.",
   };
 }
 
-/** /brands/assistant — campaigns ke baare mein kuch bhi poocho */
+/** /brands/assistant — campaigns ke baare mein poocho; jawab live portal numbers se (AI backend abhi nahi) */
 export default function BrandAssistant() {
+  const b = useBrand();
+  const v = brandView(b);
+  const SUGGESTIONS = [
+    { q: "Which creator gave the cheapest views?", icon: Rupee },
+    { q: v.campaigns[0] ? `Summarise ${v.campaigns[0].name}` : "Summarise my campaign", icon: Megaphone },
+    { q: "What should I approve first?", icon: CheckSquare },
+    { q: "How are my campaigns doing this week?", icon: BarChart },
+  ];
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState("");
   const [typing, setTyping] = useState(false);
@@ -72,7 +73,7 @@ export default function BrandAssistant() {
     setText("");
     setTyping(true);
     setTimeout(() => {
-      setMsgs((m) => [...m, { me: false, ...answer(t) }]);
+      setMsgs((m) => [...m, { me: false, ...answer(t, v) }]);
       setTyping(false);
     }, 700);
   };
@@ -104,7 +105,7 @@ export default function BrandAssistant() {
                 <span className="as-empty__ic">
                   <Sparkle size={22} />
                 </span>
-                <h2>Hi {USER.first}, what do you want to know?</h2>
+                <h2>Hi {v.user.first}, what do you want to know?</h2>
                 <p>Pick a question or type your own.</p>
                 <div className="as-sugg">
                   {SUGGESTIONS.map(({ q, icon: Icon }) => (

@@ -1,40 +1,108 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { campaignById } from "@/components/admin/data";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { useCampaign, useToast, campStatusOptions, delivChips, fmtMoney, fmtDate, daysLeft, REPORT_APPROVED, inviteStepRank } from "@/components/admin/campaign/live";
 
-const STATUS = ["Live — creators can apply", "Shortlist — invite only", "Paused — hidden from creators", "Draft — not visible", "Completed — closed"];
+/* Ideal creator profile → ek line (purane idealProfileHtml ka chhota roop) */
+function eligLine(ip) {
+  ip = ip && typeof ip === "object" ? ip : {};
+  const k = (n) => (n >= 1000 ? Math.round(n / 1000) + "k" : String(n));
+  const f = ip.min_followers != null ? (ip.max_followers != null ? `${k(ip.min_followers)}–${k(ip.max_followers)} followers` : `${k(ip.min_followers)}+ followers`) : ip.max_followers != null ? `up to ${k(ip.max_followers)} followers` : "";
+  return [f, (ip.locations || []).join(", "), (ip.categories || []).join(", "), ip.gender && ip.gender !== "any" ? ip.gender : "", ip.min_engagement != null ? `${ip.min_engagement}%+ eng.` : ""].filter(Boolean).join(" · ") || "Anyone";
+}
 
-const DETAILS = [
-  ["Each creator posts", "🎬 1 Reel · ⭕ 1 Story"],
-  ["Product", "Beardo Detan Express Kit · ₹1,099"],
-  ["Dates", "19 Oct → 20 Nov 2026 · 8 days left"],
-  ["Video due", "2 days after delivery"],
-  ["Ad rights", "1 month · posts stay live"],
-  ["Terms", "Collab with brand · blacklist if no video"],
-  ["Creators needed", "22"],
-  ["Eligibility", "10k+ followers · Mysore, Bengaluru · Travel, Lifestyle · 3%+ eng."],
-];
-
-/* Figma: Campaign workspace — Overview (status, messages, details, tools) */
+/* Figma: Campaign workspace — Overview (status, messages, details, tools) — Supabase se */
 export default function WorkspaceOverview() {
   const { id } = useParams();
   const router = useRouter();
-  const c = campaignById(id);
-  const [status, setStatus] = useState(STATUS[0]);
-  const [auto, setAuto] = useState({ wa: false, mail: false });
+  const { c: row, loading, error, reload } = useCampaign(id);
+  const msg = useRpc("admin", "api.campaign_messaging", { p_campaign: id }, { skip: !id || id === "sample" });
+  const auto = useRpc("admin", "api.ops_auto_messages", {}, {});
+  const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !id || id === "sample" });
+  const prog = useRpc("admin", "api.campaign_deliverable_progress", { p_campaign: id }, { skip: !id || id === "sample" });
   const [ask, setAsk] = useState(false);
-  const [toast, setToast] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState("");
+  const [delErr, setDelErr] = useState("");
+  const [toast, setToast] = useToast();
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const c = { id, name: row?.name || "Campaign" };
+  const ct = row?.contract_terms && typeof row.contract_terms === "object" ? row.contract_terms : {};
+  const left = daysLeft(row?.end_date);
+  const terms = [ct.collab_rights !== false ? "Collab with brand" : "", ct.blacklist_clause !== false ? "blacklist if no video" : "", ct.reship_clause !== false && row?.campaign_type !== "paid" ? "re-ship at their cost" : ""].filter(Boolean);
+  const DETAILS = row
+    ? [
+        ["Each creator posts", delivChips(row.deliverables) || "Not set — Edit"],
+        ["Product", [ct.product || "", row.product_value ? fmtMoney(row.product_value) : ""].filter(Boolean).join(" · ") || "—"],
+        ["Dates", `${row.start_date ? fmtDate(row.start_date) : "—"} → ${row.end_date ? fmtDate(row.end_date, true) : "—"}${left != null ? ` · ${left < 0 ? "ended" : left === 0 ? "ends today" : `${left} day${left > 1 ? "s" : ""} left`}` : ""}`],
+        ["Video due", `${ct.content_days || 7} days after delivery`],
+        ["Ad rights", `${ct.ad_rights_months ?? 1} month${(ct.ad_rights_months ?? 1) == 1 ? "" : "s"} · posts stay live`],
+        ["Terms", terms.join(" · ") || "—"],
+        ["Creators needed", row.creators ? String(row.creators) : "—"],
+        ["Eligibility", eligLine(row.ideal_profile)],
+      ]
+    : [];
+
+  /* status (purana ccStatus) */
+  const { list: STATUS, sel: statusSel } = campStatusOptions(row?.status, row?.end_date);
+  const setStatus = async (v) => {
+    if (!row?.id) return setToast("This campaign has no editable record yet.");
+    const lbl = (STATUS.find((x) => x[0] === v) || [v, v])[1].replace(/\s—.*$/, "");
+    if (!window.confirm(`Change the campaign status to “${lbl}”?`)) return;
+    setBusy("status");
+    const { error: e } = await rpc("admin", "admin_set_campaign_status", { p_id: row.id, p_status: v });
+    setBusy("");
+    if (e) return setToast(errText(e));
+    setToast(`Status → ${lbl} ✓`);
+    reload();
+  };
+
+  /* WhatsApp / Email switches (campaign_messaging + set_campaign_messaging) */
+  const m = msg.data || {};
+  const autoOff = auto.data && auto.data.auto_on === false;
+  const chan = {
+    wa: { on: m.global_wa_on !== false && m.wa_on !== false, global: m.global_wa_on, held: m.held_wa },
+    mail: { on: m.global_email_on !== false && m.email_on !== false, global: m.global_email_on, held: m.held_email },
+  };
+  const toggle = async (k, label) => {
+    const ch = chan[k];
+    if (ch.global === false) return setToast("This is turned off for every campaign in Settings. Turn it on there first.");
+    setBusy(k);
+    const { data: r, error: e } = await rpc("admin", "api.set_campaign_messaging", { p_campaign: id, p_channel: k === "wa" ? "whatsapp" : "email", p_on: !ch.on });
+    setBusy("");
+    if (e) return setToast(errText(e));
+    setToast(`${label} for this campaign ${!ch.on ? "turned ON ✓" : "turned OFF"}${r && r.held_now ? ` · ${r.held_now} waiting message${r.held_now > 1 ? "s" : ""} stopped` : ""}`);
+    msg.reload();
+  };
+  const chanSub = (ch) => (ch.global === false ? "OFF — paused for all campaigns" : ch.on ? "ON — sending step updates" : ch.held ? `OFF · ${ch.held} stopped while OFF — never sent` : "OFF — for this campaign");
+
+  /* Creator journey (campaign_people + campaign_deliverable_progress) */
+  const P = people.data?.participants || [];
+  const I = people.data?.invites || [];
+  const total = P.length + I.length;
+  const approved = P.filter((x) => REPORT_APPROVED(x.stage)).length + I.filter((x) => inviteStepRank(x.status) >= 3).length;
+  const pg = prog.data && typeof prog.data === "object" ? Object.values(prog.data) : [];
+  const done = pg.filter((v) => v && v.all_done).length + I.filter((x) => x.status === "posted").length;
+  const jn = (n) => (people.loading ? "…" : people.error ? "—" : n);
+
+  /* Delete (admin_delete_campaign — naam type karke confirm) */
+  const del = async () => {
+    if (!row?.id) return setDelErr("This campaign has no editable record yet.");
+    if (String(confirm).trim().toLowerCase() !== String(row?.name || "").trim().toLowerCase()) return setDelErr(`Type “${row?.name}” exactly to confirm.`);
+    setBusy("del");
+    setDelErr("");
+    const { error: e } = await rpc("admin", "admin_delete_campaign", { p_campaign: row.id, p_note: note.trim() || null });
+    setBusy("");
+    if (e) return setDelErr(errText(e));
+    setAsk(false);
+    router.push("/admin/campaigns");
+  };
 
   const TOOLS = [
     { ic: "🎯", t: "Find matching creators", href: `/admin/campaigns/${c.id}/find` },
@@ -49,14 +117,24 @@ export default function WorkspaceOverview() {
     { ic: "🧩", t: "Creator traits", href: `/admin/campaigns/${c.id}/traits`, short: true },
   ];
 
-  const toggle = (k, label) => {
-    setAuto((a) => ({ ...a, [k]: !a[k] }));
-    setToast(`${label} auto messages ${auto[k] ? "paused" : "turned on"} for this campaign`);
-  };
+  if (!loading && (error || !row))
+    return (
+      <AdminShell>
+        <WorkspaceHead id={id} campaign={row} />
+        <section className="ad-card" style={{ padding: 22 }}>
+          <p style={{ fontSize: 13, color: "var(--ad-muted)" }}>
+            {errText(error) || "Couldn’t open this campaign."}{" "}
+            <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" onClick={reload}>
+              Retry
+            </button>
+          </p>
+        </section>
+      </AdminShell>
+    );
 
   return (
     <AdminShell>
-      <WorkspaceHead id={c.id} />
+      <WorkspaceHead id={id} campaign={row} />
 
       <div className="wo-grid">
         <div className="wo-col">
@@ -66,13 +144,15 @@ export default function WorkspaceOverview() {
                 <h2 className="ad-h2">Campaign status</h2>
                 <p className="wo-sub">Who can see and apply.</p>
               </div>
-              <select className="ad-input wo-select" value={status} onChange={(e) => (setStatus(e.target.value), setToast("Status updated · " + e.target.value.split(" — ")[0]))} aria-label="Campaign status">
-                {STATUS.map((s) => (
-                  <option key={s}>{s}</option>
+              <select className="ad-input wo-select" value={statusSel} disabled={!row || busy === "status"} onChange={(e) => setStatus(e.target.value)} aria-label="Campaign status">
+                {STATUS.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
                 ))}
               </select>
             </div>
-            {!auto.wa && !auto.mail && (
+            {autoOff && (
               <p className="wo-alert">
                 <span>⏸</span>
                 <span>
@@ -87,12 +167,12 @@ export default function WorkspaceOverview() {
                 ["mail", "✉️", "Email"],
               ].map(([k, ic, label]) => (
                 <div key={k} className="wo-ch">
-                  <button type="button" className={`ad-toggle wo-tg ${auto[k] ? "is-on" : ""}`} onClick={() => toggle(k, label)} aria-pressed={auto[k]} aria-label={`${label} auto messages`} />
+                  <button type="button" className={`ad-toggle wo-tg ${chan[k].on ? "is-on" : ""}`} disabled={busy === k || msg.loading} onClick={() => toggle(k, label)} aria-pressed={chan[k].on} aria-label={`${label} messages for this campaign`} />
                   <div>
                     <p className="wo-ch__t">
                       {ic} {label}
                     </p>
-                    <p className="wo-ch__s">{auto[k] ? "ON — sending step updates" : "OFF — paused for all campaigns"}</p>
+                    <p className="wo-ch__s">{msg.loading ? "Loading…" : chanSub(chan[k])}</p>
                   </div>
                 </div>
               ))}
@@ -110,6 +190,7 @@ export default function WorkspaceOverview() {
               </Link>
             </div>
             <div className="wo-details">
+              {loading && <p className="wo-sub">Loading campaign…</p>}
               {DETAILS.map(([k, v]) => (
                 <div key={k} className="wo-d">
                   <p>{k}</p>
@@ -130,7 +211,7 @@ export default function WorkspaceOverview() {
                 </Link>
               ))}
             </div>
-            <button type="button" className="wo-del" onClick={() => setAsk(true)}>
+            <button type="button" className="wo-del" onClick={() => (setConfirm(""), setNote(""), setDelErr(""), setAsk(true))}>
               🗑 Delete campaign
             </button>
           </section>
@@ -139,15 +220,15 @@ export default function WorkspaceOverview() {
             <h2 className="ad-h2">Creator journey</h2>
             <div className="wo-journey">
               <Link href={`/admin/campaigns/${c.id}/creators`}>
-                <strong>66</strong>
+                <strong>{jn(total)}</strong>
                 <span>Total</span>
               </Link>
               <Link href={`/admin/campaigns/${c.id}/creators`}>
-                <strong>31</strong>
+                <strong>{jn(approved)}</strong>
                 <span>Approved</span>
               </Link>
               <Link href={`/admin/campaigns/${c.id}/content`}>
-                <strong>10</strong>
+                <strong>{jn(done)}</strong>
                 <span>Done</span>
                 <small>every post up</small>
               </Link>
@@ -160,13 +241,24 @@ export default function WorkspaceOverview() {
         <div className="ad-overlay" onClick={() => setAsk(false)}>
           <div className="ad-modal wo-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete campaign">
             <h2 className="ad-h2">Delete “{c.name}”?</h2>
-            <p>Creators, content and payment history stay in the audit log. The brief disappears for creators right away.</p>
+            <p>
+              This permanently removes <b>{c.name}</b> and everything in it — creators in the campaign, contracts, addresses, shipments, videos, posts, invites and unsent WhatsApp / email messages. Creator, brand and agency accounts are not touched. <b>It can’t be undone.</b>
+            </p>
+            <label className="ad-label wo-lbl" htmlFor="wo-confirm">
+              Type the campaign name to confirm
+            </label>
+            <input id="wo-confirm" className="ad-input" autoComplete="off" placeholder={c.name} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            <label className="ad-label wo-lbl" htmlFor="wo-note">
+              Note (optional)
+            </label>
+            <input id="wo-note" className="ad-input" maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
+            {delErr && <p className="wo-err">{delErr}</p>}
             <div className="wo-modal__act">
               <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAsk(false)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" onClick={() => router.push("/admin/campaigns")}>
-                Delete campaign
+              <button type="button" className="ad-btn ad-btn--danger" disabled={busy === "del"} onClick={del}>
+                {busy === "del" ? "Deleting…" : "🗑 Delete campaign permanently"}
               </button>
             </div>
           </div>
@@ -217,6 +309,8 @@ export default function WorkspaceOverview() {
 
         .wo-modal { padding: 24px; }
         .wo-modal p { margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--ad-muted); }
+        .wo-lbl { margin-top: 14px; }
+        .wo-err { margin-top: 10px !important; color: var(--ad-red) !important; font-weight: 700; }
         .wo-modal__act { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 
         @media (max-width: 1180px) { .wo-grid { grid-template-columns: 1fr; } }

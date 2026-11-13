@@ -1,68 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import BrandCrm from "@/components/admin/brand/BrandCrm";
 import Drawer from "@/components/admin/brand/Drawer";
-import { brandInfo } from "@/components/admin/brand/store";
-import { initials } from "@/components/admin/data";
+import { useRpc, errText } from "@/lib/supabase";
+import { inr, ini, num } from "@/components/admin/brand/util";
 
-/** notes ki ginti (notes page localStorage mein rakhta hai) */
-export const notesKey = (id) => `geek_admin_brand_notes_${id}`;
+/* Brand detail (api.brand_detail) ek baar load — saare tabs isi se padhte hain */
+const BrandCtx = createContext(null);
+/** Tab ke andar: const { d, b, reload } = useBrand(); */
+export const useBrand = () => useContext(BrandCtx);
+
+export const STATUS = { active: "Active client", lead: "Lead", paused: "Paused", archived: "Archived" };
 
 /**
  * Brand detail = Brand CRM ke upar right panel (Figma 065–070).
  * Har tab apna route: /admin/brands/[id]/{overview,campaigns,creators,notes,logins,billing}
+ * children = JSX ya function ({ d, b, reload }) => JSX
  */
-export default function BrandPanel({ id, children, logins }) {
+export default function BrandPanel({ id, children }) {
   const pathname = usePathname() || "";
-  const [b, setB] = useState(() => brandInfo(id));
-  const [notes, setNotes] = useState(0);
-
-  useEffect(() => {
-    const sync = () => {
-      setB(brandInfo(id));
-      try {
-        setNotes(JSON.parse(window.localStorage.getItem(notesKey(id)) || "[]").length);
-      } catch {
-        setNotes(0);
-      }
-    };
-    sync();
-    window.addEventListener("geek-brands", sync);
-    return () => window.removeEventListener("geek-brands", sync);
-  }, [id]);
+  const { data: d, error, loading, reload } = useRpc("admin", "api.brand_detail", { p_brand: id }, { skip: !id || id === "sample" });
+  const b = d?.brand || {};
+  const T = d?.totals || {};
+  const ctx = d ? { d, b, reload } : null;
 
   const base = `/admin/brands/${id}`;
   const seg = pathname.split("/")[4] || "overview";
+  const n = (k) => (d ? (d[k] || []).length : "…");
   const tabs = [
     { k: "overview", label: "Overview" },
-    { k: "campaigns", label: `Campaigns (${b.campaigns})` },
-    { k: "creators", label: `Creators (${b.creators})` },
-    { k: "notes", label: `Notes & tasks (${notes})` },
-    { k: "logins", label: `Logins (${logins ?? (b.login ? 1 : 0)})` },
+    { k: "campaigns", label: `Campaigns (${n("campaigns")})` },
+    { k: "creators", label: `Creators (${n("creators")})` },
+    { k: "notes", label: `Notes & tasks (${n("notes")})` },
+    { k: "logins", label: `Logins (${n("logins")})` },
     { k: "logins#portal", label: "🏢 Brand portal", portal: true },
     { k: "billing", label: "💳 Billing" },
   ];
+  const name = b.name || (loading ? "Loading…" : "Brand");
+  const value = Number(T.spend) ? inr(T.spend) : Number(T.product_value) ? inr(T.product_value) : "—";
 
   return (
     <AdminShell>
       <BrandCrm interactive={false} />
-      <Drawer closeHref="/admin/brands" label={`${b.name} brand`}>
+      <Drawer closeHref="/admin/brands" label={`${name} brand`}>
         <div className="bp-head">
-          <span className="bp-av">{b.name.trim().includes(" ") ? initials(b.name) : b.name.slice(0, 2).toUpperCase()}</span>
+          {b.logo_url ? (
+            <img className="bp-av" src={b.logo_url} alt="" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
+          ) : (
+            <span className="bp-av">{ini(b.name || "?")}</span>
+          )}
           <div className="bp-head__txt">
             <p className="bp-eye">Brand</p>
-            <h2>{b.name}</h2>
-            <span className={`ad-badge ${b.status === "Active client" ? "ad-badge--green" : "ad-badge--orange"}`}>{b.status}</span>
+            <h2>{name}</h2>
+            {d && <span className={`ad-badge ${(b.status || "active") === "active" ? "ad-badge--green" : "ad-badge--orange"}`}>{STATUS[b.status] || "Active client"}</span>}
           </div>
           <div className="bp-head__act">
-            <Link href="/admin/campaigns/new" className="ad-btn ad-btn--ghost">
+            <Link href={`/admin/campaigns/new${b.name ? `?brand=${encodeURIComponent(b.name)}` : ""}`} className="ad-btn ad-btn--ghost">
               ➕ Campaign
             </Link>
-            <Link href="/admin/creator-upload" className="ad-btn ad-btn--ghost">
+            <Link href={`/admin/creator-upload${id ? `?brand=${id}` : ""}`} className="ad-btn ad-btn--ghost">
               📥 Upload creators
             </Link>
           </div>
@@ -70,10 +70,10 @@ export default function BrandPanel({ id, children, logins }) {
 
         <div className="bp-stats">
           {[
-            [b.campaigns, "Campaigns"],
-            [b.creators, "Creators"],
-            [b.posted, "Posted"],
-            [b.value, "Product value"],
+            [d ? num(T.campaigns) : "—", "Campaigns"],
+            [d ? num(T.creators) : "—", "Creators"],
+            [d ? num(T.posted) : "—", "Posted"],
+            [d ? value : "—", Number(T.spend) ? "Budget" : "Product value"],
           ].map(([n, l]) => (
             <div key={l}>
               <strong>{n}</strong>
@@ -90,7 +90,20 @@ export default function BrandPanel({ id, children, logins }) {
           ))}
         </nav>
 
-        <div className="bp-body">{children}</div>
+        <div className="bp-body">
+          {loading && !d ? (
+            <p className="bp-state">Loading…</p>
+          ) : error ? (
+            <p className="bp-state is-err">
+              Couldn’t open the brand: {errText(error)}{" "}
+              <button type="button" onClick={() => reload()}>
+                Retry
+              </button>
+            </p>
+          ) : ctx ? (
+            <BrandCtx.Provider value={ctx}>{typeof children === "function" ? children(ctx) : children}</BrandCtx.Provider>
+          ) : null}
+        </div>
       </Drawer>
 
       <style>{`
@@ -112,6 +125,10 @@ export default function BrandPanel({ id, children, logins }) {
         .bp-tabs .ad-tab { height: 37px; }
         .bp-tabs .ad-tab:not(.is-on) { color: #67718a; }
         .bp-body { margin-top: 34px; }
+        .bp-state { font-size: 13px; color: var(--ad-muted); }
+        .bp-state.is-err { color: var(--ad-red); }
+        .bp-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
+        img.bp-av { object-fit: cover; background: #fff; border: 1px solid var(--ad-line); }
 
         /* tabs ke andar common bits */
         .bp-sec { padding-bottom: 18px; border-bottom: 1px solid var(--ad-line); }

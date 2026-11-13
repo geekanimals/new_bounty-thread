@@ -2,48 +2,67 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import BrandShell from "@/components/brands/BrandShell";
 import ApprovalTabs from "@/components/brands/ApprovalTabs";
-import { APPROVAL_CREATORS, getCreator } from "@/components/brands/data";
-import { Check, Megaphone, ArrowUpDown, Sparkle, ChevronDown, MoreH, Close } from "@/components/ui/Icons";
+import { BrLoading, BrEmpty, BrError, useToast } from "@/components/brands/BrandStates";
+import { useApprovals, approveCreator, approveMany, creatorHref, bWho, bShort, bDate } from "@/services/brand";
+import { Check, Megaphone, ArrowUpDown, Sparkle, ChevronDown, MoreH } from "@/components/ui/Icons";
 
-const SORTS = ["Best match", "Lowest fee", "Most followers"];
+// purane brand portal mein fee nahi thi — sort applied date / followers / engagement se
+const SORTS = ["Oldest first", "Most followers", "Best engagement"];
 const FIRST = 6;
-const toNum = (s) => {
-  const n = parseFloat(String(s).replace(/[^\d.]/g, "")) || 0;
-  return /K/i.test(s) ? n * 1000 : /M/i.test(s) ? n * 1e6 : n;
-};
 
-/** /brands/approvals — Geek ke chune creators ko approve / decline karo */
+/**
+ * /brands/approvals — campaigns mein aane wale creators ko approve / decline karo
+ * (purana paintApprovals "to_approve" + wireActions data-bpxok + wireBulk). Decline → /brands/approvals/decline/[id] (wajah ke saath).
+ */
 export default function ApprovalsPage() {
-  const [selected, setSelected] = useState(APPROVAL_CREATORS.slice(0, 3));
-  const [status, setStatus] = useState({}); // id -> "approved" | "declined"
+  const router = useRouter();
+  const a = useApprovals();
+  const [selected, setSelected] = useState([]);
+  const [busy, setBusy] = useState(""); // participation id ya "bulk"
   const [sort, setSort] = useState(0);
+  const [camp, setCamp] = useState(""); // campaign filter ("" = sab)
   const [showAll, setShowAll] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, say] = useToast();
 
-  const flash = (t) => {
-    setToast(t);
-    setTimeout(() => setToast(""), 2400);
-  };
-
-  let list = APPROVAL_CREATORS.map(getCreator);
-  if (sort === 1) list = [...list].sort((a, b) => toNum(a.fee) - toNum(b.fee));
-  if (sort === 2) list = [...list].sort((a, b) => toNum(b.followers) - toNum(a.followers));
+  const camps = [...new Map(a.toApprove.map((x) => [x.campaign_id, x.campaign])).entries()];
+  let list = a.toApprove.filter((x) => !camp || x.campaign_id === camp);
+  if (sort === 1) list = [...list].sort((p, q) => (Number(q.creator?.followers) || 0) - (Number(p.creator?.followers) || 0));
+  if (sort === 2) list = [...list].sort((p, q) => (Number(q.creator?.engagement) || 0) - (Number(p.creator?.engagement) || 0));
   const shown = showAll ? list : list.slice(0, FIRST);
 
-  const pending = APPROVAL_CREATORS.filter((id) => !status[id]);
-  const sel = selected.filter((id) => !status[id]);
+  const pending = list.map((x) => x.participation_id);
+  const sel = selected.filter((id) => pending.includes(id));
   const allOn = pending.length > 0 && sel.length === pending.length;
-
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const setMany = (ids, val) => {
-    setStatus((s) => {
-      const n = { ...s };
-      ids.forEach((id) => (n[id] = val));
-      return n;
-    });
+  const campName = camp ? (camps.find(([id]) => id === camp) || [])[1] : camps.length === 1 ? camps[0][1] : "All campaigns";
+
+  // ek creator approve (purana data-bpxok)
+  const approveOne = async (x) => {
+    setBusy(x.participation_id);
+    const r = await approveCreator(x.participation_id);
+    setBusy("");
+    if (r.error) return say(r.error.message);
+    say("✓ Creator approved — the Geek team takes it from here");
+    setSelected((s) => s.filter((id) => id !== x.participation_id));
+    a.reload();
+  };
+  // kai ek saath (purana wireBulk "c")
+  const approveSel = async () => {
+    if (!window.confirm(`Approve ${sel.length} creator${sel.length === 1 ? "" : "s"}? They move on to the next step.`)) return;
+    setBusy("bulk");
+    const r = await approveMany("c", sel);
+    setBusy("");
     setSelected([]);
+    say(`✓ ${r.ok} approved${r.bad.length ? ` · ${r.bad.length} couldn't be: ${r.bad[0]}` : ""}`);
+    a.reload();
+  };
+  // decline wajah ke saath — pehla creator page par, baaki "more" mein (same wajah sab ko — app.js openReasonModal count)
+  const declineSel = () => {
+    const [first, ...more] = sel;
+    router.push(`/brands/approvals/decline/${first}${more.length ? `?more=${more.join(",")}` : ""}`);
   };
 
   return (
@@ -51,175 +70,167 @@ export default function ApprovalsPage() {
       <title>Approvals — Geek OS Brand</title>
       <ApprovalTabs />
 
-      {/* Selection bar */}
-      <div className="br-card ap-bar">
-        <div className="ap-bar__left">
-          <button
-            type="button"
-            className={`ap-check ${sel.length ? "is-on" : ""}`}
-            aria-label={allOn ? "Clear selection" : "Select all"}
-            onClick={() => setSelected(allOn ? [] : pending)}
-          >
-            {sel.length > 0 && <Check size={12} />}
-          </button>
-          <strong>{sel.length} selected</strong>
-          <span className="ap-bar__dot">·</span>
-          <button type="button" className="ap-bar__all" onClick={() => setSelected(pending)} disabled={!pending.length}>
-            Select all {pending.length}
-          </button>
-        </div>
-        <div className="ap-bar__right">
-          <span className="ap-pill">
-            <Megaphone size={13} /> Festive Glow Edit
-          </span>
-          <button type="button" className="ap-pill" onClick={() => setSort((sort + 1) % SORTS.length)}>
-            <ArrowUpDown size={13} /> Sort: {SORTS[sort]}
-          </button>
-          <button
-            type="button"
-            className="br-btn br-btn--ghost br-btn--sm"
-            disabled={!sel.length}
-            onClick={() => {
-              setMany(sel, "declined");
-              flash(`${sel.length} declined — Geek will suggest better matches in 24h`);
-            }}
-          >
-            Decline {sel.length || ""}
-          </button>
-          <button
-            type="button"
-            className="br-btn br-btn--primary br-btn--sm"
-            disabled={!sel.length}
-            onClick={() => {
-              setMany(sel, "approved");
-              flash(`${sel.length} creator${sel.length > 1 ? "s" : ""} approved for Festive Glow Edit`);
-            }}
-          >
-            <Check size={13} /> Approve {sel.length || ""}
-          </button>
-        </div>
-      </div>
-
-      {/* Cards */}
-      <div className="ap-grid">
-        {shown.map((c) => {
-          const st = status[c.id];
-          const on = selected.includes(c.id) && !st;
-          return (
-            <article key={c.id} className={`br-card ap-card ${on ? "is-sel" : ""} ${st ? `is-${st}` : ""}`}>
-              <div className="ap-card__top">
-                <button type="button" className={`ap-check ${on ? "is-on" : ""}`} aria-label={`Select ${c.name}`} disabled={!!st} onClick={() => toggle(c.id)}>
-                  {on && <Check size={12} />}
+      {a.loading ? (
+        <BrLoading cards={3} />
+      ) : a.error ? (
+        <BrError error={a.error} onRetry={a.reload} />
+      ) : !a.toApprove.length ? (
+        <BrEmpty title="No creators waiting" text="When creators join your campaigns, they show up here for your OK. Nothing to approve right now." />
+      ) : (
+        <>
+          {/* Selection bar */}
+          <div className="br-card ap-bar">
+            <div className="ap-bar__left">
+              {a.can && (
+                <button type="button" className={`ap-check ${sel.length ? "is-on" : ""}`} aria-label={allOn ? "Clear selection" : "Select all"} onClick={() => setSelected(allOn ? [] : pending)}>
+                  {sel.length > 0 && <Check size={12} />}
                 </button>
-                <span className="br-av br-av--lg" style={{ background: c.av }}>
-                  {c.initials}
-                </span>
-                <span className="ap-card__name">
-                  <strong>
-                    {c.name}
-                    <span className="ap-verified">
-                      <Check size={9} />
+              )}
+              <strong>{a.can ? `${sel.length} selected` : `${list.length} waiting`}</strong>
+              {a.can && (
+                <>
+                  <span className="ap-bar__dot">·</span>
+                  <button type="button" className="ap-bar__all" onClick={() => setSelected(pending)} disabled={!pending.length}>
+                    Select all {pending.length}
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="ap-bar__right">
+              <button
+                type="button"
+                className="ap-pill"
+                disabled={camps.length < 2}
+                onClick={() => {
+                  // campaigns mein ghoomo: sab → pehla → doosra …
+                  const ids = ["", ...camps.map(([id]) => id)];
+                  setCamp(ids[(ids.indexOf(camp) + 1) % ids.length]);
+                  setShowAll(false);
+                }}
+              >
+                <Megaphone size={13} /> {campName}
+              </button>
+              <button type="button" className="ap-pill" onClick={() => setSort((sort + 1) % SORTS.length)}>
+                <ArrowUpDown size={13} /> Sort: {SORTS[sort]}
+              </button>
+              {a.can && (
+                <>
+                  <button type="button" className="br-btn br-btn--ghost br-btn--sm" disabled={!sel.length || !!busy} onClick={declineSel}>
+                    Decline {sel.length || ""}
+                  </button>
+                  <button type="button" className="br-btn br-btn--primary br-btn--sm" disabled={!sel.length || !!busy} onClick={approveSel}>
+                    <Check size={13} /> {busy === "bulk" ? "Approving…" : `Approve ${sel.length || ""}`}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Cards */}
+          <div className="ap-grid">
+            {shown.map((x) => {
+              const c = bWho(x.creator);
+              const cr = x.creator || {};
+              const on = selected.includes(x.participation_id);
+              const href = creatorHref(x.participation_id);
+              return (
+                <article key={x.participation_id} className={`br-card ap-card ${on ? "is-sel" : ""}`}>
+                  <div className="ap-card__top">
+                    {a.can && (
+                      <button type="button" className={`ap-check ${on ? "is-on" : ""}`} aria-label={`Select ${c.name}`} onClick={() => toggle(x.participation_id)}>
+                        {on && <Check size={12} />}
+                      </button>
+                    )}
+                    <span className="br-av br-av--lg ap-av" style={{ background: c.av }}>
+                      {c.initials}
+                      {c.pic && <img src={c.pic} alt="" referrerPolicy="no-referrer" onError={(e) => e.currentTarget.remove()} />}
                     </span>
-                  </strong>
-                  <small>
-                    {c.handle} · {c.city}
-                  </small>
-                </span>
-                {st ? (
-                  <span className={`br-badge br-badge--${st === "approved" ? "green" : "grey"}`}>{st === "approved" ? "Approved" : "Declined"}</span>
-                ) : (
-                  <Link href={`/brands/creators/${c.id}`} className="ap-more" aria-label={`More about ${c.name}`}>
-                    <MoreH size={16} />
-                  </Link>
-                )}
-              </div>
-
-              <div className="ap-stats">
-                <span>
-                  <strong>{c.followers}</strong>
-                  <small>followers</small>
-                </span>
-                <span>
-                  <strong>{c.eng}</strong>
-                  <small>engagement</small>
-                </span>
-                <span>
-                  <strong>{c.avgViews}</strong>
-                  <small>avg views</small>
-                </span>
-              </div>
-
-              <div className="ap-tags">
-                {c.niche.map((t) => (
-                  <span key={t} className="br-tag">
-                    {t}
-                  </span>
-                ))}
-              </div>
-
-              <div className="ap-why">
-                <p>
-                  <Sparkle size={12} /> Why Geek picked them
-                </p>
-                <span>{c.why}</span>
-              </div>
-
-              <div className="ap-fee">
-                <small>Their fee</small>
-                <strong>{c.feeFull} · 1 Reel + 2 Stories</strong>
-              </div>
-
-              <div className="ap-actions">
-                {st ? (
-                  <>
-                    <span className="ap-done">
-                      {st === "approved" ? <Check size={13} /> : <Close size={13} />}
-                      {st === "approved" ? "Geek will brief them today" : "Geek will suggest a replacement"}
+                    <span className="ap-card__name">
+                      <strong>{c.name}</strong>
+                      <small>{[c.handle, c.city].filter(Boolean).join(" · ") || "Instagram creator"}</small>
                     </span>
-                    <button type="button" className="ap-undo" onClick={() => setStatus((s) => ({ ...s, [c.id]: undefined }))}>
-                      Undo
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <Link href={`/brands/approvals/decline/${c.id}`} className="br-btn br-btn--ghost br-btn--sm">
-                      Decline
+                    <Link href={href} className="ap-more" aria-label={`More about ${c.name}`}>
+                      <MoreH size={16} />
                     </Link>
-                    <Link href={`/brands/creators/${c.id}`} className="br-btn br-btn--soft br-btn--sm">
-                      View profile
-                    </Link>
-                    <button
-                      type="button"
-                      className="br-btn br-btn--primary br-btn--sm ap-approve"
-                      onClick={() => {
-                        setMany([c.id], "approved");
-                        setSelected((s) => s.filter((x) => x !== c.id));
-                        flash(`${c.name} approved for Festive Glow Edit`);
-                      }}
-                    >
-                      <Check size={13} /> Approve
-                    </button>
-                  </>
-                )}
-              </div>
-            </article>
-          );
-        })}
-      </div>
+                  </div>
 
-      {!showAll && list.length > FIRST && (
-        <div className="br-more">
-          <button type="button" className="br-btn br-btn--ghost" onClick={() => setShowAll(true)}>
-            Load more <ChevronDown size={13} />
-          </button>
-        </div>
+                  <div className="ap-stats">
+                    <span>
+                      <strong>{c.followers}</strong>
+                      <small>followers</small>
+                    </span>
+                    <span>
+                      <strong>{cr.engagement != null ? `${cr.engagement}%` : "—"}</strong>
+                      <small>engagement</small>
+                    </span>
+                    <span>
+                      <strong>{bShort(cr.avg_reach)}</strong>
+                      <small>avg reach</small>
+                    </span>
+                  </div>
+
+                  {(cr.categories || []).length > 0 && (
+                    <div className="ap-tags">
+                      {cr.categories.slice(0, 4).map((t) => (
+                        <span key={t} className="br-tag">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="ap-why">
+                    <p>
+                      <Sparkle size={12} /> Wants to join
+                    </p>
+                    <span>
+                      {x.campaign} · applied {bDate(x.applied_at, false)}
+                    </span>
+                  </div>
+
+                  <div className="ap-fee">
+                    <small>Campaign</small>
+                    <strong>{x.campaign}</strong>
+                  </div>
+
+                  <div className="ap-actions">
+                    {a.can ? (
+                      <>
+                        <Link href={`/brands/approvals/decline/${x.participation_id}`} className="br-btn br-btn--ghost br-btn--sm">
+                          Decline
+                        </Link>
+                        <Link href={href} className="br-btn br-btn--soft br-btn--sm">
+                          View profile
+                        </Link>
+                        <button type="button" className="br-btn br-btn--primary br-btn--sm ap-approve" disabled={!!busy} onClick={() => approveOne(x)}>
+                          <Check size={13} /> {busy === x.participation_id ? "…" : "Approve"}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="ap-done ap-wait">Waiting for your team’s approver</span>
+                        <Link href={href} className="br-btn br-btn--soft br-btn--sm ap-approve">
+                          View profile
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {!showAll && list.length > FIRST && (
+            <div className="br-more">
+              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShowAll(true)}>
+                Load more <ChevronDown size={13} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
-      {toast && (
-        <div className="br-toast" role="status">
-          <Check size={14} /> {toast}
-        </div>
-      )}
+      {toast}
 
       <style>{`
         .ap-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 16px; }
@@ -279,7 +290,11 @@ export default function ApprovalsPage() {
           .ap-pill { flex: 1; justify-content: center; }
           .ap-card { padding: 16px; }
         }
-      `}</style>
+              .ap-av { position: relative; overflow: hidden; }
+        .ap-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+        .ap-wait { color: var(--br-muted); }
+        .ap-pill:disabled { cursor: default; }
+`}</style>
     </BrandShell>
   );
 }

@@ -2,59 +2,73 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import BrandShell from "@/components/brands/BrandShell";
-import { getVideo, getCreator } from "@/components/brands/data";
-import { ArrowLeft, Play, Pause, Check, AlertTriangle, Clock, Edit, Send } from "@/components/ui/Icons";
+import { BrLoading, BrEmpty, BrError, useToast } from "@/components/brands/BrandStates";
+import { useApprovals, useBrandCampaign, approveVideo, askVideoChanges, bWho, bGrad, bEmbed, bLines, bWhen } from "@/services/brand";
+import { ArrowLeft, Play, Check, Clock, Edit, Send, LinkIcon } from "@/components/ui/Icons";
 
-const toSec = (t) => {
-  const [m, s] = t.split(":").map(Number);
-  return m * 60 + s;
-};
-const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-
-/** /brands/approvals/video/[id] — creator ka video dekho, note likho, approve ya changes */
+/**
+ * /brands/approvals/video/[id] — creator ka video dekho, approve ya changes maango
+ * (purana openVideo + data-bpxvok confirm → bp_review_video approve, data-bpxvno → bp_review_video changes 5–800 akshar).
+ * id = participation_id.
+ */
 export default function VideoReview() {
   const { id } = useParams();
-  const v = getVideo(id);
-  const c = getCreator(id);
-  const total = v ? toSec(v.length) : 60;
-  const [playing, setPlaying] = useState(false);
-  const [t, setT] = useState(34);
-  const [notes, setNotes] = useState(v ? v.notes : []);
+  const a = useApprovals();
+  const live = a.videos.find((x) => x.participation_id === id);
+  const [snap, setSnap] = useState(null); // review ke baad list se hat jaata hai — naam / campaign dikhte rahein
+  useEffect(() => {
+    if (live) setSnap(live);
+  }, [live]);
+  const camp = useBrandCampaign((live || snap || {}).campaign_id || null);
+  const vb = ((camp.data || {}).campaign || {}).video_brief || {};
+  const checks = [...bLines(vb.key_messages), ...bLines(vb.dos)].slice(0, 6);
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState(false);
   const [ask, setAsk] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const [state, setState] = useState(null); // "approved" | "changes"
+  const [toast, say] = useToast();
+  const v = live || (state ? snap : null);
 
-  // Play dabane par progress chalta hai (dummy video)
-  useEffect(() => {
-    if (!playing) return;
-    const timer = setInterval(() => {
-      setT((x) => {
-        if (x + 1 >= total) {
-          setPlaying(false);
-          return total;
-        }
-        return x + 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [playing, total]);
+  const c = bWho(v ? v.creator : null);
+  const first = c.name.split(" ")[0];
+  const emb = v ? bEmbed(v.video_url) : null;
 
-  if (!v || !c) notFound();
-
-  const addNote = (e) => {
+  // approve (purana data-bpxvok: confirm → bp_review_video p_approve:true)
+  const approve = async () => {
+    if (!window.confirm("Approve this video? The creator is told to post it.")) return;
+    setBusy(true);
+    const r = await approveVideo(id);
+    setBusy(false);
+    if (r.error) return say(r.error.message);
+    setState("approved");
+    say("✓ Video approved — the creator can post it now");
+    a.reload();
+  };
+  // changes (purana bpxCh form: kam se kam 5 akshar)
+  const sendChanges = async (e) => {
     e.preventDefault();
-    const txt = note.trim();
-    if (!txt) return;
-    setNotes((n) => [...n, { at: fmt(t), text: txt, by: "You · just now" }]);
-    setNote("");
+    const t = ask.trim();
+    if (t.length < 5) return setErr("Write at least a few words for the creator.");
+    setBusy(true);
+    setErr("");
+    const r = await askVideoChanges(id, t);
+    setBusy(false);
+    if (r.error) return setErr(r.error.message);
+    setState("changes");
+    setAsking(false);
+    say("Sent — the creator will fix the video");
+    a.reload();
   };
 
+  const crumbs = [{ label: "Approvals", href: "/brands/approvals/videos" }, { label: v ? `${c.name}’s video` : "Video" }];
+
   return (
-    <BrandShell crumbs={[{ label: "Approvals", href: "/brands/approvals/videos" }, { label: `${c.name}’s video` }]}>
-      <title>{`Review ${c.name}’s video — Geek OS Brand`}</title>
+    <BrandShell crumbs={crumbs}>
+      <title>{v ? `Review ${c.name}’s video — Geek OS Brand` : "Review video — Geek OS Brand"}</title>
 
       <Link href="/brands/approvals/videos" className="br-back">
         <span>
@@ -63,160 +77,165 @@ export default function VideoReview() {
         Back to Approvals
       </Link>
 
-      <div className="br-card vv">
-        {/* Phone preview */}
-        <div className="vv-phone" style={{ background: v.g }}>
-          <div className="vv-phone__top">
-            <span className="vv-phone__who">
-              <i>{c.initials}</i>
-              {c.handle.slice(1)}
-            </span>
-            <span className="vv-draft">Draft</span>
+      {a.loading ? (
+        <BrLoading rows={5} />
+      ) : a.error ? (
+        <BrError error={a.error} onRetry={a.reload} />
+      ) : !v && !state ? (
+        <BrEmpty title="This video isn’t waiting for review" text="It was already approved or sent back for changes — or the link is old.">
+          <Link href="/brands/approvals/videos" className="br-btn br-btn--primary br-btn--sm">
+            See videos to review
+          </Link>
+        </BrEmpty>
+      ) : (
+        <div className="br-card vv">
+          {/* Phone preview — asli video (Drive / Instagram / YouTube / file) */}
+          <div className="vv-phone" style={{ background: bGrad(id) }}>
+            {emb && emb.kind === "video" && <video className="vv-embed" src={emb.src} controls playsInline preload="metadata" />}
+            {emb && emb.kind === "frame" && (
+              <iframe className="vv-embed" src={emb.src} title={`${c.name}'s video`} allow="autoplay; encrypted-media; fullscreen" allowFullScreen loading="lazy" referrerPolicy="no-referrer" />
+            )}
+            <div className="vv-phone__top">
+              <span className="vv-phone__who">
+                <i>{c.initials}</i>
+                {c.handle ? c.handle.slice(1) : c.name}
+              </span>
+              <span className="vv-draft">Draft</span>
+            </div>
+            {!emb && (
+              <a className="vv-play" href={v ? v.video_url : "#"} target="_blank" rel="noopener noreferrer" aria-label="Open the video">
+                <Play size={22} />
+              </a>
+            )}
+            <div className="vv-phone__bottom">
+              {!emb && <p>This link can’t be played here — open it in a new tab.</p>}
+              {v && v.video_url && (
+                <a className="vv-time vv-open" href={v.video_url} target="_blank" rel="noopener noreferrer">
+                  <LinkIcon size={11} /> Open in a new tab ↗
+                </a>
+              )}
+            </div>
           </div>
-          <button type="button" className="vv-play" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause video" : "Play video"}>
-            {playing ? <Pause size={22} /> : <Play size={22} />}
-          </button>
-          <div className="vv-phone__bottom">
-            <p>{v.caption.slice(0, 64)}…</p>
-            <button
-              type="button"
-              className="vv-track"
-              aria-label="Seek"
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setT(Math.round(((e.clientX - r.left) / r.width) * total));
-              }}
-            >
-              <i style={{ width: `${(t / total) * 100}%` }} />
-            </button>
-            <span className="vv-time">
-              {fmt(t)} / {v.length}
-            </span>
-          </div>
-        </div>
 
-        {/* Details */}
-        <div className="vv-info">
-          <div className="vv-head">
-            <span className="br-av" style={{ background: c.av }}>
-              {c.initials}
-            </span>
-            <span className="vv-head__name">
-              <strong>{c.name}</strong>
-              <small>
-                {c.handle} · {v.campaign}
-              </small>
-            </span>
-            {state === "approved" ? (
-              <span className="br-badge br-badge--green">Approved</span>
-            ) : state === "changes" ? (
-              <span className="br-badge br-badge--blue">Changes requested</span>
+          {/* Details */}
+          <div className="vv-info">
+            <div className="vv-head">
+              <span className="br-av" style={{ background: c.av }}>
+                {c.initials}
+              </span>
+              <span className="vv-head__name">
+                <strong>{c.name}</strong>
+                <small>{[c.handle, v && v.campaign].filter(Boolean).join(" · ")}</small>
+              </span>
+              {state === "approved" ? (
+                <span className="br-badge br-badge--green">Approved</span>
+              ) : state === "changes" ? (
+                <span className="br-badge br-badge--blue">Changes requested</span>
+              ) : (
+                <span className="br-badge br-badge--orange">Sent {v ? bWhen(v.submitted_at) : ""}</span>
+              )}
+            </div>
+
+            <p className="vv-label">Note from the creator</p>
+            <p className="vv-caption">{(v && v.note) || "No note — just the video."}</p>
+
+            <p className="vv-label">Brief check</p>
+            {checks.length ? (
+              <ul className="vv-checks">
+                {checks.map((x) => (
+                  <li key={x}>
+                    <span>
+                      <Check size={11} />
+                    </span>
+                    {x}
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <span className="br-badge br-badge--orange">{v.due}</span>
+              <p className="vv-caption vv-muted">{camp.loading ? "Loading the video brief…" : "No video brief points for this campaign — check it against the campaign brief."}</p>
             )}
-          </div>
 
-          <p className="vv-label">Caption</p>
-          <p className="vv-caption">{v.caption}</p>
-
-          <p className="vv-label">Brief check</p>
-          <ul className="vv-checks">
-            {v.checks.map((x) => (
-              <li key={x.text} className={x.ok ? "" : "is-warn"}>
-                <span>{x.ok ? <Check size={11} /> : <AlertTriangle size={11} />}</span>
-                {x.text}
-              </li>
-            ))}
-          </ul>
-
-          <p className="vv-label">Your notes on the video</p>
-          {notes.length > 0 && (
-            <ul className="vv-notes">
-              {notes.map((n, i) => (
-                <li key={i}>
-                  <button type="button" className="vv-at" onClick={() => setT(toSec(n.at))}>
-                    {n.at}
-                  </button>
-                  <span>
-                    {n.text}
-                    <small>{n.by}</small>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <form className="vv-addnote" onSubmit={addNote}>
-            <Clock size={14} />
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={`Add a note at ${fmt(t)}…`} />
-            {note.trim() && (
-              <button type="submit" className="br-btn br-btn--soft br-btn--sm">
-                Add
-              </button>
-            )}
-          </form>
-
-          {asking && !state && (
+            <p className="vv-label">Your notes on the video</p>
             <form
-              className="vv-ask"
+              className="vv-addnote"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!ask.trim()) return;
-                setState("changes");
-                setAsking(false);
+                if (note.trim()) say("Coming soon — timed notes. Use “Ask for changes” to send notes to the creator.");
               }}
             >
-              <label className="br-label" htmlFor="vv-ask">
-                What should {c.name.split(" ")[0]} change?
-              </label>
-              <textarea
-                id="vv-ask"
-                className="br-input"
-                rows={3}
-                value={ask}
-                autoFocus
-                onChange={(e) => setAsk(e.target.value)}
-                placeholder="e.g. Please say the price once and keep the serum close-up 2 sec longer."
-              />
-              <div className="vv-ask__btns">
-                <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => setAsking(false)}>
-                  Cancel
+              <Clock size={14} />
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note…" />
+              {note.trim() && (
+                <button type="submit" className="br-btn br-btn--soft br-btn--sm">
+                  Add
                 </button>
-                <button type="submit" className="br-btn br-btn--primary br-btn--sm" disabled={!ask.trim()}>
-                  <Send size={13} /> Send to {c.name.split(" ")[0]}
-                </button>
-              </div>
+              )}
             </form>
-          )}
 
-          {state ? (
-            <div className={`vv-result vv-result--${state}`}>
-              <span>{state === "approved" ? <Check size={15} /> : <Edit size={14} />}</span>
-              <div>
-                <strong>{state === "approved" ? "Video approved — it can go live" : "Changes requested"}</strong>
-                <small>
-                  {state === "approved"
-                    ? `${c.name} gets a WhatsApp now and posts on the agreed date. You’ll see views in the campaign.`
-                    : `${c.name} gets your notes on WhatsApp. The new cut comes back here for your OK.`}
-                </small>
+            {asking && !state && (
+              <form className="vv-ask" onSubmit={sendChanges}>
+                <label className="br-label" htmlFor="vv-ask">
+                  What should {first} change?
+                </label>
+                <textarea
+                  id="vv-ask"
+                  className="br-input"
+                  rows={3}
+                  maxLength={800}
+                  value={ask}
+                  autoFocus
+                  onChange={(e) => {
+                    setAsk(e.target.value);
+                    setErr("");
+                  }}
+                  placeholder="e.g. Show the product in the first 3 seconds and say the brand name clearly."
+                />
+                {err && <p className="vv-err">{err}</p>}
+                <div className="vv-ask__btns">
+                  <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => setAsking(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="br-btn br-btn--primary br-btn--sm" disabled={!ask.trim() || busy}>
+                    <Send size={13} /> {busy ? "Sending…" : `Send to ${first}`}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {state ? (
+              <div className={`vv-result vv-result--${state}`}>
+                <span>{state === "approved" ? <Check size={15} /> : <Edit size={14} />}</span>
+                <div>
+                  <strong>{state === "approved" ? "Video approved — it can go live" : "Changes requested"}</strong>
+                  <small>
+                    {state === "approved"
+                      ? `${c.name} is told to post it. You’ll see views in the campaign.`
+                      : `${c.name} gets your notes. The new cut comes back here for your OK.`}
+                  </small>
+                </div>
+                <Link href="/brands/approvals/videos" className="vv-undo">
+                  Next video
+                </Link>
               </div>
-              <button type="button" className="vv-undo" onClick={() => setState(null)}>
-                Undo
-              </button>
-            </div>
-          ) : (
-            !asking && (
-              <div className="vv-actions">
-                <button type="button" className="br-btn br-btn--ghost" onClick={() => setAsking(true)}>
-                  <Edit size={14} /> Ask for changes
-                </button>
-                <button type="button" className="br-btn br-btn--primary" onClick={() => setState("approved")}>
-                  <Check size={14} /> Approve video
-                </button>
-              </div>
-            )
-          )}
+            ) : !a.can ? (
+              <p className="vv-caption vv-muted vv-view">👁 View-only login — videos are approved by your team’s approvers.</p>
+            ) : (
+              !asking && (
+                <div className="vv-actions">
+                  <button type="button" className="br-btn br-btn--ghost" onClick={() => setAsking(true)} disabled={busy}>
+                    <Edit size={14} /> Ask for changes
+                  </button>
+                  <button type="button" className="br-btn br-btn--primary" onClick={approve} disabled={busy}>
+                    <Check size={14} /> {busy ? "Approving…" : "Approve video"}
+                  </button>
+                </div>
+              )
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {toast}
 
       <style>{`
         .vv { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 28px; padding: 22px; }
@@ -274,7 +293,15 @@ export default function VideoReview() {
           .vv { padding: 16px; gap: 18px; }
           .vv-actions .br-btn { flex: 1; }
         }
-      `}</style>
+              .vv-embed { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; object-fit: contain; }
+        .vv-phone__top, .vv-phone__bottom { position: relative; z-index: 1; pointer-events: none; }
+        .vv-phone__top *, .vv-phone__bottom a { pointer-events: auto; }
+        .vv-open { display: inline-flex; align-items: center; gap: 5px; color: #fff; text-decoration: none; padding: 3px 8px; border-radius: 6px; background: rgba(0,0,0,.35); }
+        a.vv-play { text-decoration: none; position: relative; z-index: 1; }
+        .vv-muted { color: var(--br-muted); font-size: 13px; }
+        .vv-view { margin-top: 22px; }
+        .vv-err { margin: 8px 0 0; font-size: 12.5px; font-weight: 600; color: var(--br-red); }
+`}</style>
     </BrandShell>
   );
 }

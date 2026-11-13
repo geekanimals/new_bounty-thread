@@ -1,10 +1,8 @@
-import { SCREENING } from "@/components/admin/queue/queueData";
-
-/* /admin/applications/screening/<item> — drawer */
+/* id database se aata hai (UUID) — sirf ek sample pehle se banta hai, baaki pehli baar khulne par */
 export function generateStaticParams() {
-  return SCREENING.map((id) => ({ id }));
+  return [{ id: "sample" }];
 }
 
-export default function ScreeningItemLayout({ children }) {
+export default function IdLayout({ children }) {
   return children;
 }

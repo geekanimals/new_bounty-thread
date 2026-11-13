@@ -5,67 +5,115 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { useToast, downloadFile } from "@/components/admin/campaign2/kit";
-import { UploadCard, MsgOff, SAMPLE_ROWS, saveUpload } from "@/components/admin/campaign2/upload";
+import { useToast, downloadFile, downloadXlsx, TableState, when } from "@/components/admin/campaign2/kit";
+import { useRpc, rpc, errText } from "@/lib/supabase";
+import { UploadCard, MsgOff, saveUpload, buildUpload, readUploadFile, readPasted, readSheetLink, statusesFor, useUploadKind, KIND_LABEL } from "@/components/admin/campaign2/upload";
 
-const HISTORY = [
-  ["12 Nov, 6:10 pm", "Mysore creators.xlsx", 4, 2, 2, "Mayank"],
-  ["11 Nov, 4:10 pm", "Google Sheet · Olio list", 12, 12, 0, "Shivam"],
-];
-
-const GUIDE = [
-  ["1 Applied", "Added, waiting for screening", "—", "—"],
-  ["2 Screened", "Checked against the brand’s criteria", "—", "—"],
-  ["3 Sent to brand", "On the brand’s final list", "—", "—"],
-  ["4 Approved", "Contract goes out once their fee is set", "Fee", "✉️ Invite"],
-  ["5 Contract sent", "Creator signs in the app", "—", "✉️ Sign your contract"],
-  ["6 Contract signed", "Confirms address + adds bank / UPI", "—", "✉️ Confirm address"],
-  ["7 Address confirmed", "Reads the video brief · you add courier", "Address, City, State, PIN", "—"],
-  ["8 Courier sent", "Creator can track it", "Courier, Tracking", "✉️ Product shipped"],
-  ["9 Courier delivered", "Video deadline starts", "Courier, Tracking", "✉️ Delivered"],
-  ["10 Video brief sent", "Creator shoots", "Courier", "—"],
-  ["11 Video submitted", "Waiting for client approval", "Video link", "—"],
-  ["12 Client approved", "Creator can post", "Video link", "✉️ Go live"],
-  ["13 Posted", "Post is live · insights start", "Post link", "✉️ Thank you"],
-];
+// 📄 Campaign sheet ke columns — purane SH_COLS jaisa (bulk upload wale hi columns, wapas upload ho sake)
+const SH_COLS = [["Name", "name"], ["Instagram", "instagram"], ["WhatsApp", "whatsapp"], ["Email", "email"], ["City", "city"], ["Status", "status"], ["Address", "address"], ["State", "state"], ["PIN code", "pincode"], ["Courier", "courier"], ["Tracking", "tracking"], ["Video link", "video_link"], ["Post link", "post_link"]];
+const SHIP = ["Address", "State", "PIN code", "Courier", "Tracking"];
 
 /**
  * Bulk upload step 1 — 3 roop (har ek apna route):
  *  mode="upload"  → /upload
  *  mode="help"    → /upload/help (guide drawer khula)
  *  mode="history" → /upload/history (upload history khuli)
+ * Data: api.campaign_sheet_rows + api.campaign_sheet_link_get (download / Google Sheet), api.campaign_upload_history (history).
+ * Sheet padhna browser mein (Excel / CSV / Word / Google Sheet / paste) → sessionStorage → /match.
  */
 export default function UploadStart({ id, mode = "upload" }) {
   const router = useRouter();
   const fileRef = useRef(null);
   const [toast, show] = useToast();
-  const [which, setWhich] = useState("All creators (22)");
-  const [gsheet, setGsheet] = useState("");
-  const [link, setLink] = useState("");
+  const kind = useUploadKind(id);
+  const skip = !id || id === "sample";
+  const sheet = useRpc("admin", "api.campaign_sheet_rows", { p_campaign: id }, { skip });
+  const link = useRpc("admin", "api.campaign_sheet_link_get", { p_campaign: id }, { skip });
+  const hist = useRpc("admin", "api.campaign_upload_history", { p_campaign: id }, { skip: skip || mode !== "history" });
+  const [step, setStep] = useState("");
+  const [gsheet, setGsheet] = useState(null); // null = jo link saved hai wahi dikhao
+  const [sheetUrl, setSheetUrl] = useState("");
   const [paste, setPaste] = useState("");
+  const [busy, setBusy] = useState("");
   const base = `/admin/campaigns/${id}/upload`;
+  const steps = statusesFor(kind);
+  const guide = steps.map((s, i) => [`${i + 1} ${s[1]}`, s[2], s[4] || "—", s[3] === "no message" ? "—" : `✉️ ${s[3]}`]);
 
-  const start = (source) => {
-    saveUpload(id, { source, rows: SAMPLE_ROWS });
-    router.push(`${base}/match`);
+  const rows = (sheet.data && sheet.data.rows) || [];
+  const cnt = (k) => rows.filter((r) => (k === "" ? true : k === "out" ? /^Out/.test(r.status || "") : r.status_key === k && !/^Out/.test(r.status || ""))).length;
+  const opts = [["", "All creators"], ...steps.map((s) => [s[0], s[1]]), ["out", "Out of the campaign"]];
+  const saved = link.data || null;
+  const gval = gsheet == null ? (saved && saved.sheet_url) || "" : gsheet;
+
+  // sheet → match step
+  const start = (src, aoa) => {
+    try {
+      const up = buildUpload(aoa, src, kind);
+      if (!up.rows.length) return show("That sheet has no creator rows.");
+      saveUpload(id, up);
+      router.push(`${base}/match`);
+    } catch (e) {
+      show(errText(e));
+    }
   };
-
-  const onFile = (e) => {
+  const onFile = async (e) => {
     const f = e.target.files?.[0];
+    e.target.value = "";
     if (!f) return;
-    if (!/\.(xlsx|xls|csv|docx?|txt)$/i.test(f.name)) return show("Use an Excel, CSV or Word file");
-    start(f.name);
+    setBusy("file");
+    try {
+      start(f.name, await readUploadFile(f));
+    } catch (er) {
+      show(errText(er));
+    }
+    setBusy("");
+  };
+  const loadLink = async () => {
+    const u = sheetUrl.trim();
+    if (!u) return show("Paste a Google Sheet link first");
+    setBusy("link");
+    try {
+      start("Google Sheet", await readSheetLink(u));
+    } catch (er) {
+      show(errText(er));
+    }
+    setBusy("");
   };
 
-  const download = (kind) => {
-    downloadFile(`campaign-sheet.${kind === "Excel" ? "csv" : "csv"}`, [["Name", "Instagram", "WhatsApp", "Email", "City", "Status"], ...SAMPLE_ROWS.map((r) => [r.name, r.ig, r.wa, r.email, r.city, r.status])]);
-    show(`${which} downloaded as ${kind}`);
+  // ⬇ campaign sheet (purane shDownload jaisa)
+  const download = async (fmt) => {
+    const list = rows.filter((r) => (step === "" ? true : step === "out" ? /^Out/.test(r.status || "") : r.status_key === step && !/^Out/.test(r.status || "")));
+    if (!list.length) return show("No creators to download for that choice.");
+    const cols = SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h)));
+    const aoa = [cols.map((c) => c[0]), ...list.map((r) => cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : r[k] == null ? "" : String(r[k]))))];
+    const lab = step ? (opts.find((o) => o[0] === step) || [])[1] || step : "";
+    const nm = `${String(sheet.data.campaign || "campaign").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "campaign"}-creators${lab ? "-" + lab.replace(/[^\w]+/g, "-").toLowerCase() : ""}`;
+    try {
+      if (fmt === "csv") downloadFile(nm + ".csv", aoa);
+      else await downloadXlsx(nm + ".xlsx", aoa, "Creators");
+      show(`⬇ ${list.length} creator${list.length !== 1 ? "s" : ""} downloaded — same columns as the bulk upload, so you can upload it again`);
+    } catch (e) {
+      show(errText(e));
+    }
   };
+  const linkSheet = async (e) => {
+    e.preventDefault();
+    const u = gval.trim();
+    if (u && !/^https:\/\/docs\.google\.com\/spreadsheets\//i.test(u)) return show("Paste the Google Sheet link (https://docs.google.com/spreadsheets/…)");
+    setBusy("gs");
+    const { error } = await rpc("admin", "api.campaign_sheet_link", { p_campaign: id, p_sheet_url: u || null, p_new_token: false });
+    setBusy("");
+    if (error) return show(errText(error));
+    show("🔗 Sheet linked — the sheet’s Apps Script keeps it up to date");
+    setGsheet(null);
+    link.reload(true);
+  };
+  const ups = (hist.data && hist.data.uploads) || [];
 
   return (
     <AdminShell>
       <WorkspaceHead id={id} />
-      <UploadCard step={1}>
+      <UploadCard id={id} step={1}>
         <div className="us-sheet">
           <p className="us-sheet__t">
             <b>📄 Campaign sheet</b> <span>— every creator in the same columns as the bulk upload: download it, edit it, upload it again · or link a Google Sheet that keeps itself up to date</span>
@@ -73,48 +121,50 @@ export default function UploadStart({ id, mode = "upload" }) {
           <div className="us-row">
             <span className="us-lab">⬇️ Download</span>
             <div className="us-ctl">
-              <select className="ad-input us-sel" value={which} onChange={(e) => setWhich(e.target.value)} aria-label="Which creators">
-                <option>All creators (22)</option>
-                <option>Approved (8)</option>
-                <option>Not posted yet (14)</option>
+              <select className="ad-input us-sel" value={step} onChange={(e) => setStep(e.target.value)} aria-label="Which creators">
+                {opts.map(([k, l]) => {
+                  const n = sheet.data ? cnt(k) : null;
+                  if (k && n === 0) return null;
+                  return (
+                    <option key={k} value={k}>
+                      {l}
+                      {n != null ? ` (${n})` : ""}
+                    </option>
+                  );
+                })}
               </select>
-              <button type="button" className="ad-btn ad-btn--primary us-b" onClick={() => download("Excel")}>
+              <button type="button" className="ad-btn ad-btn--primary us-b" onClick={() => download("xlsx")} disabled={!sheet.data}>
                 ⬇️ Excel
               </button>
-              <button type="button" className="ad-btn ad-btn--ghost us-b" onClick={() => download("CSV")}>
+              <button type="button" className="ad-btn ad-btn--ghost us-b" onClick={() => download("csv")} disabled={!sheet.data}>
                 ⬇️ CSV
               </button>
               <span className="us-or">or</span>
-              <button type="button" className="c2-tbtn" onClick={() => show("Tick creators in the Creators tab first")}>
+              <button type="button" className="c2-tbtn" onClick={() => show("Tick creators in the Creators tab and download from there")} title="Tick creators in the Creators tab first">
                 ⬇️ Only the ticked (0)
               </button>
             </div>
           </div>
+          {sheet.error && <p className="us-err">{errText(sheet.error)}</p>}
           <div className="us-row">
             <span className="us-lab">
               🔗 Google{" "}
               <br />
               Sheet
             </span>
-            <form
-              className="us-ctl"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!/docs\.google\.com\/spreadsheets/.test(gsheet)) return show("Paste a docs.google.com/spreadsheets link");
-                show("Google Sheet linked — it syncs every 15 minutes");
-              }}
-            >
-              <input className="ad-input us-link" value={gsheet} onChange={(e) => setGsheet(e.target.value)} placeholder="Paste your Google Sheet link (https://docs.google.com/spreadsheets/…)" aria-label="Google Sheet link" />
-              <button type="submit" className="ad-btn ad-btn--primary us-b">
-                Link it
+            <form className="us-ctl" onSubmit={linkSheet}>
+              <input className="ad-input us-link" value={gval} onChange={(e) => setGsheet(e.target.value)} placeholder="Paste your Google Sheet link (https://docs.google.com/spreadsheets/…)" aria-label="Google Sheet link" />
+              <button type="submit" className="ad-btn ad-btn--primary us-b" disabled={busy === "gs"}>
+                {busy === "gs" ? "Saving…" : saved ? "Save" : "Link it"}
               </button>
             </form>
           </div>
+          {saved && saved.sheet_url && <p className="us-sync">{saved.last_pull_at ? `✅ Last updated ${when(saved.last_pull_at)} · ${saved.pulls || 0} update${(saved.pulls || 0) !== 1 ? "s" : ""}` : "⏳ Not updated yet — add the Geek OS script in the sheet once"}</p>}
         </div>
 
         {mode !== "history" && (
           <>
-            <MsgOff />
+            <MsgOff id={id} />
             <p className="us-desc">
               Google Sheet link, Excel / CSV, or a Word file (table or a simple list). Give every creator a <b>Status</b>— the exact step they are on. They get <b>one message for that step</b>: Approved → the invite; a later step → only that step’s message. Creators already on Geek OS go on that step now; new ones register, connect Instagram and complete their profile (pre-filled from your sheet) and then land on their step.
             </p>
@@ -122,7 +172,7 @@ export default function UploadStart({ id, mode = "upload" }) {
         )}
 
         <Link href={mode === "help" ? base : `${base}/help`} className="us-fold">
-          ▸ 📘 How to set up your sheet — 🎁💰 Barter + Paid campaign template
+          ▸ 📘 How to set up your sheet — {KIND_LABEL[kind]} template
         </Link>
         {mode === "history" ? (
           <div className="us-fold us-fold--open">
@@ -142,13 +192,21 @@ export default function UploadStart({ id, mode = "upload" }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {HISTORY.map((h) => (
-                    <tr key={h[0]}>
-                      {h.map((v, i) => (
-                        <td key={i}>{v}</td>
-                      ))}
-                    </tr>
-                  ))}
+                  <TableState cols={6} loading={hist.loading && !hist.data} error={!hist.data && hist.error} onRetry={hist.reload} empty={hist.data && !ups.length && "No bulk upload on this campaign yet."} />
+                  {ups.map((u, i) => {
+                    const nu = (u.not_uploaded || []).length || u.skipped || 0;
+                    const ok = (u.new_count || 0) + (u.updated_count || 0);
+                    return (
+                      <tr key={u.batch_id || i}>
+                        <td>{when(u.at)}</td>
+                        <td title={u.note || ""}>{u.source || u.file || "Bulk upload"}</td>
+                        <td>{ok + nu}</td>
+                        <td>{ok}</td>
+                        <td title={(u.not_uploaded || []).slice(0, 10).map((x) => `Row ${x.row}: ${x.reason}`).join("\n")}>{nu}</td>
+                        <td>{u.who || "—"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -160,13 +218,13 @@ export default function UploadStart({ id, mode = "upload" }) {
         )}
 
         <div className="us-act">
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.doc,.docx,.txt" hidden onChange={onFile} />
-          <button type="button" className="ad-btn ad-btn--primary" onClick={() => fileRef.current?.click()}>
-            📄 Choose file
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.doc,.docx,.txt" hidden onChange={onFile} />
+          <button type="button" className="ad-btn ad-btn--primary" onClick={() => fileRef.current?.click()} disabled={busy === "file"}>
+            {busy === "file" ? "Reading…" : "📄 Choose file"}
           </button>
-          <input className="ad-input us-paste" value={link} onChange={(e) => setLink(e.target.value)} placeholder="or paste a Google Sheet link" aria-label="Google Sheet link" />
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={() => (link.trim() ? start("Google Sheet") : show("Paste a Google Sheet link first"))}>
-            Load sheet
+          <input className="ad-input us-paste" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="or paste a Google Sheet link" aria-label="Google Sheet link to upload" />
+          <button type="button" className="ad-btn ad-btn--ghost" onClick={loadLink} disabled={busy === "link"}>
+            {busy === "link" ? "Loading…" : "Load sheet"}
           </button>
           <Link href={`/admin/campaigns/${id}/find`} className="ad-btn ad-btn--ghost">
             🎯 Pick from Geek OS instead
@@ -175,7 +233,7 @@ export default function UploadStart({ id, mode = "upload" }) {
         <details className="us-rows">
           <summary>…or paste rows (copy cells from Sheets / Excel / Word)</summary>
           <textarea className="ad-input" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={"Name\tInstagram\tWhatsApp\tStatus\nAsha Rao\t@asha.creates\t+91 98765 43210\tApproved"} rows={5} />
-          <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" onClick={() => (paste.trim() ? start("pasted rows") : show("Paste some rows first"))}>
+          <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" onClick={() => (paste.trim() ? start("pasted rows", readPasted(paste)) : show("Paste some rows first"))}>
             Use these rows
           </button>
         </details>
@@ -189,10 +247,11 @@ export default function UploadStart({ id, mode = "upload" }) {
             </Link>
             <p className="us-eye">Bulk upload · Guide</p>
             <h2>📘 How to set up your sheet</h2>
-            <p className="us-gsub">🎁💰 Barter + Paid campaign template · one creator per row · keep the first row as column names</p>
+            <p className="us-gsub">{KIND_LABEL[kind]} template · one creator per row · keep the first row as column names</p>
             <h3>📝 Step by step</h3>
             <p className="us-gtxt">
-              1. Download the template (Excel or CSV) or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it is put one step back until you add it.
+              1. Download the campaign sheet (Excel or CSV) or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it can’t go on that step until you add it.
+              {kind !== "barter" ? " 6. Fee, Advance %, Pay days, UPI / Account no + IFSC columns set each creator’s payment as they land." : ""}
             </p>
             <hr />
             <h3>🏷 Statuses — write exactly this in the Status column</h3>
@@ -207,7 +266,7 @@ export default function UploadStart({ id, mode = "upload" }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {GUIDE.map((g) => (
+                  {guide.map((g) => (
                     <tr key={g[0]}>
                       {g.map((v, i) => (
                         <td key={i}>{v}</td>
@@ -223,6 +282,7 @@ export default function UploadStart({ id, mode = "upload" }) {
       {toast}
 
       <style>{`
+
         .us-sheet { padding: 22px 20px 34px; border: 1px solid var(--ad-line); border-radius: 14px; }
         .us-sheet__t { font-size: 12px; line-height: 1.4; color: var(--ad-muted); }
         .us-sheet__t b { font-size: 14px; font-weight: 700; color: var(--ad-ink); }
@@ -277,6 +337,8 @@ export default function UploadStart({ id, mode = "upload" }) {
           .us-x { right: 18px; top: 18px; }
           .us-guide h2 { font-size: 21px; padding-right: 40px; }
         }
+        .us-err { margin-top: 10px; font-size: 12px; color: #d4493f; }
+        .us-sync { margin-top: 12px; font-size: 12px; color: var(--ad-muted); }
       `}</style>
     </AdminShell>
   );

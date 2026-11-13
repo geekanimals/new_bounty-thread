@@ -1,38 +1,37 @@
 "use client";
 
 import { useState } from "react";
+import { invoke, useRpc, errText } from "@/lib/supabase";
 import AdminShell from "@/components/admin/AdminShell";
 import DiscoveryHead from "@/components/admin/discovery/DiscoveryHead";
 
-const POSTS = {
-  top: [
-    ["@homewithriya", "2.4k", 86],
-    ["@decor.daily", "1.8k", 41],
-    ["@thefestiveedit", "3.1k", 120],
-    ["@nestandnook", "0.9k", 22],
-  ],
-  recent: [
-    ["@nestandnook", "0.9k", 22],
-    ["@diyadesigns", "0.4k", 12],
-    ["@homewithriya", "2.4k", 86],
-    ["@rangoli.by.ritu", "0.2k", 9],
-  ],
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
+const ago = (t) => {
+  if (!t) return "";
+  const d = Math.round((Date.now() - new Date(t).getTime()) / 86400000);
+  return d < 1 ? "today" : d < 7 ? d + "d ago" : d < 60 ? Math.round(d / 7) + "w ago" : Math.round(d / 30) + "mo ago";
 };
 
-/* Discovery → Hashtag search (Figma 054) */
+/* Discovery → Hashtag search (Figma 054) — ig-discover {action:"hashtag", edge:"both"} (purane app jaisa) */
 export default function DiscoveryHashtag() {
   const [tag, setTag] = useState("");
   const [mode, setMode] = useState("top");
-  const [shown, setShown] = useState({ tag: "#diwalidecor", mode: "top" });
-  const [used, setUsed] = useState(1);
+  const [st, setSt] = useState({ data: null, busy: false, error: "" });
+  // kis Instagram se search ho raha hai (team ka Facebook connection)
+  const { data: dc } = useRpc("admin", "my_discovery_connection", {});
+  const igName = dc && ((dc.team && dc.team.ig_username) || dc.ig_username);
 
-  const search = (e) => {
+  const search = async (e) => {
     e?.preventDefault();
-    const t = tag.trim().replace(/^#?/, "#");
-    const next = t.length > 1 ? t : "#diwalidecor";
-    if (next !== shown.tag) setUsed((u) => Math.min(30, u + 1));
-    setShown({ tag: next, mode });
+    const q = tag.trim().replace(/^#/, "").replace(/\s+/g, "").toLowerCase();
+    if (!/^[\p{L}\p{N}_]{2,60}$/u.test(q)) return setSt((s) => ({ ...s, error: "Type a hashtag — letters, numbers or _ only." }));
+    setSt({ data: null, busy: true, error: "" });
+    const r = await invoke("admin", "ig-discover", { action: "hashtag", tag: q, edge: "both" });
+    if (r.error || !r.data) return setSt({ data: null, busy: false, error: errText(r.error) || "Couldn't reach Instagram." });
+    setSt({ data: r.data, busy: false, error: "" });
   };
+  const d = st.data;
+  const posts = d ? (mode === "recent" ? d.recent || [] : d.posts || []) : [];
 
   return (
     <AdminShell>
@@ -43,7 +42,7 @@ export default function DiscoveryHashtag() {
             <h2 className="ad-h2">Hashtag search</h2>
             <p className="dg-sub">See the top and most recent public posts using a hashtag on Instagram.</p>
           </div>
-          <span className="ad-badge">Searching with @geekanimals</span>
+          <span className="ad-badge">{igName ? `Searching with @${igName}` : "Searching with the team's Instagram"}</span>
         </div>
         <form className="dg-row" onSubmit={search}>
           <input className="ad-input dg-q" placeholder="#diwalidecor" value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Hashtag" />
@@ -58,37 +57,56 @@ export default function DiscoveryHashtag() {
                 role="tab"
                 aria-selected={mode === k}
                 className={`ad-tab ${mode === k ? "is-on" : ""}`}
-                onClick={() => {
-                  setMode(k);
-                  setShown((s) => ({ ...s, mode: k }));
-                }}
+                onClick={() => setMode(k)}
               >
                 {l}
               </button>
             ))}
           </div>
-          <button type="submit" className="ad-btn ad-btn--primary dg-go">
-            🔎 Search
+          <button type="submit" className="ad-btn ad-btn--primary dg-go" disabled={st.busy}>
+            {st.busy ? "Searching…" : "🔎 Search"}
           </button>
         </form>
         <p className="dg-note">
           <span>ℹ️</span> Meta allows 30 different hashtags per 7 days for each connected account.
-          {used > 1 && <b> {used}/30 used this week.</b>}
+          {" "}Searching the same hashtag again is free.
         </p>
-        <div className="dg-grid">
-          {POSTS[shown.mode].map(([h, likes, com]) => (
-            <div key={h + shown.mode} className="dg-post">
-              <span className="dg-img" />
-              <strong>{h}</strong>
-              <small>
-                ❤️ {likes} · 💬 {com}
-              </small>
-              <a href={`https://www.instagram.com/explore/tags/${shown.tag.slice(1)}/`} target="_blank" rel="noreferrer">
-                Open post ↗
+        {st.error && <p className="dg-empty">{st.error}</p>}
+        {d && !!(d.handles || []).length && (
+          <p className="dg-handles">
+            Accounts tagged in these posts:{" "}
+            {d.handles.slice(0, 30).map((h) => (
+              <a key={h} href={`/admin/discovery/business?u=${encodeURIComponent(h)}`}>
+                @{h}
               </a>
-            </div>
-          ))}
+            ))}
+          </p>
+        )}
+        <div className="dg-grid">
+          {posts.map((m, i) => {
+            const vid = m.media_type === "VIDEO";
+            const img = m.thumbnail_url || (!vid && m.media_url) || "";
+            return (
+              <div key={(m.id || m.permalink || "") + i} className="dg-post">
+                <span className="dg-img">{img && <img src={img} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />}</span>
+                <strong>{m.caption ? String(m.caption).slice(0, 40) : vid ? "▶ Reel" : "📷 Post"}</strong>
+                <small>
+                  ❤️ {fmt(m.like_count)} · 💬 {fmt(m.comments_count)}
+                  {m.timestamp ? ` · ${ago(m.timestamp)}` : ""}
+                </small>
+                {m.permalink && (
+                  <a href={m.permalink} target="_blank" rel="noopener noreferrer">
+                    Open post ↗
+                  </a>
+                )}
+              </div>
+            );
+          })}
         </div>
+        {st.busy && <p className="dg-empty">Searching Instagram…</p>}
+        {d && !posts.length && <p className="dg-empty">{mode === "recent" ? "No recent posts." : "No top posts."}</p>}
+        {!d && !st.busy && !st.error && <p className="dg-empty">Type a hashtag — e.g. diwalidecor, delhifoodblogger, skincare.</p>}
+        {d && <p className="dg-empty">Instagram doesn&apos;t say who posted a hashtag post — open a post to see the creator.</p>}
       </section>
 
       <style>{`
@@ -105,7 +123,12 @@ export default function DiscoveryHashtag() {
         .dg-note b { font-weight: 700; }
         .dg-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 17px; }
         .dg-post { display: flex; flex-direction: column; padding: 20px 19px 20px; border-radius: 16px; border: 1px solid var(--ad-line); }
-        .dg-img { display: block; aspect-ratio: 220 / 120; border-radius: 12px; background: #ebe7fc; margin-bottom: 12px; }
+        .dg-img { display: block; aspect-ratio: 220 / 120; overflow: hidden; border-radius: 12px; background: #ebe7fc; margin-bottom: 12px; }
+        .dg-img img { width: 100%; height: 100%; object-fit: cover; }
+        .dg-post strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dg-empty { margin-top: 14px; font-size: 12.5px; color: var(--ad-muted); }
+        .dg-handles { margin-top: 14px; font-size: 12.5px; color: var(--ad-muted); line-height: 1.8; }
+        .dg-handles a { margin-right: 8px; font-weight: 700; color: #6151ea; }
         .dg-post strong { font-size: 14px; font-weight: 700; }
         .dg-post small { margin-top: 2px; font-size: 12px; color: var(--ad-muted); }
         .dg-post a { margin-top: 3px; font-size: 14px; font-weight: 800; color: #6151ea; }

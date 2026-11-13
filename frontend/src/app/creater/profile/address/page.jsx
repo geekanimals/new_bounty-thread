@@ -1,29 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
+import { useSession, useCreator, geoLookup, saveAddress, setDefaultAddress, deleteAddress, INDIA_STATES, canonState, phone10 } from "@/services/creator";
 import { Check, Pin, Trash, Edit } from "@/components/ui/Icons";
 
-const STATES = ["Andhra Pradesh", "Assam", "Bihar", "Chandigarh", "Chhattisgarh", "Delhi", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jammu & Kashmir", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Odisha", "Punjab", "Rajasthan", "Tamil Nadu", "Telangana", "Uttar Pradesh", "Uttarakhand", "West Bengal"];
-
-// Dummy PIN lookup — asli app mein PIN API se aayega
-const PINS = {
-  "302001": { city: "Jaipur", state: "Rajasthan" },
-  "302017": { city: "Jaipur", state: "Rajasthan" },
-  "110001": { city: "New Delhi", state: "Delhi" },
-  "400001": { city: "Mumbai", state: "Maharashtra" },
-  "560001": { city: "Bengaluru", state: "Karnataka" },
-};
 
 // Figma: shuru mein koi saved address nahi (empty) — save karne par list banti hai
-const EMPTY = { flat: "", area: "", landmark: "", city: "", state: "", pin: "", name: "Shivam Rathore", phone: "8936096607", notes: "", label: "Home" };
+const EMPTY = { flat: "", area: "", landmark: "", city: "", state: "", pin: "", name: "", phone: "", notes: "", label: "Home" };
+// "Save as": screen ka Work = database ka Office (purane app ke labels)
+const LABEL_DB = { Home: "Home", Work: "Office", Other: "Other" };
+const LABEL_UI = (l) => (l === "Office" ? "Work" : ["Home", "Other"].includes(l) ? l : l ? "Other" : "Home");
+const geo = (body) => geoLookup(body).then((r) => r.data || null);
 
-/** /creater/profile/address — brands kit kahan bhejein (saved list + naya address) */
+/** database address → form / list shape */
+const fromDb = (a) => ({
+  id: a.address_id,
+  flat: a.line1 || "",
+  area: a.line2 || "",
+  landmark: a.landmark || "",
+  city: a.city || "",
+  state: canonState(a.state) || a.state || "",
+  pin: a.postal_code || "",
+  name: a.recipient_name || "",
+  phone: phone10(a.recipient_phone),
+  notes: a.delivery_instructions || "",
+  label: LABEL_UI(a.label),
+  isDefault: !!a.is_default,
+  lat: a.lat,
+  lng: a.lng,
+});
+
+/** /creater/profile/address — brands kit kahan bhejein (saved list + naya address) — upsert_address / delete_address */
 export default function Address() {
-  const [s, update] = useSession();
-  const [list, setList] = useState([]);
+  const [s] = useSession();
+  const c = useCreator();
+  const list = (c.profile?.addresses || []).map(fromDb).sort((x, y) => (y.isDefault ? 1 : 0) - (x.isDefault ? 1 : 0));
   const [makeDefault, setMakeDefault] = useState(true);
   const [f, setF] = useState(EMPTY);
   const [editId, setEditId] = useState(null);
@@ -31,56 +44,126 @@ export default function Address() {
   const [notesOpen, setNotesOpen] = useState(true);
   const [tried, setTried] = useState(false);
   const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pinInfo, setPinInfo] = useState(null);
+  const [coords, setCoords] = useState(null);
+  const filled = useRef(false);
 
+  // Receiver: apna naam + WhatsApp number pehle se
   useEffect(() => {
-    if (s.addresses?.length) setList(s.addresses);
-  }, [s.addresses]);
+    if (filled.current || !c.ready || !c.profile) return;
+    filled.current = true;
+    setF((x) => ({ ...x, name: x.name || s.name || "", phone: x.phone || phone10(s.phone) }));
+    if ((c.profile.addresses || []).length) setMakeDefault(false);
+  }, [c, s.name, s.phone]);
 
   const flash = (t) => {
     setToast(t);
-    setTimeout(() => setToast(""), 2200);
-  };
-  const save = (next) => {
-    setList(next);
-    update({ addresses: next });
+    setTimeout(() => setToast(""), 2400);
   };
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-
-  // PIN: 6 digit hote hi city/state bhar do
-  const setPin = (e) => {
+  // PIN: 6 digit hote hi city/state (geo-lookup "pincode" — India Post)
+  const setPin = async (e) => {
     const pin = e.target.value.replace(/\D/g, "").slice(0, 6);
-    const hit = PINS[pin];
-    setF((x) => ({ ...x, pin, ...(hit || {}) }));
+    setF((x) => ({ ...x, pin }));
+    setPinInfo(null);
+    if (!/^[1-9]\d{5}$/.test(pin)) return;
+    const r = await geo({ action: "pincode", pin });
+    if (r && r.ok) {
+      setPinInfo(r);
+      setF((x) => ({ ...x, city: x.city || r.city || r.district || "", state: canonState(r.state) || x.state }));
+    }
   };
-
+  // 📍 current location → geo-lookup "reverse"
   const useLocation = () => {
-    setF((x) => ({ ...x, flat: "B-204, Green Park Society", area: "Malviya Nagar, Sector 7", landmark: "Near Apollo Pharmacy", city: "Jaipur", state: "Rajasthan", pin: "302017" }));
-    setSearch("Malviya Nagar, Jaipur");
-    flash("Location found — check the details");
+    if (!navigator.geolocation) return flash("Location isn't available in this browser — type the address.");
+    flash("📍 Locating…");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const r = await geo({ action: "reverse", lat: pos.coords.latitude, lon: pos.coords.longitude });
+        if (!r || !r.ok) return flash("Couldn't look up your address — please type it.");
+        setF((x) => ({
+          ...x,
+          flat: r.house || x.flat,
+          area: r.street || x.area,
+          landmark: r.landmark ? "Near " + r.landmark : x.landmark,
+          city: r.city || x.city,
+          state: canonState(r.state) || x.state,
+          pin: r.pin ? String(r.pin).replace(/\D/g, "").slice(0, 6) : x.pin,
+        }));
+        setCoords({ lat: r.lat, lon: r.lon });
+        setSearch([r.street, r.city].filter(Boolean).join(", "));
+        flash("Location found — check the flat / house number");
+      },
+      () => flash("Location permission was denied — type the address."),
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
   };
-
   const req = ["pin", "city", "state", "flat", "area", "landmark", "name", "phone"];
   const bad = (k) => tried && (!f[k] || (k === "pin" && f.pin.length !== 6) || (k === "phone" && f.phone.length !== 10));
   const valid = req.every((k) => f[k]) && f.pin.length === 6 && f.phone.length === 10;
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setTried(true);
-    if (!valid) return;
-    if (editId) {
-      save(list.map((a) => (a.id === editId ? { ...a, ...f } : a)));
-      flash("Address updated");
-    } else {
-      const def = makeDefault || list.length === 0;
-      save([...list.map((x) => (def ? { ...x, isDefault: false } : x)), { ...f, id: Date.now(), isDefault: def }]);
-      flash("Address saved");
+    if (!valid || busy) return;
+    if (f.name.trim().split(/\s+/).length < 2) return flash("Add the receiver's full name (first and last).");
+    if (!/^[6-9]\d{9}$/.test(f.phone)) return flash("Enter a valid 10-digit mobile number.");
+    if (pinInfo && canonState(pinInfo.state) && canonState(pinInfo.state) !== f.state) return flash(`This PIN code is in ${pinInfo.state} — please pick that state.`);
+    setBusy(true);
+    try {
+      // map par address check (geo-lookup "verify") — purane form jaisa
+      const chk = await geo({ action: "verify", pin: f.pin, line1: f.flat.trim(), line2: f.area.trim(), landmark: f.landmark.trim(), city: f.city.trim(), state: f.state });
+      if (chk && chk.ok && chk.pin_ok === false) throw new Error("This PIN code doesn't exist — please check it.");
+      const at = chk && chk.found ? { lat: chk.lat, lon: chk.lon } : coords;
+      const payload = {
+        recipient_name: f.name.trim(),
+        recipient_phone: "+91" + f.phone,
+        line1: f.flat.trim(),
+        line2: f.area.trim(),
+        landmark: f.landmark.trim(),
+        city: f.city.trim(),
+        state: f.state,
+        postal_code: f.pin,
+        country: "India",
+        delivery_instructions: f.notes.trim() || null,
+        lat: at ? Math.round(at.lat * 1e6) / 1e6 : null,
+        lng: at ? Math.round(at.lon * 1e6) / 1e6 : null,
+        map_verified: !!(chk && chk.found && chk.near_pin !== false && chk.state_ok !== false),
+        label: LABEL_DB[f.label] || "Other",
+        is_default: editId ? undefined : makeDefault || list.length === 0,
+      };
+      if (editId) payload.address_id = editId;
+      if (payload.is_default === undefined) delete payload.is_default;
+      await saveAddress(payload);
+      flash(editId ? "Address updated" : "Address saved");
+      setF({ ...EMPTY, name: s.name || "", phone: phone10(s.phone) });
+      setEditId(null);
+      setTried(false);
+      setSearch("");
+      setCoords(null);
+    } catch (ex) {
+      flash("Couldn't save: " + (ex.message || ex));
     }
-    setF(EMPTY);
-    setEditId(null);
-    setTried(false);
-    setSearch("");
+    setBusy(false);
   };
-
+  const makeDef = async (a) => {
+    try {
+      await setDefaultAddress(a.id);
+      flash("Default address updated");
+    } catch (ex) {
+      flash("Couldn't save: " + (ex.message || ex));
+    }
+  };
+  const remove = async (a) => {
+    if (!window.confirm(`Delete your ${a.label} address?`)) return;
+    try {
+      await deleteAddress(a.id);
+      flash("Address deleted");
+    } catch (ex) {
+      flash("Couldn't delete: " + (ex.message || ex));
+    }
+  };
   const edit = (a) => {
     setF({ ...EMPTY, ...a });
     setEditId(a.id);
@@ -119,7 +202,7 @@ export default function Address() {
                 </div>
                 <div className="ad-list__act">
                   {!a.isDefault && (
-                    <button type="button" onClick={() => save(list.map((x) => ({ ...x, isDefault: x.id === a.id })))}>
+                    <button type="button" onClick={() => makeDef(a)}>
                       Make default
                     </button>
                   )}
@@ -129,12 +212,7 @@ export default function Address() {
                   <button
                     type="button"
                     className="is-red"
-                    onClick={() => {
-                      const next = list.filter((x) => x.id !== a.id);
-                      if (a.isDefault && next[0]) next[0] = { ...next[0], isDefault: true };
-                      save(next);
-                      flash("Address deleted");
-                    }}
+                    onClick={() => remove(a)}
                     aria-label={`Delete ${a.label} address`}
                   >
                     <Trash size={13} /> Delete
@@ -180,7 +258,7 @@ export default function Address() {
               </label>
               <select id="ad-state" className="pf-input ad-in" value={f.state} onChange={set("state")}>
                 <option value="">Choose a state</option>
-                {STATES.map((st) => (
+                {INDIA_STATES.map((st) => (
                   <option key={st}>{st}</option>
                 ))}
               </select>
@@ -261,8 +339,8 @@ export default function Address() {
                 Cancel
               </button>
             )}
-            <button type="submit" className="pf-btn ad-save">
-              {editId ? "Update address" : "Save address"}
+            <button type="submit" className="pf-btn ad-save" disabled={busy}>
+              {busy ? "Saving…" : editId ? "Update address" : "Save address"}
             </button>
           </div>
           <p className="ad-foot">Your full address is private, used only for campaign logistics you approve — never shown in search or to brands.</p>

@@ -1,8 +1,6 @@
-import { BILLS } from "@/components/brands/data";
-
-// Har bill ka page build ke time ban jaata hai (page.jsx client hai, isliye params yahan se)
+// Bill ka page: id = invoice_id (Supabase) — build ke time ek sample page, asli id browser mein useParams se
 export function generateStaticParams() {
-  return BILLS.map((b) => ({ id: b.id }));
+  return [{ id: "sample" }];
 }
 
 export default function BillLayout({ children }) {

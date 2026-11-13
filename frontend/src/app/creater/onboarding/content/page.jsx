@@ -1,37 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell, { RumiTip } from "@/components/creater/OnboardShell";
-import { readSession, writeSession } from "@/components/creater/session";
+import { useCreator, saveSection } from "@/services/creator";
 import { CATEGORIES, FORMATS, LANGUAGES, getSidekick } from "@/components/creater/data";
 import { Check } from "@/components/ui/Icons";
 
 const MAX = 3;
+// Formats: screen par label, database mein key (purane app jaisa)
+const FMT_KEY = { Reels: "reel", Stories: "story", Carousels: "carousel", "UGC videos": "ugc" };
+const FMT_LABEL = { reel: "Reels", story: "Stories", carousel: "Carousels", ugc: "UGC videos", post: "Posts", live: "Lives" };
 
 /** /creater/onboarding/content — Setup 1: categories, format, language */
 export default function SetupContent() {
   const router = useRouter();
-  const [cats, setCats] = useState(["lifestyle"]);
+  const [cats, setCats] = useState([]);
   const [custom, setCustom] = useState([]); // apni categories (sirf text)
-  const [formats, setFormats] = useState(["Reels"]);
-  const [langs, setLangs] = useState(["Hindi", "Hinglish"]);
+  const [formats, setFormats] = useState([]);
+  const [langs, setLangs] = useState([]);
   const [extraLangs, setExtraLangs] = useState([]);
   const [addCat, setAddCat] = useState(null); // null = band, string = input value
   const [addLang, setAddLang] = useState(null);
   const [warn, setWarn] = useState("");
-  const [sk, setSk] = useState(getSidekick("rumi"));
+  const [busy, setBusy] = useState(false);
+  const c = useCreator();
+  const sk = getSidekick(c.prefs?.kid);
+  const loaded = useRef(false);
 
+  // Saved profile se bharo (categories label mein save hoti hain — purane app jaisa)
   useEffect(() => {
-    const s = readSession();
-    setCats(s.categories || []);
-    setFormats(s.formats || []);
-    setLangs(s.languages || []);
-    setSk(getSidekick(s.sidekick));
-    const known = CATEGORIES.map((c) => c.id);
-    setCustom((s.categories || []).filter((c) => !known.includes(c)));
-    setExtraLangs((s.languages || []).filter((l) => !LANGUAGES.includes(l)));
-  }, []);
+    if (loaded.current || !c.ready || !c.loggedIn) return;
+    loaded.current = true;
+    const pro = (c.profile && c.profile.professional) || {};
+    const ids = (pro.categories || []).map((x) => (CATEGORIES.find((k) => k.label.toLowerCase() === String(x).toLowerCase()) || {}).id || x);
+    setCats(ids);
+    setCustom(ids.filter((x) => !CATEGORIES.some((k) => k.id === x)));
+    setFormats((pro.content_formats || []).map((f) => FMT_LABEL[f] || f));
+    const L = pro.languages || [];
+    setLangs(L);
+    setExtraLangs(L.filter((l) => !LANGUAGES.includes(l)));
+  }, [c]);
 
   const toggleCat = (id) => {
     if (cats.includes(id)) return setCats(cats.filter((c) => c !== id));
@@ -61,13 +70,31 @@ export default function SetupContent() {
     setAddLang(null);
   };
 
-  const next = (save) => {
-    if (save) writeSession({ categories: cats, formats, languages: langs });
+  // api.save_profile_section("professional") — purane onbStep(1) jaisa
+  const next = async (save) => {
+    if (save) {
+      setBusy(true);
+      try {
+        await saveSection(
+          "professional",
+          {
+            categories: cats.map((id) => (CATEGORIES.find((k) => k.id === id) || {}).label || id),
+            languages: langs,
+            content_formats: formats.map((f) => FMT_KEY[f] || f.toLowerCase()),
+          },
+          "ui-onboard"
+        );
+      } catch (e) {
+        setWarn("Couldn't save: " + (e.message || e));
+        setBusy(false);
+        return;
+      }
+    }
     router.push("/creater/onboarding/brands");
   };
 
   return (
-    <OnboardShell tone="light" step={5} stepText="05 / 06" avatar>
+    <OnboardShell tone="light" step={5} stepText="05 / 06" avatar gate="member">
       <title>What you create — Bounty</title>
       <div className="sc">
         <h2 className="sc-h">
@@ -146,8 +173,8 @@ export default function SetupContent() {
         )}
 
         <RumiTip mobileDark className="sc-rumi" name={sk.name} img={sk.img} text="Pick what you post most — I'll match briefs to it." />
-        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block sc-cta" onClick={() => next(true)} disabled={!cats.length}>
-          Build my creator profile →
+        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block sc-cta" onClick={() => next(true)} disabled={!cats.length || busy}>
+          {busy ? "Saving…" : "Build my creator profile →"}
         </button>
         <p className="sc-skip">
           You can change these anytime ·{" "}

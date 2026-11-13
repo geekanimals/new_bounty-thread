@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useParams, notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import BrandShell from "@/components/brands/BrandShell";
-import { getCreator } from "@/components/brands/data";
+import { BrLoading, BrError, BrAvatar } from "@/components/brands/BrandStates";
+import { useBrand, canAct, reloadPortal, parseCreatorId, useCreatorCard, setFavorite, approveCreator, short as fmt, igUrl } from "@/services/brand";
 import { ArrowLeft, Check, Bookmark, Instagram, Play, Eye, ShieldCheck } from "@/components/ui/Icons";
 
 const POST_G = [
@@ -15,70 +16,121 @@ const POST_G = [
   "linear-gradient(160deg,#21c38a,#9aedc9)",
   "linear-gradient(160deg,#e5484d,#ff9a9e)",
 ];
+const GENDER = { f: "Women", female: "Women", m: "Men", male: "Men", u: "Others" };
+const pct = (v) => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
 
-/** /brands/creators/[id] — creator ka profile (campaign ke andar se khulta hai) */
+/**
+ * /brands/creators/[id] — purana openCard (creator profile card):
+ *  api.brand_creator_card { p_participation | p_invite } → creator, audience, recent posts, averages, past work with this brand.
+ *  Save ⭐ → api.brand_favorite_set. Approve (sirf jab creator approval mein ho) → api.org_decide_applicant; Decline → /brands/approvals/decline/[id].
+ */
 export default function CreatorProfile() {
   const { id } = useParams();
-  const cr = getCreator(id);
-  const [saved, setSaved] = useState(Boolean(cr?.starred));
+  const { pid, inv } = parseCreatorId(id);
+  const b = useBrand();
+  const card = useCreatorCard(pid, inv);
+  const [busy, setBusy] = useState(false);
   const [approved, setApproved] = useState(false);
   const [toast, setToast] = useState("");
-  if (!cr) notFound();
 
   const flash = (t) => {
     setToast(t);
     setTimeout(() => setToast(""), 2400);
   };
+
+  const d = card.data;
+  if (card.loading && !d) {
+    return (
+      <BrandShell crumbs={[{ label: "Campaigns", href: "/brands/campaigns" }, { label: "Creator" }]}>
+        <BrLoading rows={6} />
+      </BrandShell>
+    );
+  }
+  if (!d) {
+    return (
+      <BrandShell crumbs={[{ label: "Campaigns", href: "/brands/campaigns" }, { label: "Creator" }]}>
+        <BrError error={card.error || "Creator not found."} onRetry={card.reload} />
+      </BrandShell>
+    );
+  }
+
+  const cr = d.creator || {};
+  const name = cr.name || cr.username || "Creator";
+  const saved = !!d.saved;
+  const waiting = pid ? ((b.portal && b.portal.to_approve) || []).find((x) => x.participation_id === pid) : null;
+  const camp = waiting ? waiting.campaign : ((d.for_brand || [])[0] || {}).campaign;
+  const act = canAct(b);
   const stats = [
-    { v: cr.followers, l: "followers" },
-    { v: cr.eng, l: "engagement" },
-    { v: cr.avgViews, l: "avg reel views" },
-    { v: cr.saves, l: "avg saves" },
-    { v: cr.fee, l: "fee per reel" },
+    { v: cr.followers != null ? fmt(cr.followers) : "—", l: "followers" },
+    { v: cr.engagement != null ? `${Math.round(Number(cr.engagement) * 10) / 10}%` : "—", l: "engagement" },
+    { v: d.avg_views != null ? fmt(d.avg_views) : cr.avg_reach != null ? fmt(cr.avg_reach) : "—", l: d.avg_views != null ? "avg reel views" : "avg reach" },
+    { v: d.avg_likes != null ? fmt(d.avg_likes) : "—", l: "avg likes" },
+    { v: d.campaigns_done != null ? String(d.campaigns_done) : d.avg_comments != null ? fmt(d.avg_comments) : "—", l: d.campaigns_done != null ? "Geek campaigns" : "avg comments" },
   ];
+  const A = d.audience || {};
+  const top = (k) => ((A[k] || [])[0] ? A[k][0] : null);
+  const g = top("gender");
+  const ag = top("age");
+  const ct = top("city");
   const audience = [
-    { l: "Women", v: cr.womenNum, c: "#e8336d" },
-    { l: "Age 18–30", v: cr.age, c: "#8b5cf6" },
-    { l: "Metro cities", v: cr.metro, c: "#16a34a" },
-  ];
+    g && { l: GENDER[String(g.key).toLowerCase()] || g.key, v: pct(g.pct), c: "#e8336d" },
+    ag && { l: `Age ${ag.key}`, v: pct(ag.pct), c: "#8b5cf6" },
+    ct && { l: String(ct.key).split(",")[0], v: pct(ct.pct), c: "#16a34a" },
+  ].filter(Boolean);
+
+  // ⭐ Save / hatao (purana bpxCardStar → brand_favorite_set)
+  const toggleSave = async () => {
+    setBusy(true);
+    const r = await setFavorite(pid, inv, !saved);
+    setBusy(false);
+    if (r.error) return flash(r.error.message);
+    card.setSaved(!saved);
+    flash(saved ? "Removed from Saved creators" : "Saved to your creators");
+  };
+  // Approve (purana data-bpxok → org_decide_applicant)
+  const approve = async () => {
+    setBusy(true);
+    const r = await approveCreator(pid);
+    setBusy(false);
+    if (r.error) return flash(r.error.message);
+    setApproved(true);
+    flash("Creator approved — the Geek team takes it from here");
+    reloadPortal();
+  };
 
   return (
-    <BrandShell crumbs={[{ label: "Campaigns", href: "/brands/campaigns" }, { label: "Festive Glow Edit", href: "/brands/campaigns/festive-glow-edit" }, { label: cr.name }]}>
-      <title>{`${cr.name} — Geek OS Brand`}</title>
+    <BrandShell crumbs={[{ label: waiting ? "Approvals" : "Campaigns", href: waiting ? "/brands/approvals" : "/brands/campaigns" }, ...(camp ? [{ label: camp }] : []), { label: name }]}>
+      <title>{`${name} — Geek OS Brand`}</title>
 
-      <Link href="/brands/campaigns/festive-glow-edit" className="br-back">
+      <Link href={waiting ? "/brands/approvals" : "/brands/campaigns"} className="br-back">
         <span>
           <ArrowLeft size={13} />
         </span>
-        Back to Campaign · Creators
+        {waiting ? "Back to Approvals" : "Back to Campaigns"}
       </Link>
 
       <article className="br-card cp">
         <div className="cp-cover" style={{ background: `linear-gradient(110deg, #ff8fb1 0%, #c084fc 55%, #7c5cff 100%)` }} />
         <div className="cp-body">
           <div className="cp-top">
-            <span className="cp-av" style={{ background: cr.av }}>
-              {cr.initials}
-            </span>
+            <BrAvatar name={name} src={cr.profile_picture_url} cls="cp-av" />
             <div className="cp-name">
               <h1>
-                {cr.name}
-                <span className="cp-tick" title="Verified by Geek">
-                  <Check size={11} />
-                </span>
+                {name}
+                {d.campaigns_done > 0 && (
+                  <span className="cp-tick" title="Has done Geek campaigns">
+                    <Check size={11} />
+                  </span>
+                )}
               </h1>
-              <p>
-                {cr.handle} · {cr.city} · {cr.category}
-              </p>
+              <p>{[cr.username ? `@${cr.username}` : "", cr.city, (cr.categories || []).join(", ")].filter(Boolean).join(" · ")}</p>
             </div>
             <button
               type="button"
               className={`br-btn br-btn--sm cp-save ${saved ? "is-on" : "br-btn--ghost"}`}
               aria-pressed={saved}
-              onClick={() => {
-                setSaved(!saved);
-                flash(saved ? "Removed from Saved creators" : "Saved to your creators");
-              }}
+              onClick={toggleSave}
+              disabled={busy}
             >
               <Bookmark size={13} /> {saved ? "Saved" : "Save"}
             </button>
@@ -96,6 +148,7 @@ export default function CreatorProfile() {
           <div className="cp-grid">
             <div>
               <p className="cp-label">Audience</p>
+              {!audience.length && <p className="cp-none">Audience numbers show once Instagram shares them for this creator.</p>}
               <ul className="cp-aud">
                 {audience.map((a) => (
                   <li key={a.l}>
@@ -109,66 +162,64 @@ export default function CreatorProfile() {
                   </li>
                 ))}
               </ul>
-              <p className="cp-why">
-                <ShieldCheck size={14} /> {cr.why}
-              </p>
+              {cr.bio && (
+                <p className="cp-why">
+                  <ShieldCheck size={14} /> {cr.bio}
+                </p>
+              )}
             </div>
             <div>
               <p className="cp-label">Recent posts</p>
               <div className="cp-posts">
-                {cr.posts.map((v, i) => (
-                  <a key={i} href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="br-thumb" style={{ background: POST_G[i] }}>
+                {(d.recent || []).slice(0, 6).map((p, i) => (
+                  <a key={i} href={p.permalink || igUrl(cr.username)} target="_blank" rel="noreferrer" className="br-thumb" style={{ background: POST_G[i % POST_G.length] }}>
+                    {p.img && <img src={p.img} alt="" loading="lazy" referrerPolicy="no-referrer" className="cp-post__img" onError={(e) => (e.currentTarget.style.display = "none")} />}
                     <span className="br-thumb__play">
                       <Play size={11} />
                     </span>
                     <span className="br-thumb__views">
-                      <Eye size={11} /> {v}
+                      <Eye size={11} /> {p.likes != null ? `${fmt(p.likes)} likes` : p.comments != null ? `${fmt(p.comments)} comments` : "Post"}
                     </span>
                   </a>
                 ))}
+                {!(d.recent || []).length && <p className="cp-none">No recent posts to show.</p>}
               </div>
             </div>
           </div>
 
           <p className="cp-label">Worked with</p>
           <div className="cp-worked">
-            {cr.worked.length ? (
-              cr.worked.map((w) => (
-                <span key={w} className={w.startsWith("Nykaa") ? "br-badge br-badge--green" : "br-tag"}>
-                  {w}
+            {(d.for_brand || []).length ? (
+              d.for_brand.map((w, i) => (
+                <span key={i} className="br-badge br-badge--green">
+                  {w.campaign} · {w.status}
+                  {(w.posts || []).length ? ` · ${w.posts.length} post${w.posts.length === 1 ? "" : "s"}` : ""}
                 </span>
               ))
             ) : (
-              <span className="cp-none">No brand collabs yet</span>
+              <span className="cp-none">Not on your campaigns before</span>
             )}
           </div>
 
           <div className="cp-foot">
-            <a href={`https://www.instagram.com/${cr.handle.replace("@", "")}`} target="_blank" rel="noreferrer" className="br-btn br-btn--ghost">
+            <a href={igUrl(cr.username)} target="_blank" rel="noreferrer" className="br-btn br-btn--ghost">
               <Instagram size={15} /> Open Instagram
             </a>
             <div className="cp-foot__right">
               {approved ? (
                 <span className="cp-approved">
-                  <Check size={14} /> Approved for Festive Glow Edit
+                  <Check size={14} /> Approved for {camp}
                 </span>
-              ) : (
+              ) : waiting && act ? (
                 <>
-                  <Link href={`/brands/approvals/decline/${cr.id}`} className="br-btn br-btn--ghost">
+                  <Link href={`/brands/approvals/decline/${pid}`} className="br-btn br-btn--ghost">
                     Decline
                   </Link>
-                  <button
-                    type="button"
-                    className="br-btn br-btn--primary"
-                    onClick={() => {
-                      setApproved(true);
-                      flash(`${cr.name} approved — Geek will send the brief`);
-                    }}
-                  >
+                  <button type="button" className="br-btn br-btn--primary" onClick={approve} disabled={busy}>
                     <Check size={14} /> Approve for campaign
                   </button>
                 </>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -195,6 +246,7 @@ export default function CreatorProfile() {
         .cp-tick { width: 18px; height: 18px; border-radius: 50%; background: var(--br-blue); color: #fff; display: grid; place-items: center; }
         .cp-name p { margin: 3px 0 0; font-size: 13px; color: var(--br-muted); }
         .cp-save { margin-bottom: 6px; }
+        .cp-post__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
         .cp-save.is-on { background: var(--br-lilac); color: var(--br-primary); border-color: transparent; }
 
         .cp-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0 22px; padding: 14px 18px; border-radius: 14px; background: #f4f5fa; }

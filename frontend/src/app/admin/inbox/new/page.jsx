@@ -5,28 +5,51 @@ import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import Drawer from "@/components/admin/brand/Drawer";
 import Inbox, { InboxHead } from "@/components/admin/msg/Inbox";
+import { invoke, errText } from "@/lib/supabase";
 
-/** /admin/inbox/new — New WhatsApp chat (Figma 080) */
+/**
+ * /admin/inbox/new — New WhatsApp chat (Figma 080) · edge function wa-send (purane whatsapp.js jaisa)
+ * 24 ghante se baat nahi hui → WhatsApp approved template maangta hai → template + variables wale fields khulte hain.
+ */
 export default function NewChat() {
   const router = useRouter();
   const [num, setNum] = useState("");
   const [msg, setMsg] = useState("");
+  const [tplOn, setTplOn] = useState(false);
+  const [tpl, setTpl] = useState("");
+  const [vars, setVars] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
+  const [goTo, setGoTo] = useState("");
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => router.push("/admin/inbox"), 1200);
+    const t = setTimeout(() => router.push(goTo || "/admin/inbox"), 1200);
     return () => clearTimeout(t);
-  }, [toast, router]);
+  }, [toast, goTo, router]);
 
-  const send = (e) => {
+  const send = async (e) => {
     e.preventDefault();
-    const digits = num.replace(/\D/g, "");
-    if (digits.length < 10) return setErr("Enter a WhatsApp number with 10 digits.");
-    if (!msg.trim()) return setErr("Write a message to send.");
+    const phone = num.trim();
+    if (!/^\+?[0-9 \-]{10,}$/.test(phone)) return setErr("Enter a WhatsApp number with 10 digits.");
+    const t = tpl.trim();
+    if (!msg.trim() && !t) return setErr("Write a message to send.");
     setErr("");
-    setToast(`Message sent to ${num.trim()}`);
+    setBusy(true);
+    const body = t ? { to_phone: phone, template: t, variables: vars.split(",").map((v) => v.trim()).filter(Boolean) } : { to_phone: phone, text: msg.trim() };
+    const r = await invoke("admin", "wa-send", body);
+    setBusy(false);
+    if (r.error) {
+      const m = errText(r.error);
+      if (/24-hour/.test(m)) {
+        setTplOn(true);
+        return setErr("This number hasn’t messaged you in 24h — send an approved template first.");
+      }
+      return setErr(`Couldn’t send: ${m}`);
+    }
+    if (r.data?.conversation_id) setGoTo(`/admin/inbox/chat/${r.data.conversation_id}`);
+    setToast(`Message sent to ${phone}`);
   };
 
   return (
@@ -52,13 +75,29 @@ export default function NewChat() {
               <textarea id="nc-msg" className="ad-input nc-in nc-ta" placeholder="Write your message" value={msg} onChange={(e) => setMsg(e.target.value)} />
             </div>
           </div>
+          {tplOn && (
+            <div className="nc-grid nc-tpl">
+              <div>
+                <label className="nc-l" htmlFor="nc-tpl">
+                  Approved template name
+                </label>
+                <input id="nc-tpl" className="ad-input nc-in" placeholder="campaign_update" value={tpl} onChange={(e) => setTpl(e.target.value)} />
+              </div>
+              <div>
+                <label className="nc-l" htmlFor="nc-vars">
+                  Template variables (comma-separated, in order)
+                </label>
+                <input id="nc-vars" className="ad-input nc-in" placeholder="Priya, Summer Glow" value={vars} onChange={(e) => setVars(e.target.value)} />
+              </div>
+            </div>
+          )}
           <p className="nc-note">
             <span>ℹ️</span> Outside the 24-hour window WhatsApp needs a pre-approved template for the first message.
           </p>
           {err && <p className="nc-err">{err}</p>}
           <div className="nc-act">
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={!!toast}>
-              Send
+            <button type="submit" className="ad-btn ad-btn--primary" disabled={!!toast || busy}>
+              {busy ? "Sending…" : "Send"}
             </button>
           </div>
         </form>
@@ -74,6 +113,7 @@ export default function NewChat() {
         .nc-in { height: 42px; font-size: 12px; font-weight: 800; }
         .nc-in::placeholder { color: #757575; }
         .nc-ta { height: 90px; min-height: 90px; resize: vertical; }
+        .nc-tpl { margin-top: 16px; }
         .nc-note { display: flex; gap: 10px; margin-top: 18px; padding: 12px 15px; border-radius: 13px; border: 1px solid #f6dfb5; background: #fff6e6; font-size: 12px; line-height: 1.35; color: #986016; }
         .nc-err { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: var(--ad-red-bg); color: var(--ad-red); font-size: 12.5px; font-weight: 700; }
         .nc-act { margin-top: 16px; }

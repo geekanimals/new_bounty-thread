@@ -4,41 +4,78 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
 import CampaignCard from "@/components/creater/CampaignCard";
-import { useSession } from "@/components/creater/session";
+import { useSession, useMyIg, isLive, needsMe, stepOf, STAGE_TXT, STAGE_SHORT, profileProgress, homeCard, coverOf, useMyCampaignRows, useOpenCampaigns, useMyProfile, useProfileRequirements, useCovers } from "@/services/creator";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { CREATOR, CAMPAIGNS, MY_CAMPAIGNS, STEPS, DREAM_BRANDS, TYPE_LABEL, getCampaign, getSidekick } from "@/components/creater/data";
+import { STEPS, DREAM_BRANDS, TYPE_LABEL, getSidekick } from "@/components/creater/data";
 import { ArrowRight } from "@/components/ui/Icons";
 
-/** /creater/home — "Your next move" (Figma: 1 · Home — desktop + mobile) */
+/* stage → card par chhoti line (Figma "note") */
+const stageNote = (m) => STAGE_TXT[m.stage] || String(m.stage || "").replace(/_/g, " ");
+
+/**
+ * /creater/home — "Your next move" (Figma: 1 · Home — desktop + mobile)
+ * Data purane Bounty home jaisa: get_my_campaigns · list_open_campaigns · get_my_profile · get_profile_requirements · campaign_covers
+ * + Instagram (social_accounts). Locked = Instagram abhi connect nahi.
+ */
 export default function CreatorHome() {
-  const [s] = useSession();
-  const locked = !s.ig;
+  const [s] = useSession(); // sirf sidekick (Pip/Rumi…) ke liye
   const sk = getSidekick(s.sidekick);
+  const ig = useMyIg();
+  const mine = useMyCampaignRows();
+  const open = useOpenCampaigns();
+  const prof = useMyProfile();
+  const req = useProfileRequirements();
+  const covers = useCovers();
+  const locked = !ig.loading && !ig.acct;
+
   // Greeting browser ke time se (prerender par Date nahi)
   const [greet, setGreet] = useState("Hello");
   useEffect(() => {
     const h = new Date().getHours();
     setGreet(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening");
   }, []);
-  const running = locked ? [] : MY_CAMPAIGNS.filter((m) => m.group === "running");
-  const picks = CAMPAIGNS.slice(0, 3);
+
+  const p = prof.data || {};
+  const firstName = String((p.personal || {}).first_name || (p.professional || {}).display_name || "").split(" ")[0];
+  // campaigns sirf us Instagram account ki jo khula hai (purane app jaisa)
+  const handle = String(ig.acct?.username || "").toLowerCase();
+  const myList = (Array.isArray(mine.data) ? mine.data : []).filter((c) => !c.applied_profile || !handle || String(c.applied_profile).toLowerCase().replace(/^@/, "") === handle);
+  const running = myList.filter(isLive);
+  const yours = needsMe(myList);
+  const progress = profileProgress(req.data, prof.data, !!ig.acct);
+  const openList = open.list;
+  const fresh = openList.filter((x) => !x.my_stage && !x.applications_closed).map((x) => homeCard(x, covers)).sort((a, b) => a.elig - b.elig);
+  const picks = fresh.slice(0, 3);
   const first = picks[0];
-  const dream = DREAM_BRANDS.filter((b) => s.dreamBrands.includes(b.id));
-  const firstOk = !locked && first.eligible;
+  const firstOk = !locked && first?.eligible;
+  const dreams = Array.isArray(p.dream_brands) ? p.dream_brands.slice(0, 5) : [];
+  // dream brand ki photo (naam match ho to apni photo, warna naam)
+  const dreamImg = (x) => DREAM_BRANDS.find((b) => b.name.toLowerCase().replace(/[^a-z]/g, "") === String(x.submitted_brand_name || "").toLowerCase().replace(/[^a-z]/g, ""))?.img;
+
+  // "Next step" card — purane buildHome jaisa ek hi kaam jo abhi zaroori hai
+  let act;
+  if (locked) act = { tag: "Action needed", red: true, t: "Connect Instagram to apply", s: "Explore freely — brands check real reach when you apply.", b: "Connect Instagram", href: "/creater/onboarding/meta" };
+  else if (yours[0]) act = { tag: "Action needed", red: true, t: `${yours[0].brand ? yours[0].brand + " · " : ""}${STAGE_SHORT[yours[0].stage] || yours[0].campaign || "Campaign"}`, s: stageNote(yours[0]), b: "Open brief", href: `/creater/my-campaigns/${yours[0].participation_id || yours[0].campaign_id}` };
+  else if (progress && !progress.complete) act = { tag: "Next step", t: `Your profile is ${progress.pct}% complete`, s: "Brands pick complete profiles first", b: "Finish profile", href: "/creater/profile/finish" };
+  else act = { tag: "Next step", t: "Find your next campaign", s: `${fresh.length} campaigns open for you`, b: "Explore campaigns", href: "/creater/discover" };
+  const loading = mine.loading || ig.loading;
 
   // Chal rahi campaigns ki list (desktop card + mobile box dono mein)
   const runningList = (
     <ul className="hm-list">
-      {running.map((m) => {
-        const c = getCampaign(m.id);
-        const idx = STEPS.findIndex((x) => x.key === m.stage);
+      {running.slice(0, 4).map((m) => {
+        const idx = STEPS.findIndex((x) => x.key === stepOf(m.stage));
         return (
-          <li key={m.id}>
-            <Link href={`/creater/my-campaigns/${m.id}`}>
-              <img src={c.img} alt="" />
+          <li key={m.participation_id || m.campaign_id}>
+            <Link href={`/creater/my-campaigns/${m.participation_id || m.campaign_id}`}>
+              <img
+                src={coverOf({ campaign_id: m.campaign_id, brand: m.brand, name: m.campaign, product: m.product, category: m.category }, covers)}
+                alt=""
+                onError={(e) => (e.currentTarget.src = coverOf({ brand: m.brand, name: m.campaign, product: m.product, category: m.category }))}
+              />
               <span className="hm-list__txt">
-                <strong>{c.title}</strong>
-                <small className={m.revision ? "is-red" : ""}>{m.note}</small>
+                <strong>{m.campaign || "Campaign"}</strong>
+                <small className={m.stage === "changes_requested" ? "is-red" : ""}>{stageNote(m)}</small>
                 <span className="hm-steps" aria-label={`Step ${idx + 1} of ${STEPS.length}`}>
                   {STEPS.map((st, i) => (
                     <i key={st.key} className={i <= idx ? "is-on" : ""} />
@@ -52,38 +89,26 @@ export default function CreatorHome() {
       })}
     </ul>
   );
+  const emptyRun = <p className="hm-empty">{loading ? "Loading your campaigns…" : mine.error ? "Couldn't load your campaigns — please refresh the page." : "No active campaigns yet — apply to one below."}</p>;
 
   return (
     <BountyShell tone="forest">
       <title>Home — Bounty</title>
 
       <p className="hm-hi">
-        {greet}, {locked ? "creator" : CREATOR.first.toLowerCase()}.
+        {greet}, {firstName ? firstName.toLowerCase() : "creator"}.
       </p>
       <h1 className="hm-title">Your next move.</h1>
 
       <div className="hm-top">
         {/* Next step */}
         <section className="hm-next">
-          {locked ? (
-            <>
-              <span className="hm-badge hm-badge--red">Action needed</span>
-              <h2>Connect Instagram to apply</h2>
-              <p>⏳ Explore freely — brands check real reach when you apply.</p>
-              <Link href="/creater/onboarding/meta" className="hm-cream">
-                Connect Instagram →
-              </Link>
-            </>
-          ) : (
-            <>
-              <span className="hm-badge">Next step</span>
-              <h2>Your profile is {CREATOR.profilePct}% complete</h2>
-              <p>⏳ Brands pick complete profiles first</p>
-              <Link href="/creater/profile/finish" className="hm-cream">
-                Finish profile →
-              </Link>
-            </>
-          )}
+          <span className={`hm-badge ${act.red ? "hm-badge--red" : ""}`}>{act.tag}</span>
+          <h2>{act.t}</h2>
+          <p>⏳ {act.s}</p>
+          <Link href={act.href} className="hm-cream">
+            {act.b} →
+          </Link>
         </section>
 
         {/* Active campaigns — desktop card */}
@@ -96,7 +121,7 @@ export default function CreatorHome() {
               </Link>
             )}
           </div>
-          {running.length === 0 ? <p className="hm-empty">No active campaigns yet — apply to one below.</p> : runningList}
+          {running.length === 0 ? emptyRun : runningList}
         </section>
       </div>
 
@@ -104,52 +129,56 @@ export default function CreatorHome() {
       <div className="hm-m">
         <p className="hm-label">— Active campaigns —</p>
         <p className="hm-count">{running.length} in progress</p>
-        <div className="hm-mbox">{running.length === 0 ? <p className="hm-empty">No active campaigns yet — apply to one below.</p> : runningList}</div>
+        <div className="hm-mbox">{running.length === 0 ? emptyRun : runningList}</div>
       </div>
 
-      <p className="hm-label hm-label--world">— Made for your world —</p>
+      {picks.length > 0 && (
+        <>
+          <p className="hm-label hm-label--world">— Made for your world —</p>
 
-      {/* Desktop: 3 cards */}
-      <div className="hm-grid">
-        {picks.map((c) => (
-          <CampaignCard key={c.id} c={c} href={`/creater/discover/${c.id}`} locked={locked} />
-        ))}
-      </div>
-
-      {/* Mobile: ek dark campaign card */}
-      <article className="hm-mcamp">
-        <img src={first.img} alt="" />
-        <div className="hm-mcamp__body">
-          <p className="hm-mcamp__eye">Campaign</p>
-          <h3>{first.title}</h3>
-          <p className="hm-mcamp__type">
-            🎁 {TYPE_LABEL[first.type]} · {first.type === "paid" ? "Fee" : "Product"}
-          </p>
-          <span className={`hm-mcamp__pill ${firstOk ? "is-ok" : ""}`}>{firstOk ? "✓ You match" : "✗ Not eligible yet"}</span>
-          <div className="hm-mcamp__foot">
-            <p>Finish your profile to qualify</p>
-            <Link href={`/creater/discover/${first.id}`} className="hm-mcamp__btn">
-              Explore
-            </Link>
+          {/* Desktop: 3 cards */}
+          <div className="hm-grid">
+            {picks.map((c) => (
+              <CampaignCard key={c.id} c={c} href={`/creater/discover/${c.id}`} locked={locked} />
+            ))}
           </div>
-        </div>
-      </article>
+
+          {/* Mobile: ek dark campaign card (purane jaisa: eligible / potential / not yet) */}
+          <article className="hm-mcamp">
+            <img src={first.img} alt="" />
+            <div className="hm-mcamp__body">
+              <p className="hm-mcamp__eye">Campaign</p>
+              <h3>{first.title}</h3>
+              <p className="hm-mcamp__type">
+                🎁 {TYPE_LABEL[first.type]} · {first.type === "paid" ? "Fee" : "Product"}
+              </p>
+              <span className={`hm-mcamp__pill ${firstOk ? "is-ok" : ""}`}>{["✓ You match", "Potential match", "✗ Not eligible yet"][locked ? 1 : first.elig]}</span>
+              <div className="hm-mcamp__foot">
+                <p>{["You can apply now", "Not guaranteed eligible", "Finish your profile to qualify"][locked ? 1 : first.elig]}</p>
+                <Link href={`/creater/discover/${first.id}`} className="hm-mcamp__btn">
+                  Explore
+                </Link>
+              </div>
+            </div>
+          </article>
+        </>
+      )}
 
       {/* Mobile: dream brand board */}
       <div className="hm-m">
         <p className="hm-label">— Your dream brand board —</p>
         <div className="hm-mbox hm-dream">
-          {dream.length ? (
+          {dreams.length ? (
             <div className="hm-dream__row">
-              {dream.slice(0, 3).map((b) => (
-                <img key={b.id} src={b.img} alt={b.name} />
-              ))}
+              {dreams.slice(0, 3).map((b, i) =>
+                dreamImg(b) ? <img key={i} src={dreamImg(b)} alt={b.submitted_brand_name} /> : <span key={i} className="hm-dream__name">{b.submitted_brand_name}</span>
+              )}
             </div>
           ) : (
             <p>Pick up to 5 brands you&apos;d love to work with — private to you.</p>
           )}
           <Link href="/creater/profile/dream-brands" className="hm-dream__link">
-            {dream.length ? "Edit board →" : "Add dream brands →"}
+            {dreams.length ? "Edit board →" : "Add dream brands →"}
           </Link>
         </div>
       </div>
@@ -252,6 +281,7 @@ export default function CreatorHome() {
           .hm-mcamp__btn { display: inline-flex; align-items: center; height: 32px; padding: 0 13px; border-radius: 999px; border: 1.5px solid #3fd9e8; color: #fbf3e2; font-family: var(--bx-jak); font-size: 12px; font-weight: 700; }
 
           .hm-dream { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 15px; }
+          .hm-dream__name { display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 8px; border-radius: 12px; background: rgba(251,243,226,.14); color: #fbf3e2; font-size: 11px; font-weight: 700; }
           .hm-dream p { margin: 0; max-width: 180px; font-size: 14px; line-height: 1.32; color: #fbf3e2; }
           .hm-dream__row { display: flex; gap: 6px; }
           .hm-dream__row img { width: 52px; height: 34px; border-radius: 7px; object-fit: cover; }

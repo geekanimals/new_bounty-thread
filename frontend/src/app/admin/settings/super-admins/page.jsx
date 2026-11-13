@@ -1,18 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import AdminShell from "@/components/admin/AdminShell";
+import AdminShell, { useAdmin } from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
-import { SettingsTabs, Panel, Table, useToast } from "@/components/admin/settings/kit";
+import { SettingsTabs, Panel, Table, useToast, fmtDate, emptyState } from "@/components/admin/settings/kit";
+import { rpc, useRpc, errText } from "@/lib/supabase";
 
-/** /admin/settings/super-admins — super admin do / hatao */
+/** AdminShell ke andar — "You" pehchanne ke liye login kiye admin ka email chahiye */
+function YouBadge({ email, children }) {
+  const me = useAdmin();
+  return me?.email && email && me.email.toLowerCase() === String(email).toLowerCase() ? (
+    <span className="ad-badge ad-badge--violet">You</span>
+  ) : (
+    children
+  );
+}
+
+/**
+ * /admin/settings/super-admins — purane app jaisa:
+ *  list = admin_list_platform_admins · do = admin_add_platform_admin(p_email) · hatao = admin_remove_platform_admin(p_user_id)
+ */
 export default function SettingsSuperAdmins() {
-  const [admins, setAdmins] = useState([
-    { name: "Mayank", email: "mayank@geekcreativeagency.com", since: "13 Sep 2026" },
-    { name: "Mayank", email: "g•••@gmail.com", since: "17 Oct 2026", you: true },
-  ]);
+  const list = useRpc("admin", "admin_list_platform_admins");
+  const admins = list.data || [];
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [toast, say] = useToast();
 
@@ -20,21 +33,32 @@ export default function SettingsSuperAdmins() {
     e.preventDefault();
     const v = email.trim();
     if (!/^\S+@\S+\.\S+$/.test(v)) return setErr("Enter the email of an existing Geek OS user.");
-    if (admins.some((a) => a.email === v)) return setErr("Already a super admin.");
-    const name = v.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-    setConfirm({ grant: { name, email: v, since: "Today" } });
+    if (admins.some((a) => String(a.email || "").toLowerCase() === v.toLowerCase())) return setErr("Already a super admin.");
+    setConfirm({ grant: { email: v } });
     setErr("");
   };
-  const doIt = () => {
+  const doIt = async () => {
+    setBusy(true);
     if (confirm.grant) {
-      setAdmins((l) => [...l, confirm.grant]);
+      const { error } = await rpc("admin", "admin_add_platform_admin", { p_email: confirm.grant.email });
+      setBusy(false);
+      if (error) {
+        setConfirm(null);
+        return setErr(errText(error));
+      }
       say(`${confirm.grant.email} is now a super admin`);
       setEmail("");
     } else {
-      setAdmins((l) => l.filter((a) => a.email !== confirm.remove.email));
-      say(`${confirm.remove.email} removed`);
+      const { error } = await rpc("admin", "admin_remove_platform_admin", { p_user_id: confirm.remove.user_id });
+      setBusy(false);
+      if (error) {
+        setConfirm(null);
+        return say(errText(error), true);
+      }
+      say(`${confirm.remove.email || "Admin"} removed`);
     }
     setConfirm(null);
+    list.reload();
   };
 
   return (
@@ -60,19 +84,16 @@ export default function SettingsSuperAdmins() {
             { label: "Since", w: 219 },
             { label: "", w: 189 },
           ]}
+          empty={emptyState({ loading: list.loading, error: list.error, reload: list.reload, empty: "No super admins found." })}
           rows={admins.map((a) => [
-            <b key="n">{a.name}</b>,
-            a.email,
-            a.since,
-            a.you ? (
-              <span key="y" className="ad-badge ad-badge--violet">
-                You
-              </span>
-            ) : (
-              <button key="r" type="button" className="sk-link" onClick={() => setConfirm({ remove: a })}>
+            <b key="n">{a.name || (a.email || "").split("@")[0] || "—"}</b>,
+            a.email || a.user_id,
+            fmtDate(a.created_at),
+            <YouBadge key="r" email={a.email}>
+              <button type="button" className="sk-link" onClick={() => setConfirm({ remove: a })}>
                 Remove
               </button>
-            ),
+            </YouBadge>,
           ])}
         />
       </Panel>
@@ -88,7 +109,7 @@ export default function SettingsSuperAdmins() {
                 </>
               ) : (
                 <>
-                  <b>{confirm.remove.email}</b> will lose super admin access. Their own account stays.
+                  <b>{confirm.remove.email || confirm.remove.name}</b> will lose super admin access. Their own account stays.
                 </>
               )}
             </p>
@@ -96,7 +117,7 @@ export default function SettingsSuperAdmins() {
               <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setConfirm(null)}>
                 Cancel
               </button>
-              <button type="button" className={`ad-btn ${confirm.grant ? "ad-btn--primary" : "ad-btn--danger"}`} onClick={doIt}>
+              <button type="button" className={`ad-btn ${confirm.grant ? "ad-btn--primary" : "ad-btn--danger"}`} onClick={doIt} disabled={busy}>
                 {confirm.grant ? "Grant access" : "Remove"}
               </button>
             </div>

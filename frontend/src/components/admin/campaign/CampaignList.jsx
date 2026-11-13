@@ -1,31 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
-import { CAMPAIGNS, tone } from "@/components/admin/data";
+import { useRpc, errText } from "@/lib/supabase";
+import { campTypeLabel, campStatusPick, campInBucket, statusTone, APPLICANT_PENDING, REPORT_APPROVED, fmtDate } from "@/components/admin/campaign/live";
 
 /* Campaign list ke tabs — har tab apna route (Back ek step) */
 const TABS = [
   { k: "all", label: "All", href: "/admin/campaigns", test: () => true },
   { k: "live", label: "Live", href: "/admin/campaigns/live", test: (c) => c.status === "Live" },
   { k: "draft", label: "Draft", href: "/admin/campaigns/draft", test: (c) => c.status === "Draft" },
-  { k: "barter", label: "Barter", href: "/admin/campaigns/barter", test: (c) => c.type === "Barter" },
-  { k: "paid", label: "Paid", href: "/admin/campaigns/paid", test: (c) => c.type === "Paid" },
+  { k: "barter", label: "Barter", href: "/admin/campaigns/barter", test: (c) => campInBucket(c.raw, "barter") },
+  { k: "paid", label: "Paid", href: "/admin/campaigns/paid", test: (c) => campInBucket(c.raw, "paid") },
   { k: "completed", label: "Completed", href: "/admin/campaigns/completed", test: (c) => c.status === "Completed" },
 ];
 
-const pct = (d) => {
-  const [a, b] = d.split("/").map(Number);
-  return b ? Math.round((a / b) * 100) : 0;
-};
+const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
+const sum = (o, pred) => Object.entries(o || {}).reduce((n, [k, v]) => n + (pred(k) ? Number(v) || 0 : 0), 0);
+
+/* admin_campaigns ki ek row → list ki row (purane adminCampaigns jaisa hisaab) */
+function toRow(c) {
+  const pc = c.pipeline_stage_counts || {};
+  const applied = (Number(c.applied) || 0) + sum(pc, () => true);
+  const approved = (Number(c.approved) || 0) + sum(pc, REPORT_APPROVED);
+  const done = sum(pc, (k) => k === "published" || k === "completed");
+  const pending = sum(pc, (k) => APPLICANT_PENDING.includes(k)) + Math.max(0, (Number(c.applied) || 0) - (Number(c.approved) || 0) - (Number(c.declined) || 0));
+  const status = campStatusPick(c.status);
+  const risk =
+    status === "Approval" ? "Waiting for approval" : pending ? `${pending} awaiting screening` : status === "Draft" ? "Not visible to creators" : status === "Completed" ? "Closed" : approved && done >= approved ? "All posted" : "On track";
+  return { id: c.id, raw: c, name: c.name || "Untitled", brand: c.brand || c.org_name || "", type: (campTypeLabel(c.campaign_type, c.barter_subtype) || c.campaign_type || "—").replace(" · Normal", ""), status, applied, approved, done, ends: c.end_date ? fmtDate(c.end_date) : "—", risk };
+}
 
 /** Figma: Campaigns (All / Live / Draft / Barter / Paid / Completed) */
 export default function CampaignList({ filter = "all" }) {
   const [q, setQ] = useState("");
   const tab = TABS.find((t) => t.k === filter) || TABS[0];
-  const rows = CAMPAIGNS.filter((c) => !c.hidden).filter(tab.test).filter((c) => `${c.name} ${c.brand}`.toLowerCase().includes(q.trim().toLowerCase()));
+  // purana app: admin_campaigns (har 30 sec refresh)
+  const { data, error, loading, reload } = useRpc("admin", "admin_campaigns", { p_status: null }, { refreshMs: 30000 });
+  const all = useMemo(() => (Array.isArray(data) ? data.map(toRow) : []), [data]);
+  const rows = all.filter(tab.test).filter((c) => `${c.name} ${c.brand}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const emptyMsg = error ? null : loading ? "Loading campaigns…" : q.trim() ? `No campaigns match “${q}”.` : "No campaigns here yet.";
 
   return (
     <AdminShell>
@@ -72,16 +88,18 @@ export default function CampaignList({ filter = "all" }) {
                   </td>
                   <td>{c.type}</td>
                   <td>
-                    <span className={`ad-badge ad-badge--${c.status === "Shortlist" ? "violet" : tone(c.status)}`}>{c.status}</span>
+                    <span className={`ad-badge ad-badge--${c.status === "Completed" ? "green" : statusTone(c.status)}`}>{c.status === "Shortlist completed" ? "Shortlist" : c.status}</span>
                   </td>
                   <td>{c.applied}</td>
                   <td>{c.approved}</td>
                   <td>
                     <div className="cl-prog">
                       <span className="ad-bar">
-                        <i style={{ width: `${pct(c.done)}%` }} />
+                        <i style={{ width: `${pct(c.done, c.approved)}%` }} />
                       </span>
-                      <small>{c.done}</small>
+                      <small>
+                        {c.done}/{c.approved}
+                      </small>
                     </div>
                   </td>
                   <td>{c.ends}</td>
@@ -95,7 +113,15 @@ export default function CampaignList({ filter = "all" }) {
               ))}
             </tbody>
           </table>
-          {!rows.length && <p className="cl-empty">No campaigns match “{q}”.</p>}
+          {!rows.length && emptyMsg && <p className="cl-empty">{emptyMsg}</p>}
+          {error && (
+            <p className="cl-empty">
+              {errText(error)}{" "}
+              <button type="button" className="cl-retry" onClick={() => reload()}>
+                Retry
+              </button>
+            </p>
+          )}
         </div>
 
         {/* Mobile: cards */}
@@ -109,7 +135,7 @@ export default function CampaignList({ filter = "all" }) {
                     {c.brand} · {c.type}
                   </span>
                 </div>
-                <span className={`ad-badge ad-badge--${c.status === "Shortlist" ? "violet" : tone(c.status)}`}>{c.status}</span>
+                <span className={`ad-badge ad-badge--${c.status === "Completed" ? "green" : statusTone(c.status)}`}>{c.status === "Shortlist completed" ? "Shortlist" : c.status}</span>
               </div>
               <div className="cl-card__nums">
                 <span>
@@ -124,9 +150,11 @@ export default function CampaignList({ filter = "all" }) {
               </div>
               <div className="cl-prog">
                 <span className="ad-bar">
-                  <i style={{ width: `${pct(c.done)}%` }} />
+                  <i style={{ width: `${pct(c.done, c.approved)}%` }} />
                 </span>
-                <small>{c.done}</small>
+                <small>
+                  {c.done}/{c.approved}
+                </small>
               </div>
               <div className="cl-card__foot">
                 <span className="cl-risk">{c.risk}</span>
@@ -134,7 +162,7 @@ export default function CampaignList({ filter = "all" }) {
               </div>
             </Link>
           ))}
-          {!rows.length && <p className="cl-empty">No campaigns match “{q}”.</p>}
+          {!rows.length && <p className="cl-empty">{error ? errText(error) : emptyMsg}</p>}
         </div>
       </section>
 
@@ -162,6 +190,7 @@ export default function CampaignList({ filter = "all" }) {
         .cl-risk { display: block; margin-top: 5px; font-size: 12px; color: var(--ad-muted); }
         .cl-empty { padding: 30px 10px; text-align: center; font-size: 13px; color: var(--ad-muted); }
         .cl-cards { display: none; }
+        .cl-retry { border: 0; background: none; padding: 0; font-weight: 800; color: var(--ad-primary); }
 
         @media (max-width: 1023px) {
           .cl-bar { flex-direction: column; align-items: stretch; }

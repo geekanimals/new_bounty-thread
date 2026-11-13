@@ -1,8 +1,6 @@
-import { APPROVAL_CREATORS } from "@/components/brands/data";
-
-// Har creator ka decline page build ke time ban jaata hai
+// Decline page: id = asli id (campaign_id / participation_id) — build ke time ek sample page, asli id browser mein useParams se
 export function generateStaticParams() {
-  return APPROVAL_CREATORS.map((id) => ({ id }));
+  return [{ id: "sample" }];
 }
 
 export default function DeclineLayout({ children }) {

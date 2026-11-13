@@ -1,22 +1,65 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
-import { BILLS, BILL_YEAR } from "@/components/brands/data";
+import { BrLoading, BrError, BrEmpty } from "@/components/brands/BrandStates";
+import { useInvoices, payInvoice, resetOpenBills, printInvoice, inr, fdate } from "@/services/brand";
 import { Receipt, CreditCard, FileText, Download, Bank, QrCode, Check, ChevronDown } from "@/components/ui/Icons";
 
 const FIRST = 5;
 
-/** /brands/billing — Geek Creative Agency ke bills, payment aur receipts */
+/**
+ * /brands/billing — purana paintBilling:
+ *  api.brand_invoices (bills + due / paid + online + can_pay), Razorpay wapsi (?rzpbill → brand-billing check),
+ *  Pay now (brand-billing pay → Razorpay), bill / receipt download (printInvoice).
+ */
 export default function BrandBilling() {
+  const inv = useInvoices();
+  const d = inv.data;
+  const L = inv.list;
   const [shown, setShown] = useState(FIRST);
+  const [paying, setPaying] = useState("");
+  const [year, setYear] = useState(""); // "This year" — saal effect mein (render mein Date nahi)
   const [toast, setToast] = useState("");
-  const due = BILLS.find((b) => b.status === "due");
+  useEffect(() => {
+    setYear(String(new Date().getFullYear()));
+  }, []);
+  const flash = (t) => {
+    setToast(t);
+    setTimeout(() => setToast(""), 2800);
+  };
+  // Razorpay se wapsi ka jawab (purana gateToast)
+  useEffect(() => {
+    if (inv.returned) flash(inv.returned.paid ? "Payment received — thank you! The receipt is ready." : "Payment not completed yet — you can try again.");
+  }, [inv.returned]);
 
-  const receipt = (b) => {
-    setToast(`Receipt for ${b.no} is downloading…`);
-    setTimeout(() => setToast(""), 2400);
+  const open = L.filter((i) => i.status === "requested");
+  const due = open.find((i) => i.overdue) || open[0];
+  const canPay = !!(d && d.can_pay);
+  const yr = L.filter((i) => i.status !== "cancelled" && (!year || String(i.issued_on || "").startsWith(year)));
+  const billed = yr.reduce((a, i) => a + (Number(i.total) || 0), 0);
+  const paidY = yr.filter((i) => i.status === "paid").reduce((a, i) => a + (Number(i.paid_amount || i.total) || 0), 0);
+  const dueY = yr.filter((i) => i.status === "requested").reduce((a, i) => a + (Number(i.total) || 0), 0);
+
+  const download = (b) => {
+    if (!printInvoice(b)) flash("Allow pop-ups to download the bill.");
+  };
+  // Pay now (purana data-bpxpay → brand-billing pay)
+  const pay = async (b) => {
+    setPaying(b.invoice_id);
+    const r = await payInvoice(b.invoice_id);
+    if (r.error || (r.data && r.data.error)) {
+      setPaying("");
+      return flash((r.error && r.error.message) || r.data.error);
+    }
+    if (r.data && r.data.paid) {
+      setPaying("");
+      resetOpenBills();
+      flash("This bill is already paid ✓");
+      return inv.reload();
+    }
+    window.location.href = r.data.url;
   };
 
   return (
@@ -34,76 +77,89 @@ export default function BrandBilling() {
           </span>
           <div className="bl-due__txt">
             <strong>
-              {due.amount} due on {due.due}
+              {inr(due.total)} {due.overdue ? "overdue since" : "due"} {due.due_on ? `${due.overdue ? "" : "on "}${fdate(due.due_on)}` : "now"}
             </strong>
             <small>
-              {due.no} · {due.campaign} — {due.note}
+              {due.invoice_no} · {due.campaign || due.title}
+              {open.length > 1 ? ` — ${open.length} bills open` : ""}
             </small>
           </div>
           <div className="bl-due__btns">
-            <Link href={`/brands/billing/${due.id}`} className="br-btn br-btn--ghost">
+            <Link href={`/brands/billing/${due.invoice_id}`} className="br-btn br-btn--ghost">
               View bill
             </Link>
-            <Link href={`/brands/billing/${due.id}#pay`} className="br-btn br-btn--primary">
-              <CreditCard size={15} /> Pay now
-            </Link>
+            {canPay && (
+              <button type="button" className="br-btn br-btn--primary" onClick={() => pay(due)} disabled={!!paying}>
+                <CreditCard size={15} /> {paying === due.invoice_id ? "Opening Razorpay…" : "Pay now"}
+              </button>
+            )}
           </div>
         </section>
       )}
 
       <div className="bl-grid">
         <div>
-          <div className="br-table-wrap">
-            <table className="br-table bl-table">
-              <thead>
-                <tr>
-                  <th>Bill</th>
-                  <th>Campaign</th>
-                  <th>Date</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {BILLS.slice(0, shown).map((b) => (
-                  <tr key={b.id} className={b.status === "due" ? "is-due" : ""}>
-                    <td>
-                      <Link href={`/brands/billing/${b.id}`} className="bl-no">
-                        <FileText size={14} /> {b.no}
-                      </Link>
-                    </td>
-                    <td>{b.campaign}</td>
-                    <td className="bl-muted">{b.date}</td>
-                    <td>
-                      <strong>{b.amount}</strong>
-                    </td>
-                    <td>
-                      {b.status === "due" ? (
-                        <span className="br-badge br-badge--red">Due</span>
-                      ) : (
-                        <span className="br-badge br-badge--green">{b.paidVia === "bank" ? "Paid · bank" : "Paid"}</span>
-                      )}
-                    </td>
-                    <td className="bl-act">
-                      {b.status === "due" ? (
-                        <Link href={`/brands/billing/${b.id}#pay`} className="br-btn br-btn--primary br-btn--sm">
-                          Pay now
-                        </Link>
-                      ) : (
-                        <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => receipt(b)}>
-                          <Download size={13} /> Receipt
-                        </button>
-                      )}
-                    </td>
+          {inv.loading && !d ? (
+            <BrLoading rows={5} />
+          ) : inv.error && !d ? (
+            <BrError error={inv.error} onRetry={inv.reload} />
+          ) : !L.length ? (
+            <BrEmpty title="No bills yet" text="When the Geek team sends a payment request, it shows up here — you get an alert too." />
+          ) : (
+            <div className="br-table-wrap">
+              <table className="br-table bl-table">
+                <thead>
+                  <tr>
+                    <th>Bill</th>
+                    <th>Campaign</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {shown < BILLS.length && (
+                </thead>
+                <tbody>
+                  {L.slice(0, shown).map((b) => (
+                    <tr key={b.invoice_id} className={b.status === "requested" ? "is-due" : ""}>
+                      <td>
+                        <Link href={`/brands/billing/${b.invoice_id}`} className="bl-no">
+                          <FileText size={14} /> {b.invoice_no}
+                        </Link>
+                      </td>
+                      <td>{b.campaign || b.title}</td>
+                      <td className="bl-muted">{fdate(b.issued_on)}</td>
+                      <td>
+                        <strong>{inr(b.total)}</strong>
+                      </td>
+                      <td>
+                        {b.status === "requested" ? (
+                          <span className={`br-badge br-badge--${b.overdue ? "red" : "orange"}`}>{b.overdue ? "Overdue" : "Due"}</span>
+                        ) : b.status === "cancelled" ? (
+                          <span className="br-badge br-badge--grey">Cancelled</span>
+                        ) : (
+                          <span className="br-badge br-badge--green">{b.paid_via === "manual" ? "Paid · bank" : "Paid"}</span>
+                        )}
+                      </td>
+                      <td className="bl-act">
+                        {b.status === "requested" && canPay ? (
+                          <button type="button" className="br-btn br-btn--primary br-btn--sm" onClick={() => pay(b)} disabled={!!paying}>
+                            {paying === b.invoice_id ? "Opening…" : "Pay now"}
+                          </button>
+                        ) : (
+                          <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => download(b)}>
+                            <Download size={13} /> {b.status === "paid" ? "Receipt" : "Bill"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {shown < L.length && (
             <div className="br-more">
-              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(BILLS.length)}>
+              <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(L.length)}>
                 Load more <ChevronDown size={14} />
               </button>
             </div>
@@ -115,15 +171,15 @@ export default function BrandBilling() {
           <dl className="bl-sum">
             <div>
               <dt>Total billed</dt>
-              <dd>{BILL_YEAR.billed}</dd>
+              <dd>{inr(billed)}</dd>
             </div>
             <div>
               <dt>Paid</dt>
-              <dd className="is-green">{BILL_YEAR.paid}</dd>
+              <dd className="is-green">{inr(paidY)}</dd>
             </div>
             <div>
               <dt>Due</dt>
-              <dd className="is-red">{BILL_YEAR.due}</dd>
+              <dd className="is-red">{inr(dueY)}</dd>
             </div>
           </dl>
           <p className="bl-how">How to pay</p>
@@ -134,7 +190,7 @@ export default function BrandBilling() {
               </span>
               <p>
                 <strong>Razorpay</strong>
-                <small>Card, UPI, net banking — instant</small>
+                <small>{d && !d.online ? "Not available right now — pay by bank / UPI" : "Card, UPI, net banking — instant"}</small>
               </p>
             </li>
             <li>
@@ -152,7 +208,7 @@ export default function BrandBilling() {
               </span>
               <p>
                 <strong>UPI</strong>
-                <small>Scan the QR on the bill</small>
+                <small>UPI details are on each bill</small>
               </p>
             </li>
           </ul>

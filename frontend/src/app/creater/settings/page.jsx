@@ -1,36 +1,108 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BountyShell from "@/components/creater/BountyShell";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { useSession, clearSession } from "@/components/creater/session";
-import { CREATOR, SIDEKICKS, getSidekick } from "@/components/creater/data";
+import { useSession, useCreator, savePrefs, signOut as doSignOut, errText, getNotifyPrefs, setWaOptOut, setEmailUpdates, exportMyData, deleteAccount } from "@/services/creator";
+import { SIDEKICKS, getSidekick } from "@/components/creater/data";
 import { Check, LogOut } from "@/components/ui/Icons";
 
 // Sidekick ka mood (Figma: "Playful · Match me · Auto scene")
 const TONE = { rumi: "Playful", pip: "Dreamy", mochi: "Fiery", sprout: "Cheerful", pebble: "Calm", dot: "Helpful" };
 
-/** /creater/settings — sidekick, notifications, connected accounts, data & privacy */
+/** +91 98••• ••321 (purane settings jaisa) */
+const maskWa = (e) => {
+  const d = String(e || "").replace(/\D/g, "").slice(-10);
+  return d.length === 10 ? `+91 ${d.slice(0, 2)}••• ••${d.slice(-3)}` : "";
+};
+
+/**
+ * /creater/settings — purane loadSettings jaisa:
+ *  my_notify_prefs · wa_set_opt_out · set_email_updates · tips (sidekick prefs) · social_accounts · download (get_my_profile + social_accounts + get_my_campaigns)
+ *  · cookie popup (BountyShell) · creator_delete_me · sign out (sirf is browser mein)
+ */
 export default function Settings() {
   const router = useRouter();
   const [s, update] = useSession();
+  const c = useCreator();
   const sk = getSidekick(s.sidekick);
   const [pick, setPick] = useState(false);
-  const [notif, setNotif] = useState({ wa: true, email: true, tips: true });
+  const [np, setNp] = useState(null); // my_notify_prefs
+  const [busyK, setBusyK] = useState("");
+  const [dl, setDl] = useState(false);
   const [del, setDel] = useState(false);
   const [confirm, setConfirm] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState("");
   const [toast, setToast] = useState("");
 
   const flash = (t) => {
     setToast(t);
     setTimeout(() => setToast(""), 2400);
   };
-  const signOut = () => {
-    clearSession();
-    router.push("/creater");
+  const loadNp = async () => {
+    const r = await getNotifyPrefs();
+    if (r.error) flash(errText(r.error));
+    setNp(r.data || {});
   };
+  useEffect(() => {
+    if (c.loggedIn) loadNp();
+  }, [c.loggedIn]);
+
+  const tipsOn = !(c.prefs?.vibe === "focused" || c.prefs?.tips === "asked");
+  const notif = {
+    wa: !!(np && np.whatsapp_linked && !np.whatsapp_off),
+    email: !!(np && !np.email_off),
+    tips: tipsOn,
+  };
+  const toggle = async (k) => {
+    if (!np || busyK) return;
+    if (k === "wa" && !np.whatsapp_linked) {
+      router.push("/creater/profile/contact"); // pehle WhatsApp link karo
+      return;
+    }
+    setBusyK(k);
+    let r = { error: null };
+    if (k === "wa") r = await setWaOptOut(notif.wa);
+    if (k === "email") r = await setEmailUpdates(!notif.email);
+    if (k === "tips") await savePrefs({ tips: tipsOn ? "asked" : "occasional" });
+    if (r.error) flash(errText(r.error));
+    if (k !== "tips") await loadNp();
+    setBusyK("");
+  };
+
+  // Download my data — purane jaisa JSON file (browser mein hi banti hai)
+  const download = async () => {
+    if (dl) return;
+    setDl(true);
+    const out = await exportMyData(c);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+    a.download = "my-bounty-data.json";
+    a.click();
+    setDl(false);
+  };
+
+  const signOut = async () => {
+    await doSignOut();
+    router.replace("/creater");
+  };
+  const deleteMe = async () => {
+    setDelBusy(true);
+    setDelErr("");
+    const r = await deleteAccount(confirm.trim());
+    if (r.error) {
+      setDelErr("Couldn't delete: " + errText(r.error));
+      setDelBusy(false);
+      return;
+    }
+    router.replace("/creater");
+  };
+
+  const accts = c.igAccounts || [];
+  const waNum = maskWa(c.profile?.contact?.whatsapp_e164 || s.phone);
 
   return (
     <BountyShell>
@@ -79,45 +151,72 @@ export default function Settings() {
           <p className="bx-section-label">Notifications</p>
           <section className="bx-card st-list">
             {[
-              ["wa", "WhatsApp campaign alerts"],
+              ["wa", np && !np.whatsapp_linked ? "WhatsApp campaign alerts (link WhatsApp first)" : "WhatsApp campaign alerts"],
               ["email", "Email updates"],
               ["tips", `Growth tips from ${sk.name}`],
             ].map(([k, l]) => (
               <div key={k} className="st-row">
                 <span>{l}</span>
-                <button type="button" className={`bx-toggle ${notif[k] ? "is-on" : ""}`} onClick={() => setNotif({ ...notif, [k]: !notif[k] })} aria-pressed={notif[k]} aria-label={l} />
+                <button
+                  type="button"
+                  className={`bx-toggle ${notif[k] ? "is-on" : ""}`}
+                  onClick={() => toggle(k)}
+                  disabled={!np || busyK === k}
+                  aria-pressed={notif[k]}
+                  aria-label={l}
+                />
               </div>
             ))}
           </section>
 
           <p className="bx-section-label">Connected accounts</p>
           <section className="bx-card st-list st-list--acc">
-            <div className="st-row">
-              <span className="st-acc">
-                <i>📸</i> {s.ig ? <b>{CREATOR.handle}</b> : <b>No Instagram connected</b>}
-                {s.ig && <em className="st-ok">✓ Connected</em>}
-              </span>
-              {!s.ig && (
+            {accts.length ? (
+              accts.map((a) => (
+                <div key={a.id || a.username} className="st-row">
+                  <span className="st-acc">
+                    <i>📸</i> <b>@{a.username}</b>
+                    <em className="st-ok">✓ Connected</em>
+                  </span>
+                  <Link href="/creater/profile/instagram" className="st-change">
+                    Manage
+                  </Link>
+                </div>
+              ))
+            ) : (
+              <div className="st-row">
+                <span className="st-acc">
+                  <i>📸</i> <b>No Instagram connected</b>
+                </span>
                 <Link href="/creater/onboarding/meta" className="bx-btn bx-btn--dark bx-btn--sm st-conn">
                   Connect
                 </Link>
-              )}
-            </div>
+              </div>
+            )}
             <div className="st-row">
               <span className="st-acc">
-                <i>💬</i> <b>WhatsApp {CREATOR.phoneMasked}</b>
+                <i>💬</i> <b>{waNum ? `WhatsApp ${waNum}` : "WhatsApp not linked"}</b>
               </span>
+              {!(np && np.whatsapp_linked) && np && (
+                <Link href="/creater/profile/contact" className="bx-btn bx-btn--dark bx-btn--sm st-conn">
+                  Link
+                </Link>
+              )}
             </div>
           </section>
         </div>
 
         <div className="st-col">
           <p className="bx-section-label st-first">Your data</p>
-          <button type="button" className="bx-card st-data" onClick={() => flash("We’ll email your data file within 24 hours")}>
-            <strong>
-              ⤓ Download my data
-            </strong>
-            <small>Profile, Instagram and campaigns as a file</small>
+          <button type="button" className="bx-card st-data" onClick={download} disabled={dl}>
+            {dl ? (
+              <strong>Preparing…</strong>
+            ) : (
+              <>
+                <strong>⤓ Download my data</strong>
+                <small>Profile, Instagram and campaigns as a file</small>
+              </>
+            )}
           </button>
           <button type="button" className="bx-card st-data" onClick={() => window.dispatchEvent(new Event("bounty-cookie"))}>
             <strong>🍪 Cookie settings</strong>
@@ -126,14 +225,14 @@ export default function Settings() {
 
           <section className="st-del">
             <strong>Delete my account</strong>
-            <p>Removes your profile and campaign history. Type DELETE to confirm.</p>
+            <p>{del ? "This permanently deletes your login, profile, Instagram connection, campaign history and messages. It can’t be undone." : "Removes your profile and campaign history. Type DELETE to confirm."}</p>
             {!del ? (
               <button type="button" className="st-delbtn" onClick={() => setDel(true)}>
                 Delete account
               </button>
             ) : (
               <div className="st-del__confirm">
-                <input className="bx-input" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Type DELETE" aria-label="Type DELETE to confirm" />
+                <input className="bx-input" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Type DELETE" aria-label="Type DELETE to confirm" autoComplete="off" />
                 <div>
                   <button
                     type="button"
@@ -141,14 +240,16 @@ export default function Settings() {
                     onClick={() => {
                       setDel(false);
                       setConfirm("");
+                      setDelErr("");
                     }}
                   >
                     Cancel
                   </button>
-                  <button type="button" className="bx-btn bx-btn--danger bx-btn--sm" disabled={confirm !== "DELETE"} onClick={signOut}>
-                    Delete forever
+                  <button type="button" className="bx-btn bx-btn--danger bx-btn--sm" disabled={confirm.trim() !== "DELETE" || delBusy} onClick={deleteMe}>
+                    {delBusy ? "Deleting…" : "Delete forever"}
                   </button>
                 </div>
+                {delErr && <p className="bx-err">{delErr}</p>}
               </div>
             )}
           </section>
@@ -178,7 +279,7 @@ export default function Settings() {
         .st-sk__row span { flex: 1; min-width: 0; }
         .st-sk__row strong { display: block; font-family: var(--bx-serif); font-size: 17px; line-height: 21px; font-weight: 600; color: #0e2a33; }
         .st-sk__row small { display: block; margin-top: 4px; font-size: 12.5px; line-height: 16px; color: #3e4b52; }
-        .st-change { height: 34px; padding: 0 16px; border-radius: 999px; border: 1px solid #c9b38a; background: #fffaef; font-family: var(--bx-jak); font-size: 14px; font-weight: 700; color: #2a1e14; }
+        .st-change { display: inline-flex; align-items: center; height: 34px; padding: 0 16px; border-radius: 999px; border: 1px solid #c9b38a; background: #fffaef; font-family: var(--bx-jak); font-size: 14px; font-weight: 700; color: #2a1e14; }
         .st-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
         .st-pick button { display: flex; flex-direction: column; align-items: center; padding: 8px 6px; border: 2px solid transparent; border-radius: 12px; }
         .st-pick button.is-on { border-color: #2bc0e4; }

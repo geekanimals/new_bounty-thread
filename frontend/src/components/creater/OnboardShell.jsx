@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { pushTip, useRumiTip } from "@/components/creater/rumiBus";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import BootLoader from "@/components/creater/BootLoader";
+import { useCreatorGate } from "@/services/creator";
 import Logo from "@/components/creater/Logo";
 import { SIDEKICKS } from "@/components/creater/data";
 import { Play, Close } from "@/components/ui/Icons";
@@ -141,9 +144,17 @@ export function RumiTip({ text, name = "Rumi", img = "/creater/rumi.png", onClos
  * tone: "dark" (jungle) | "light" (parchment) — right panel ka background
  * step: 1–6 (progress bar), back: link/handler, footer: neeche chhota text
  */
-export default function OnboardShell({ children, tone = "dark", step, stepText, eyebrow, back, onBack, avatar = false, footer = "by Geek Creative Agency" }) {
+export default function OnboardShell({ children, tone = "dark", step, stepText, eyebrow, back, onBack, avatar = false, footer = "by Geek Creative Agency", gate }) {
   const [video, setVideo] = useState(false);
+  // Login / flow guard (purane app jaisa): gate="guest" (login ho chuka to aage), "member" (login zaroori)
+  const router = useRouter();
+  const pathname = usePathname() || "";
+  const gc = useCreatorGate(gate, router, pathname);
   const tip = useRumiTip();
+  // login wale step par check chal raha hai → wahi "Getting your world ready…" loader
+  if (gate === "member" && (!gc.ready || !gc.loggedIn)) return <BootLoader kid={gc.loggedIn ? gc.prefs?.kid : ""} />;
+  // login / OTP wale step: login ho chuka hai (Back dabane par yahan aaye) → form mat dikhao, seedha aage
+  if (gate === "guest" && (!gc.ready || gc.loggedIn)) return <BootLoader kid={gc.loggedIn ? gc.prefs?.kid : ""} />;
   return (
     <div className={`os os--${tone}`}>
       <section className="os-left">

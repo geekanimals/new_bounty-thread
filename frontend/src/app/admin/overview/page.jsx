@@ -2,49 +2,54 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import AdminShell from "@/components/admin/AdminShell";
+import AdminShell, { useAdmin } from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
+import { useRpc } from "@/lib/supabase";
+import { useApprovals, buildQueue, fmtNum, ago, N, StateBox } from "@/components/admin/queue/live";
 
-const QUEUE = [
-  { icon: "✍️", title: "Screen new creators for Circle Diwali", count: 25, sub: "Circle Diwali Declutter · Paid · 25 applicants waiting for a decision", pri: "High", tone: "orange", when: "2 days", href: "/admin/action-queue/applications" },
-  { icon: "▣", title: "Review submitted video drafts", count: 21, sub: "Beardo Detan Express Kit · Creator submissions need approval", pri: "Critical", tone: "red", when: "Overdue", href: "/admin/action-queue/content" },
-  { icon: "🏢", title: "Approve new account signups", count: 2, sub: "1 agency · 1 brand waiting for access", pri: "Medium", tone: "violet", when: "Today", href: "/admin/action-queue/signups" },
-];
-
-const ACTIVITY = [
-  { icon: "🟢", title: "Nisha Rao signed in", sub: "Creator · Mumbai · 2 min ago", kind: "Sign-in", href: "/admin/activity/nisha-rao" },
-  { icon: "📸", title: "Kabir Mehta connected Instagram", sub: "@kabirfoodtrail · 41.2k followers · 14 min ago", kind: "Instagram", href: "/admin/creators/kabir-mehta/instagram" },
-  { icon: "📣", title: "Home Spa went live", sub: "Yes Madam · Paid + product · 1 h ago", kind: "Campaign", href: "/admin/campaigns" },
-  { icon: "🟢", title: "Ananya Iyer signed in", sub: "Creator · Chennai · 1 h ago", kind: "Sign-in", href: "/admin/activity/ananya-iyer" },
-];
-const KIND_TONE = { "Sign-in": "", Instagram: "violet", Campaign: "green" };
+/* Live activity: event → icon / text / tab (purane adminOverview jaisa) */
+const EV = {
+  login: ["🟢", "signed in", "in"],
+  sign_out: ["🚪", "signed out", "in"],
+  consent: ["🍪", "chose cookies", "in"],
+  campaign_apply: ["📝", "applied to a campaign", "camp"],
+  instagram_connect_start: ["⏳", "started connecting Instagram", "ig"],
+  instagram_connect: ["📸", "connected Instagram", "ig"],
+  instagram_connected: ["📸", "connected Instagram", "ig"],
+  instagram_publish: ["📤", "published on Instagram", "camp"],
+  publish: ["📤", "published on Instagram", "camp"],
+  profile_completed: ["✅", "completed their profile", "prof"],
+  official_email_verified: ["✉️", "verified official email", "prof"],
+  campaign_create: ["📣", "created a campaign", "camp"],
+  campaign_edit: ["✏️", "edited a campaign", "camp"],
+  application_approve: ["👍", "approved an application", "camp"],
+  application_decline: ["👎", "declined an application", "camp"],
+  contract_sign: ["✍️", "signed a contract", "camp"],
+};
+const evOf = (e) => EV[e] || ["•", String(e || "").replace(/_/g, " "), "other"];
 const TABS = [
-  { k: "All", n: 20 },
-  { k: "Campaigns", n: 1 },
-  { k: "Instagram", n: 1 },
-  { k: "Sign-ins", n: 18 },
+  ["All", "all"],
+  ["Campaigns", "camp"],
+  ["Instagram", "ig"],
+  ["Sign-ins", "in"],
+  ["Profiles", "prof"],
 ];
-const TAB_KIND = { Campaigns: "Campaign", Instagram: "Instagram", "Sign-ins": "Sign-in" };
+const KIND = { camp: ["Campaign", "green"], ig: ["Instagram", "violet"], in: ["Sign-in", ""], prof: ["Profile", "blue"], other: ["Activity", ""] };
+const ROLE = { creator: "Creator", owner: "Agency", brand: "Brand", manager: "Manager", corporate: "Corporate" };
 
-const PEOPLE = [
-  { n: "298", l: "Creators", s: "57% on Instagram", href: "/admin/creators" },
-  { n: "169", l: "Instagram connected", s: "of 298 creators", href: "/admin/creators" },
-  { n: "7", l: "Agencies", href: "/admin/users" },
-  { n: "4", l: "Brands", href: "/admin/brands" },
-  { n: "2", l: "Joined today", s: "new accounts", href: "/admin/users" },
-  { n: "2", l: "Signed in today", s: "active people", href: "/admin/activity" },
-];
-const PIPE = [
-  ["298", "Signed up"],
-  ["169", "IG linked"],
-  ["35", "Profile ready"],
-  ["228", "Applied"],
-  ["151", "Approved"],
-];
+/* AdminShell ke andar render hota hai, isliye login kiye admin ka naam yahan milta hai */
+function Hello({ hello }) {
+  const me = useAdmin();
+  return (
+    <>
+      {hello}, {(me?.name || "").split(" ")[0] || "there"} ✳️
+    </>
+  );
+}
 
 export default function AdminOverview() {
   const [hello, setHello] = useState("Good afternoon");
-  const [tab, setTab] = useState("All");
+  const [tab, setTab] = useState("all");
 
   // Time ke hisaab se greeting (render ke baad — Next cache rule)
   useEffect(() => {
@@ -52,11 +57,50 @@ export default function AdminOverview() {
     setHello(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening");
   }, []);
 
-  const feed = tab === "All" ? ACTIVITY : ACTIVITY.filter((a) => a.kind === TAB_KIND[tab]);
+  // purane Super Admin overview ki hi calls: admin_dashboard + api.workspace_live (har 30 sec)
+  const dash = useRpc("admin", "admin_dashboard", {}, { refreshMs: 30000 });
+  const live = useRpc("admin", "api.workspace_live", {}, { refreshMs: 30000 });
+  const { inbox, proc, loading: qLoading, error: qError, reload: qReload } = useApprovals(30000);
+
+  const d = dash.data || {},
+    t = d.todo || {},
+    pe = d.people || {},
+    c = d.campaigns || {};
+  const W = live.data || {},
+    wc = W.campaigns || {},
+    wco = W.content || {},
+    B = W.barter || {};
+  const actions = N(t.accounts_pending) + N(t.applications_pending) + N(t.campaigns_awaiting) + N(t.contracts_to_send) + N(t.content_to_review);
+  const toSend = Math.max(0, N(B.total) - N(B.shipped) - N(B.delivered)),
+    inTransit = N(B.shipped);
+  const pct = (a, b) => (N(b) ? Math.round((100 * N(a)) / N(b)) : 0);
+  const queue = buildQueue(inbox, proc).slice(0, 3);
+  const qHref = (q) => (q.kind === "group" ? `/admin/action-queue/all/${q.id}` : `/admin/action-queue/${q.f}/${q.id}`);
+
+  const rec = Array.isArray(d.recent) ? d.recent : [];
+  const feed = rec.filter((r) => tab === "all" || evOf(r.event)[2] === tab);
+  const tabN = (k) => (k === "all" ? rec.length : rec.filter((r) => evOf(r.event)[2] === k).length);
+
+  const PEOPLE = [
+    { n: pe.creators, l: "Creators", s: `${pct(pe.instagram_connected, pe.creators)}% on Instagram`, href: "/admin/creators" },
+    { n: pe.instagram_connected, l: "Instagram connected", s: `of ${fmtNum(pe.creators)} creators`, href: "/admin/creators" },
+    { n: pe.agencies, l: "Agencies", href: "/admin/users" },
+    { n: pe.brands, l: "Brands", href: "/admin/brands" },
+    { n: pe.joined_today, l: "Joined today", s: "new accounts", href: "/admin/users" },
+    { n: pe.signed_in_today, l: "Signed in today", s: "active people", href: "/admin/activity" },
+  ];
+  const PIPE = [
+    [pe.creators, "Signed up"],
+    [pe.instagram_connected, "IG linked"],
+    [Math.max(0, N(pe.creators) - N(t.creators_incomplete)), "Profile ready"],
+    [c.applications, "Applied"],
+    [c.approved, "Approved"],
+  ];
+  const dash0 = dash.loading && !dash.data;
 
   return (
     <AdminShell>
-      <PageHead title={<>{hello}, Mayank ✳️</>} sub="One workspace for the decisions, people and campaigns that move Geek OS forward.">
+      <PageHead title={<Hello hello={hello} />} sub="One workspace for the decisions, people and campaigns that move Geek OS forward.">
         <Link href="/admin/campaigns/new" className="ad-btn ad-btn--primary">
           ＋ New campaign
         </Link>
@@ -64,11 +108,11 @@ export default function AdminOverview() {
 
       <Stats
         items={[
-          { value: 82, label: "Actions requiring review", note: "Across campaign operations", href: "/admin/action-queue" },
-          { value: 5, label: "Campaigns live", note: "8 campaigns total", href: "/admin/campaigns/live" },
-          { value: 298, label: "Creators", note: "174 connected to Instagram", href: "/admin/creators" },
-          { value: 25, label: "Shipments need progress", note: "10 to send · 15 in transit", href: "/admin/logistics" },
-          { value: 63, label: "Posts published", note: "Across all campaigns", href: "/admin/reports" },
+          { value: dash0 ? "—" : fmtNum(actions), label: "Actions requiring review", note: "Across campaign operations", href: "/admin/action-queue" },
+          { value: dash0 ? "—" : fmtNum(wc.live != null ? wc.live : c.live), label: "Campaigns live", note: `${fmtNum(c.total)} campaigns total`, href: "/admin/campaigns/live" },
+          { value: dash0 ? "—" : fmtNum(pe.creators), label: "Creators", note: `${fmtNum(pe.instagram_connected)} connected to Instagram`, href: "/admin/creators" },
+          { value: live.data ? fmtNum(toSend + inTransit) : "—", label: "Shipments need progress", note: `${fmtNum(toSend)} to send · ${fmtNum(inTransit)} in transit`, href: "/admin/logistics" },
+          { value: live.data ? fmtNum(wco.published) : "—", label: "Posts published", note: "Across all campaigns", href: "/admin/reports" },
         ]}
       />
 
@@ -86,19 +130,21 @@ export default function AdminOverview() {
               </Link>
             </div>
             <div className="ov-list">
-              {QUEUE.map((q) => (
-                <div key={q.title} className="ov-q">
+              <StateBox loading={qLoading && !queue.length} error={!queue.length && qError} onRetry={qReload} />
+              {!qLoading && !qError && !queue.length && <div className="ov-clear">✅ All clear — nothing waiting on you right now.</div>}
+              {queue.map((q) => (
+                <div key={q.id} className="ov-q">
                   <span className="ov-ic">{q.icon}</span>
                   <div className="ov-q__main">
                     <p className="ov-q__title">
                       {q.title} <span className="ad-count">{q.count}</span>
                     </p>
-                    <p className="ov-q__sub">{q.sub}</p>
+                    <p className="ov-q__sub">{q.line || `${q.campaign} · ${q.reason}`}</p>
                   </div>
                   <div className="ov-q__side">
                     <span className={`ad-badge ad-badge--${q.tone}`}>{q.pri}</span>
                     <span className="ov-when">{q.when}</span>
-                    <Link href={q.href} className="ad-btn ad-btn--ghost ov-review">
+                    <Link href={qHref(q)} className="ad-btn ad-btn--ghost ov-review">
                       Review →
                     </Link>
                   </div>
@@ -112,23 +158,34 @@ export default function AdminOverview() {
             <h2 className="ad-h2">🕒 Live activity</h2>
             <p className="ov-sub">Sign-ins, campaigns and Instagram connections as they happen.</p>
             <div className="ad-tabs ov-tabs" role="tablist">
-              {TABS.map((t) => (
-                <button key={t.k} type="button" role="tab" aria-selected={tab === t.k} className={`ad-tab ${tab === t.k ? "is-on" : ""}`} onClick={() => setTab(t.k)}>
-                  {t.k} {t.n}
+              {TABS.filter(([, k]) => k !== "prof" || tabN(k)).map(([label, k]) => (
+                <button key={k} type="button" role="tab" aria-selected={tab === k} className={`ad-tab ${tab === k ? "is-on" : ""}`} onClick={() => setTab(k)}>
+                  {label} {tabN(k)}
                 </button>
               ))}
             </div>
             <div className="ov-list">
-              {feed.map((a) => (
-                <Link key={a.title} href={a.href} className="ov-a">
-                  <span className="ov-ic">{a.icon}</span>
-                  <div className="ov-q__main">
-                    <p className="ov-q__title">{a.title}</p>
-                    <p className="ov-q__sub">{a.sub}</p>
-                  </div>
-                  <span className={`ad-badge ad-badge--${KIND_TONE[a.kind]}`}>{a.kind}</span>
-                </Link>
-              ))}
+              {dash0 && <StateBox loading />}
+              {!dash.data && dash.error && <StateBox error={dash.error} onRetry={dash.reload} />}
+              {dash.data && !feed.length && <div className="ov-clear">Nothing here yet.</div>}
+              {feed.map((r, i) => {
+                const [ic, txt, k] = evOf(r.event);
+                const det = r.detail || {};
+                const sub = [ROLE[r.role] || r.role, det.campaign ? `📣 ${det.campaign}` : "", det.profile ? `@${det.profile}` : "", r.city, ago(r.at)].filter(Boolean).join(" · ");
+                return (
+                  <Link key={`${r.at}-${i}`} href="/admin/activity" className="ov-a">
+                    <span className="ov-ic">{ic}</span>
+                    <div className="ov-q__main">
+                      <p className="ov-q__title">
+                        {r.who || "Someone"} {txt}
+                        {r.event === "consent" && det.choice ? ` (${det.choice})` : ""}
+                      </p>
+                      <p className="ov-q__sub">{sub}</p>
+                    </div>
+                    <span className={`ad-badge ad-badge--${KIND[k][1]}`}>{KIND[k][0]}</span>
+                  </Link>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -141,7 +198,7 @@ export default function AdminOverview() {
             <div className="ov-people">
               {PEOPLE.map((p) => (
                 <Link key={p.l} href={p.href} className={`ov-p ${p.s ? "" : "ov-p--short"}`}>
-                  <strong>{p.n}</strong>
+                  <strong>{dash0 ? "—" : fmtNum(p.n)}</strong>
                   <span>{p.l}</span>
                   {p.s && <small>{p.s}</small>}
                 </Link>
@@ -158,7 +215,7 @@ export default function AdminOverview() {
             <div className="ov-pipe">
               {PIPE.map(([n, l]) => (
                 <div key={l}>
-                  <strong>{n}</strong>
+                  <strong>{dash0 ? "—" : fmtNum(n)}</strong>
                   <span>{l}</span>
                 </div>
               ))}
@@ -175,12 +232,12 @@ export default function AdminOverview() {
             </div>
             <div className="ov-pulse">
               {[
-                ["10", "To send"],
-                ["15", "In transit"],
-                ["116", "Delivered"],
+                [toSend, "To send"],
+                [inTransit, "In transit"],
+                [B.delivered, "Delivered"],
               ].map(([n, l]) => (
                 <Link key={l} href="/admin/logistics">
-                  <strong>{n}</strong>
+                  <strong>{live.data ? fmtNum(n) : "—"}</strong>
                   <span>{l}</span>
                 </Link>
               ))}
@@ -200,6 +257,7 @@ export default function AdminOverview() {
         .ov-card__head--c .ov-link { margin-top: 0; }
         .ov-link:hover { color: var(--ad-primary-2); }
         .ov-list { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+        .ov-clear { padding: 18px 14px; border-radius: 14px; background: var(--ad-soft-2); font-size: 13px; color: var(--ad-muted); }
 
         .ov-q, .ov-a {
           display: flex; align-items: center; gap: 14px; padding: 18px 14px 14px 13px; border-radius: 14px;

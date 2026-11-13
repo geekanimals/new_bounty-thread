@@ -2,68 +2,99 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import AdminShell from "@/components/admin/AdminShell";
+import AdminShell, { useAdmin } from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
-import { Panel, Table, useToast } from "@/components/admin/settings/kit";
+import { Panel, Table, useToast, fmtDate, fmtDateTime, fmtNum, ago, emptyState } from "@/components/admin/settings/kit";
+import { rpc, useRpc, errText } from "@/lib/supabase";
 
-const USERS = [
-  { id: "nisha-rao", name: "Nisha Rao · @nishastories", role: "Creator", joined: "2 Oct", last: "Today", profile: "92%", state: "complete", href: "/admin/creators/nisha-rao/profile" },
-  { id: "kabir-mehta", name: "Kabir Mehta · @kabirfoodtrail", role: "Creator", joined: "12 Oct", last: "Today", profile: "64%", state: "incomplete", href: "/admin/creators/kabir-mehta/profile" },
-  { id: "pixel-bloom-media", name: "Pixel Bloom Media", role: "Agency", joined: "Today", last: "Today", profile: "—", state: "incomplete", href: "/admin/settings/workspaces" },
-  { id: "beardo", name: "Beardo", role: "Brand", joined: "14 Sep", last: "Yesterday", profile: "—", state: "incomplete", href: "/admin/brands/beardo/overview" },
-  { id: "ananya-iyer", name: "Ananya Iyer · @ananya.travels", role: "Creator", joined: "20 Oct", last: "3 days", profile: "48%", state: "incomplete", href: "/admin/creators/ananya-iyer/profile" },
-  { id: "aarav-shah", name: "Aarav Shah · @aaravcreates", role: "Creator", joined: "18 Sep", last: "2 days", profile: "100%", state: "complete", href: "/admin/creators/aarav-shah/profile" },
-  { id: "ritika-sen", name: "Ritika Sen · @ritika.daily", role: "Creator", joined: "5 Nov", last: "Never", profile: "12%", state: "never", href: "/admin/creators/ritika-sen/profile" },
-  { id: "rohan-das", name: "Rohan Das · @rohanfitlife", role: "Creator", joined: "9 Oct", last: "3 h ago", profile: "58%", state: "incomplete", href: "/admin/creators/rohan-das/profile" },
-];
+const ROLE = { creator: "Creator", owner: "Agency", brand: "Brand", manager: "Manager", corporate: "Corporate", admin: "Admin" };
+const FAKE_EMAIL = /@creators\.bountythreads\.app$/i;
+const PER = 40; // purane app jaisa: 40 per page
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+const isToday = (t) => !!t && new Date(t) >= startOfToday();
 const FILTERS = [
-  { k: "all", label: "All" },
-  { k: "complete", label: "✅ Profile complete 34" },
-  { k: "incomplete", label: "🧩 Incomplete 270" },
-  { k: "never", label: "💤 Never signed in 1" },
-  { k: "pending", label: "⏳ Pending approval 0" },
+  { k: "all", label: "All", fn: () => true },
+  { k: "complete", label: "✅ Profile complete", fn: (u) => u.role === "creator" && u.profile_complete },
+  { k: "incomplete", label: "🧩 Incomplete", fn: (u) => u.role === "creator" && u.profile_complete === false },
+  { k: "never", label: "💤 Never signed in", fn: (u) => !u.last_sign_in_at },
+  { k: "pending", label: "⏳ Pending approval", fn: (u) => u.status === "pending" },
 ];
-const PER = 5;
+const nameOf = (u) => (u.name && u.name !== "Creator" ? u.name : "") || (u.ig_username ? `@${u.ig_username}` : "") || (u.email && !FAKE_EMAIL.test(u.email) ? u.email : "") || u.whatsapp || "Name not added";
+const profileHref = (u) => (u.role === "creator" ? `/admin/creators/${u.member_id}/profile` : u.role === "brand" ? "/admin/brands" : "/admin/settings/workspaces");
 
+/** "Delete" button sirf dusron ke liye — khud ko delete nahi */
+function DelBtn({ u, onClick }) {
+  const me = useAdmin();
+  const email = u.email && !FAKE_EMAIL.test(u.email) ? u.email : "";
+  if (me?.email && email && me.email.toLowerCase() === email.toLowerCase()) return null;
+  return (
+    <button type="button" className="sk-link au-del" onClick={onClick} aria-label={`Delete ${nameOf(u)}`} title="Delete this user and all their data">
+      🗑
+    </button>
+  );
+}
+
+/** /admin/users — har login wala account (admin_users, har 30 sec live) · delete = admin_delete_user */
 export default function AllUsers() {
-  const [list, setList] = useState(USERS);
+  const res = useRpc("admin", "admin_users", {}, { refreshMs: 30000 });
+  const all = useMemo(() => res.data || [], [res.data]);
   const [f, setF] = useState("all");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
   const [del, setDel] = useState(null);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
   const [toast, say] = useToast();
 
+  const count = (k) => all.filter(FILTERS.find((x) => x.k === k).fn).length;
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return list.filter((u) => (f === "all" || u.state === f) && (!t || u.name.toLowerCase().includes(t) || u.role.toLowerCase().includes(t)));
-  }, [list, f, q]);
+    const fn = FILTERS.find((x) => x.k === f).fn;
+    return all
+      .filter(fn)
+      .filter((u) => !t || [u.name, u.ig_username, u.whatsapp, u.email, u.org_name, u.last_city, u.last_region, u.role].filter(Boolean).join(" ").toLowerCase().includes(t))
+      .sort((a, b) => new Date(b.joined_at || 0) - new Date(a.joined_at || 0));
+  }, [all, f, q]);
   const pages = Math.max(1, Math.ceil(rows.length / PER));
   const pg = Math.min(page, pages - 1);
   const shown = rows.slice(pg * PER, pg * PER + PER);
-  const total = 316 - (USERS.length - list.length);
 
-  const remove = () => {
-    setList((l) => l.filter((u) => u.id !== del.id));
-    say(`${del.name.split(" · ")[0]} removed`);
+  const remove = async () => {
+    const u = del;
+    setBusy(true);
+    setMsg("");
+    const { data, error } = await rpc("admin", "admin_delete_user", { p_member: u.member_id, p_confirm: typed.trim() });
+    setBusy(false);
+    if (error) return setMsg(errText(error));
+    say(`🗑 ${nameOf(u)} deleted${data && data.campaigns_removed_from ? ` — removed from ${data.campaigns_removed_from} campaign(s)` : ""}. They can sign up again fresh.`);
     setDel(null);
+    res.reload();
   };
+  const L = (n) => (res.loading ? "…" : fmtNum(n));
 
   return (
     <AdminShell>
       <PageHead title="All users" sub="Every account on Geek OS — creators, agencies, brands and admins." />
       <Stats
         items={[
-          { value: 310, label: "Everyone", note: "Live" },
-          { value: 298, label: "Creators", href: "/admin/creators" },
-          { value: 10, label: "Agencies & brands", href: "/admin/brands" },
-          { value: 2, label: "Joined today" },
-          { value: 263, label: "Profile incomplete" },
+          { value: L(all.length), label: "Everyone", note: "Live" },
+          { value: L(all.filter((u) => u.role === "creator").length), label: "Creators", href: "/admin/creators" },
+          { value: L(all.filter((u) => u.role === "owner" || u.role === "brand").length), label: "Agencies & brands", href: "/admin/brands" },
+          { value: L(all.filter((u) => isToday(u.joined_at)).length), label: "Joined today" },
+          { value: L(count("incomplete")), label: "Profile incomplete" },
         ]}
       />
 
       <Panel className="au-panel">
         <div className="au-top">
-          <h2 className="ad-h2 au-title">Everyone · 310</h2>
+          <h2 className="ad-h2 au-title">
+            {FILTERS.find((x) => x.k === f).k === "all" ? "Everyone" : FILTERS.find((x) => x.k === f).label.replace(/^\S+\s/, "")} · {L(rows.length)}
+          </h2>
           <div className="au-right">
             <div className="au-filters" role="tablist">
               {FILTERS.map((x) => (
@@ -79,6 +110,7 @@ export default function AllUsers() {
                   }}
                 >
                   {x.label}
+                  {x.k !== "all" && !res.loading ? ` ${fmtNum(count(x.k))}` : ""}
                 </button>
               ))}
             </div>
@@ -97,7 +129,7 @@ export default function AllUsers() {
         <Table
           rowH={64}
           minW={860}
-          empty="No users match this filter."
+          empty={emptyState({ loading: res.loading, error: res.error, reload: res.reload, empty: "No users match this filter." })}
           cols={[
             { label: "Person", w: 325 },
             { label: "Role", w: 104 },
@@ -107,27 +139,39 @@ export default function AllUsers() {
             { label: "", w: 277 },
           ]}
           rows={shown.map((u) => [
-            <b key="n">{u.name}</b>,
-            u.role,
-            u.joined,
-            u.last,
-            u.profile,
+            <b key="n" title={[u.whatsapp, u.email && !FAKE_EMAIL.test(u.email) ? u.email : "", [u.last_city, u.last_region].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}>
+              {nameOf(u)}
+              {u.ig_username && u.name && u.name !== "Creator" ? ` · @${u.ig_username}` : ""}
+              {u.role !== "creator" && u.org_name && u.org_name !== nameOf(u) ? ` · ${u.org_name}` : ""}
+              {u.status === "pending" ? " · pending" : ""}
+            </b>,
+            ROLE[u.role] || u.role || "—",
+            fmtDate(u.joined_at).replace(/ \d{4}$/, ""),
+            <span key="l" title={u.last_sign_in_at ? fmtDateTime(u.last_sign_in_at) : ""}>
+              {u.last_sign_in_at ? ago(u.last_sign_in_at) : "Never"}
+            </span>,
+            u.role !== "creator" ? "—" : u.profile_complete ? "100%" : u.profile_total ? `${Math.round((100 * (u.profile_done || 0)) / u.profile_total)}%` : "—",
             <span key="a" className="au-acts">
-              <Link href={u.href} className="sk-link">
+              <Link href={profileHref(u)} className="sk-link">
                 Profile
               </Link>
-              <Link href={`/admin/activity/${u.id}`} className="sk-link">
+              <Link href={`/admin/activity/${u.member_id}`} className="sk-link">
                 Activity
               </Link>
-              <button type="button" className="sk-link au-del" onClick={() => setDel(u)} aria-label={`Delete ${u.name}`}>
-                🗑
-              </button>
+              <DelBtn
+                u={u}
+                onClick={() => {
+                  setTyped("");
+                  setMsg("");
+                  setDel(u);
+                }}
+              />
             </span>,
           ])}
         />
         <div className="au-foot">
           <p>
-            Showing {rows.length ? pg * PER + 1 : 0}–{pg * PER + shown.length} of {f === "all" && !q ? total : rows.length}
+            Showing {rows.length ? pg * PER + 1 : 0}–{pg * PER + shown.length} of {fmtNum(rows.length)}
           </p>
           <div>
             <button type="button" className="sk-link au-pg" disabled={pg === 0} onClick={() => setPage(pg - 1)}>
@@ -143,16 +187,22 @@ export default function AllUsers() {
       {del && (
         <div className="ad-overlay" onClick={() => setDel(null)}>
           <div className="ad-modal au-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete account">
-            <h2 className="ad-h2">Delete this account?</h2>
+            <h2 className="ad-h2">Delete {nameOf(del)}?</h2>
             <p className="au-modal__p">
-              <b>{del.name}</b> will lose access to Geek OS. Their campaign history stays in the audit log. This can’t be undone.
+              Removes for good: their login, creator profile, Instagram and WhatsApp link, every campaign they were on, alerts and activity. Kept: campaigns they created (moved to you) and a record in the Audit log. They can
+              sign up again fresh.
             </p>
+            <label className="ad-label au-l" htmlFor="au-del">
+              Type <b>DELETE</b> to confirm
+            </label>
+            <input id="au-del" className="ad-input" autoComplete="off" placeholder="DELETE" value={typed} onChange={(e) => setTyped(e.target.value)} />
+            {msg && <p className="au-err">{msg}</p>}
             <div className="au-modal__btns">
               <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setDel(null)}>
                 Keep
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" onClick={remove}>
-                Delete account
+              <button type="button" className="ad-btn ad-btn--danger" onClick={remove} disabled={busy || typed.trim() !== "DELETE"}>
+                {busy ? "Deleting…" : "Delete permanently"}
               </button>
             </div>
           </div>
@@ -181,6 +231,8 @@ export default function AllUsers() {
         .au-modal { width: min(440px, 100%); padding: 24px; }
         .au-modal__p { margin-top: 10px; font-size: 13.5px; line-height: 1.55; color: var(--ad-muted); }
         .au-modal__p b { color: var(--ad-ink); }
+        .au-l { margin-top: 14px; }
+        .au-err { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
         .au-modal__btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
         @media (max-width: 1023px) { .au-top { flex-direction: column; align-items: flex-start; gap: 14px; } .au-title { width: auto; } }
         @media (max-width: 640px) {

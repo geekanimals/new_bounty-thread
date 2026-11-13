@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import MsgHead from "@/components/admin/msg/MsgHead";
 import PTable from "@/components/admin/brand/PTable";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { ago, fmtDateTime, useToast } from "@/components/admin/brand/util";
 
 const MENU = [
   ["1 · Help me", "Answers from FAQs and their data"],
@@ -12,41 +14,95 @@ const MENU = [
   ["4 · Talk to a team member", "Alerts the team · bot goes quiet"],
   ["5 · Something else", "Hands to the team"],
 ];
-const REPLIES = [
-  ["4:12 pm", "@nishastories", "When will my product arrive?"],
-  ["2:40 pm", "@kabirfoodtrail", "How do I submit my reel?"],
-  ["11:05 am", "@rohanfitlife", "Payment kab aayega?"],
-];
+const REASON = { team_reply: "the team replied", handoff: "waiting for the team", manual: "paused by you" };
 
-/** /admin/messaging/bot — WhatsApp help bot (Figma 081) */
+/**
+ * /admin/messaging/bot — WhatsApp help bot (Figma 081), purane app jaisa:
+ *  public.admin_bot_overview(40) · settings: admin_bot_settings (+ admin_bot_mode "direct" jab pehli baar on)
+ *  pause / unpause a number: admin_bot_pause · "What the bot sees": admin_bot_preview
+ */
 export default function WhatsAppBot() {
-  const [bot, setBot] = useState(false);
-  const [quiet, setQuiet] = useState(false);
-  const [delay, setDelay] = useState(false);
+  const { data, error, loading, reload } = useRpc("admin", "admin_bot_overview", { p_limit: 40 });
+  const d = data || {};
+  const S = d.settings || {};
+  const P = d.paused || [];
+  const L = d.log || [];
+  const bot = !!S.enabled;
+  const quiet = Number(S.team_pause_hours) > 0;
+  const delay = Number(S.reply_delay_min) > 0;
+  const [askOn, setAskOn] = useState(false);
   const [sees, setSees] = useState(false);
+  const [seeNum, setSeeNum] = useState("");
+  const [seen, setSeen] = useState(null);
   const [pause, setPause] = useState(false);
   const [num, setNum] = useState("");
-  const [paused, setPaused] = useState([]);
-  const [toast, setToast] = useState("");
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const [toast, say] = useToast();
 
-  const doPause = (e) => {
+  const save = async (patch, msg) => {
+    const r = await rpc("admin", "admin_bot_settings", { p_enabled: null, p_delay: null, p_pause_hours: null, p_use_ai: null, ...patch });
+    if (r.error) return say(errText(r.error));
+    say(msg || "Saved ✓");
+    reload(true);
+  };
+  const toggleBot = async () => {
+    if (!bot && !askOn) return setAskOn(true);
+    setAskOn(false);
+    if (!bot && S.mode === "snapto") await rpc("admin", "admin_bot_mode", { p_mode: "direct" });
+    save({ p_enabled: !bot }, bot ? "Help bot turned off" : "Help bot is answering creators ✓");
+  };
+
+  const clean = (n) => n.replace(/[^\d+]/g, "");
+  const doPause = async (e) => {
     e.preventDefault();
-    const n = num.replace(/[^\d+]/g, "");
-    if (n.replace(/\D/g, "").length < 10) return setToast("Enter a 10-digit WhatsApp number");
-    setPaused([...paused, n]);
+    const n = clean(num);
+    if (n.replace(/\D/g, "").length < 10) return say("Enter a 10-digit WhatsApp number");
+    const r = await rpc("admin", "admin_bot_pause", { p_phone: n, p_hours: 24 });
+    if (r.error) return say(errText(r.error));
     setNum("");
     setPause(false);
-    setToast(`Bot paused for ${n} for 24 h`);
+    say(`Bot paused for ${n} for 24 h ✓`);
+    reload(true);
+  };
+  const unpause = async (phone) => {
+    const r = await rpc("admin", "admin_bot_pause", { p_phone: phone, p_hours: 0 });
+    if (r.error) return say(errText(r.error));
+    reload(true);
+  };
+  const check = async (e) => {
+    e.preventDefault();
+    const n = clean(seeNum);
+    if (n.replace(/\D/g, "").length < 10) return say("Enter the creator’s WhatsApp number");
+    setSeen({ loading: true });
+    const r = await rpc("admin", "admin_bot_preview", { p_phone: n });
+    if (r.error) return setSeen({ error: errText(r.error) });
+    setSeen(r.data || {});
+  };
+  const seenText = (c) => {
+    const camps = c.campaigns || [];
+    const inv = c.invites || [];
+    const ex = c.extra || {};
+    return [
+      `creator: ${c.name || c.phone || "—"} · ${c.registered ? "registered" : "not registered on this number"}`,
+      (c.needs || []).length ? `still to connect: ${c.needs.join(", ")}` : null,
+      ...camps.slice(0, 8).map((x) => `campaign: ${x.campaign}${x.brand ? ` (${x.brand})` : ""} · ${String(x.stage || "").replace(/_/g, " ")}${ex[x.participation_id]?.pending ? ` · to do: ${ex[x.participation_id].pending}` : ""}`),
+      ...inv.map((i) => `bulk sheet: ${i.campaign} · ${String(i.status || "").replace(/_/g, " ")}`),
+      !camps.length && !inv.length ? "no campaign on this number — the bot sends the register steps" : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
   };
 
   return (
     <AdminShell>
       <MsgHead />
+      {error && (
+        <p className="mb-err">
+          Couldn’t load the bot: {errText(error)}{" "}
+          <button type="button" onClick={() => reload()}>
+            Retry
+          </button>
+        </p>
+      )}
       <div className="mb-grid">
         <section className="ad-card mb-card">
           <div className="mb-top">
@@ -54,11 +110,24 @@ export default function WhatsAppBot() {
               <h2 className="ad-h2">🤖 WhatsApp help bot</h2>
               <p className="mb-sub">Answers creators on WhatsApp from their live data — campaign, step, deadline, courier, profile.</p>
             </div>
-            <span className={`ad-badge ${bot ? "ad-badge--green" : ""}`}>{bot ? "ON" : "OFF"}</span>
-            <button type="button" className={`ad-btn ${bot ? "ad-btn--ghost" : "ad-btn--primary"} mb-turn`} onClick={() => (setBot(!bot), setToast(bot ? "Help bot turned off" : "Help bot is answering creators"))}>
+            <span className={`ad-badge ${bot ? "ad-badge--green" : ""}`}>{loading ? "…" : bot ? "ON" : "OFF"}</span>
+            <button type="button" className={`ad-btn ${bot ? "ad-btn--ghost" : "ad-btn--primary"} mb-turn`} onClick={toggleBot} disabled={loading || !!error}>
               {bot ? "Turn bot off" : "Turn bot on"}
             </button>
           </div>
+          {askOn && (
+            <div className="mb-ask">
+              Turn the WhatsApp bot on? It will auto-reply to creators who message your snapto number, when the team hasn’t replied.
+              <div className="mb-ask__b">
+                <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" onClick={toggleBot}>
+                  Yes, turn on
+                </button>
+                <button type="button" className="mb-link" onClick={() => setAskOn(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           <h3 className="mb-h3">Welcome menu</h3>
           <p className="mb-sub">A new chat (or one quiet for 24 h) first gets the welcome + 5 options. The bot answers only after one is picked · 0 brings the menu back.</p>
@@ -68,18 +137,18 @@ export default function WhatsAppBot() {
 
           <h3 className="mb-h3 mb-rules-h">Rules</h3>
           <div className="mb-rules">
-            <button type="button" className="mb-rule" onClick={() => setQuiet(!quiet)} aria-pressed={quiet}>
+            <button type="button" className="mb-rule" onClick={() => save({ p_pause_hours: quiet ? 0 : 12 }, quiet ? "Bot keeps replying after the team" : "Bot stays quiet after a team reply ✓")} aria-pressed={quiet} disabled={loading}>
               <i className={`ad-toggle ${quiet ? "is-on" : ""}`} />
               <span>
                 <strong>Stay quiet when the team replies</strong>
-                <small>from snapto or the app</small>
+                <small>{quiet ? `for ${S.team_pause_hours} h · from snapto or the app` : "from snapto or the app"}</small>
               </span>
             </button>
-            <button type="button" className="mb-rule" onClick={() => setDelay(!delay)} aria-pressed={delay}>
+            <button type="button" className="mb-rule" onClick={() => save({ p_delay: delay ? 0 : 1 }, delay ? "Bot replies right away" : "Bot waits a minute before replying ✓")} aria-pressed={delay} disabled={loading}>
               <i className={`ad-toggle ${delay ? "is-on" : ""}`} />
               <span>
                 <strong>Reply after</strong>
-                <small>30 seconds</small>
+                <small>{delay ? `${S.reply_delay_min} min` : "right away"}</small>
               </span>
             </button>
           </div>
@@ -93,18 +162,44 @@ export default function WhatsAppBot() {
             </button>
           </div>
           {sees && (
-            <pre className="mb-sees">{`creator: @nishastories
-campaign: Beardo Detan Express Kit
-step: Product shipped
-courier: DTDC 7D1439… · in transit
-deadline: draft due 18 Nov
-profile: 92% complete`}</pre>
+            <div className="mb-seebox">
+              <form className="mb-pause" onSubmit={check}>
+                <input className="ad-input" inputMode="tel" placeholder="+91… creator’s WhatsApp" value={seeNum} onChange={(e) => setSeeNum(e.target.value)} aria-label="Creator WhatsApp number" />
+                <button type="submit" className="ad-btn ad-btn--primary">
+                  Check
+                </button>
+              </form>
+              {seen && <pre className="mb-sees">{seen.loading ? "Checking…" : seen.error ? seen.error : seenText(seen)}</pre>}
+            </div>
           )}
-          <PTable minW={400} rowH={48} cols={[{ label: "When", w: "26.5%" }, { label: "Creator", w: "44.5%" }, { label: "Asked", w: "29%" }]} rows={REPLIES.map(([w, c, a]) => [w, <b key="c">{c}</b>, <span key="a" title={a}>{a}</span>])} />
-          {paused.length > 0 && (
-            <p className="mb-paused">
-              ⏸ Paused 24 h: {paused.join(", ")}
-            </p>
+          <PTable
+            minW={400}
+            rowH={48}
+            cols={[{ label: "When", w: "26.5%" }, { label: "Creator", w: "44.5%" }, { label: "Asked", w: "29%" }]}
+            rows={L.map((j) => [
+              <span key="w" title={fmtDateTime(j.at)}>
+                {ago(j.at) || "—"}
+              </span>,
+              <b key="c" title={[j.phone, j.campaign].filter(Boolean).join(" · ")}>
+                {j.name || j.phone || "—"}
+              </b>,
+              <span key="a" title={[j.question, j.reply ? `Bot: ${j.reply}` : j.reason].filter(Boolean).join("\n\n")}>
+                {j.question || "—"}
+              </span>,
+            ])}
+            empty={loading ? "Loading…" : "No messages yet."}
+          />
+          {P.length > 0 && (
+            <div className="mb-paused">
+              {P.map((p) => (
+                <p key={p.phone}>
+                  ⏸ {p.name || p.phone} · {REASON[p.reason] || p.reason} · till {fmtDateTime(p.until)}{" "}
+                  <button type="button" className="mb-link" onClick={() => unpause(p.phone)}>
+                    Let the bot reply
+                  </button>
+                </p>
+              ))}
+            </div>
           )}
           {pause ? (
             <form className="mb-pause" onSubmit={doPause}>
@@ -120,8 +215,16 @@ profile: 92% complete`}</pre>
           )}
         </section>
       </div>
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ad-toast">{toast}</div>}
       <style>{`
+        .mb-err { margin: 0 0 14px; font-size: 13px; color: var(--ad-red); }
+        .mb-err button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
+        .mb-ask { margin-top: 12px; padding: 12px 14px; border-radius: 13px; background: var(--ad-soft-2); border: 1px solid var(--ad-line); font-size: 13px; }
+        .mb-ask__b { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+        .mb-seebox { margin: -14px 0 18px; }
+        .mb-seebox .mb-pause { margin-top: 0; }
+        .mb-seebox .mb-sees { margin: 10px 0 0; }
+        .mb-paused p { margin-top: 6px; }
         .mb-grid { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }
         .mb-card { padding: 24px 22px 22px; min-width: 0; }
         .mb-top { display: flex; align-items: flex-start; gap: 10px; }

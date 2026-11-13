@@ -1,135 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, notFound } from "next/navigation";
-import BrandShell from "@/components/brands/BrandShell";
-import CampaignTop from "@/components/brands/CampaignTop";
-import { getCampaign, BRIEF } from "@/components/brands/data";
-import { Download, FileText, ImageIcon, LinkIcon, Check, Close, Calendar } from "@/components/ui/Icons";
+import CampaignFrame from "@/components/brands/CampaignFrame";
+import { useToast } from "@/components/brands/BrandStates";
+import { bLines, bDate, B_TYPE } from "@/services/brand";
+import { Download, Check, Close, Calendar, Info } from "@/components/ui/Icons";
 
-const FILE_ICON = { file: FileText, image: ImageIcon, link: LinkIcon };
-
-/** /brands/campaigns/[id]/brief — creators ko diya gaya brief, files aur dates */
+/** /brands/campaigns/[id]/brief — creators ko diya gaya brief (purana paintBrief: api.brand_campaign campaign + video_brief) */
 export default function CampaignBrief() {
-  const { id } = useParams();
-  const c = getCampaign(id);
-  const [toast, setToast] = useState("");
-  if (!c) notFound();
-
-  const flash = (t) => {
-    setToast(t);
-    setTimeout(() => setToast(""), 2400);
-  };
-
   return (
-    <BrandShell crumbs={[{ label: "Campaigns", href: "/brands/campaigns" }, { label: c.title }]}>
-      <title>{`${c.title} · Brief — Geek OS Brand`}</title>
-      <CampaignTop c={c} />
-
-      <div className="cb">
-        <section className="br-card cb-brief">
-          <div className="cb-head">
-            <div>
-              <h2>Creator brief</h2>
-              <p>{BRIEF.edited.replace("24", String(c.creators))}</p>
-            </div>
-            <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => flash("Brief PDF is downloading…")}>
-              <Download size={13} /> Download
-            </button>
-          </div>
-
-          <p className="cb-label">Goal</p>
-          <p className="cb-goal">{BRIEF.goal}</p>
-
-          <p className="cb-label">Key messages</p>
-          <ul className="cb-msgs">
-            {BRIEF.messages.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-
-          <div className="cb-dd">
-            <div className="cb-do">
-              <p>
-                <Check size={13} /> Do
-              </p>
-              <ul>
-                {BRIEF.dos.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="cb-dont">
-              <p>
-                <Close size={13} /> Don’t
-              </p>
-              <ul>
-                {BRIEF.donts.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <p className="cb-label">Deliverables</p>
-          <div className="cb-tags">
-            {BRIEF.deliverables.map((d) => (
-              <span key={d} className="br-badge br-badge--violet">
-                {d}
-              </span>
-            ))}
-          </div>
-
-          <p className="cb-label">Hashtags &amp; tags</p>
-          <p className="cb-hash">
-            {BRIEF.hashtags} <span>·</span> {BRIEF.tag}
-          </p>
-        </section>
-
-        <aside className="cb-side">
-          <section className="br-card cb-box">
-            <h3>Files</h3>
-            <ul className="cb-files">
-              {BRIEF.files.map((f) => {
-                const Icon = FILE_ICON[f.kind];
-                return (
-                  <li key={f.name}>
-                    <button type="button" onClick={() => flash(`${f.name} is downloading…`)}>
-                      <span className="cb-files__ic">
-                        <Icon size={14} />
-                      </span>
-                      <span className="cb-files__txt">
-                        <strong>{f.name}</strong>
-                        <small>{f.meta}</small>
-                      </span>
-                      <Download size={14} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-          <section className="br-card cb-box">
-            <h3>
-              <Calendar size={14} /> Key dates
-            </h3>
-            <dl className="cb-dates">
-              {BRIEF.dates.map((d) => (
-                <div key={d.label}>
-                  <dt>{d.label}</dt>
-                  <dd>{d.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        </aside>
-      </div>
-
-      {toast && (
-        <div className="br-toast" role="status">
-          <Check size={14} /> {toast}
-        </div>
-      )}
+    <>
+      <CampaignFrame tab="Brief">{(d) => <BriefTab c={d.campaign || {}} n={(d.creators || []).length} />}</CampaignFrame>
 
       <style>{`
         .cb { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
@@ -180,7 +60,147 @@ export default function CampaignBrief() {
           .cb-brief { padding: 18px; }
           .cb-dd, .cb-side { grid-template-columns: 1fr; }
         }
-      `}</style>
-    </BrandShell>
+              .cb-none { margin: 0; font-size: 13px; color: var(--br-muted); }
+        .cb-note { display: flex; align-items: center; gap: 7px; margin: 20px 0 0; padding-top: 14px; border-top: 1px solid var(--br-border); font-size: 12.5px; color: var(--br-muted); }
+        .cb-goal { white-space: pre-wrap; }
+`}</style>
+    </>
+  );
+}
+
+const tags = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,]+/)).map((x) => String(x).trim()).filter(Boolean);
+
+function BriefTab({ c, n }) {
+  const [toast, say] = useToast();
+  const vb = c.video_brief || {};
+  const goal = c.brief || vb.what_to_shoot || c.objective || "";
+  const msgs = bLines(vb.key_messages);
+  const dos = bLines(vb.dos);
+  const donts = bLines(vb.donts);
+  const deliver = bLines(c.deliverables_text);
+  const hash = tags(c.hashtags).map((h) => (h.startsWith("#") ? h : `#${h}`));
+  const ment = tags(c.mentions).map((m) => (m.startsWith("@") ? m : `@${m}`));
+  const cities = Array.isArray(c.cities) ? c.cities.join(", ") : c.cities || "";
+  const dates = [
+    { label: "Starts", value: bDate(c.starts_on) },
+    { label: "Ends", value: bDate(c.ends_on) },
+    c.creators_needed ? { label: "Creators needed", value: String(c.creators_needed) } : null,
+    c.platforms ? { label: "Platforms", value: c.platforms } : null,
+    cities ? { label: "Cities", value: cities } : null,
+    c.campaign_type ? { label: "Type", value: B_TYPE[c.campaign_type] || c.campaign_type } : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="cb">
+      <section className="br-card cb-brief">
+        <div className="cb-head">
+          <div>
+            <h2>Creator brief</h2>
+            <p>
+              Shared with {n} creator{n === 1 ? "" : "s"}
+              {c.product ? ` · ${c.product}` : ""}
+            </p>
+          </div>
+          <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => say("Coming soon — brief PDF. Use PDF report in the header for results.")}>
+            <Download size={13} /> Download
+          </button>
+        </div>
+
+        <p className="cb-label">Goal</p>
+        <p className="cb-goal">{goal || "The Geek team is writing the brief."}</p>
+
+        {msgs.length > 0 && (
+          <>
+            <p className="cb-label">Key messages</p>
+            <ul className="cb-msgs">
+              {msgs.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {(dos.length > 0 || donts.length > 0) && (
+          <div className="cb-dd">
+            <div className="cb-do">
+              <p>
+                <Check size={13} /> Do
+              </p>
+              <ul>
+                {(dos.length ? dos : ["—"]).map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="cb-dont">
+              <p>
+                <Close size={13} /> Don’t
+              </p>
+              <ul>
+                {(donts.length ? donts : ["—"]).map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
+        <p className="cb-label">Deliverables</p>
+        <div className="cb-tags">
+          {deliver.length ? (
+            deliver.map((x) => (
+              <span key={x} className="br-badge br-badge--violet">
+                {x}
+              </span>
+            ))
+          ) : (
+            <span className="cb-none">Not set yet</span>
+          )}
+        </div>
+
+        {(hash.length > 0 || ment.length > 0) && (
+          <>
+            <p className="cb-label">Hashtags &amp; tags</p>
+            <p className="cb-hash">
+              {hash.join("  ")}
+              {hash.length > 0 && ment.length > 0 && <span> · </span>}
+              {ment.length > 0 && `tag ${ment.join(" ")}`}
+            </p>
+          </>
+        )}
+
+        {vb.caption && (
+          <>
+            <p className="cb-label">Caption</p>
+            <p className="cb-goal">{vb.caption}</p>
+          </>
+        )}
+
+        <p className="cb-note">
+          <Info size={13} /> Want to change the brief? Message the Geek team.
+        </p>
+      </section>
+
+      <aside className="cb-side">
+        <section className="br-card cb-box">
+          <h3>Files</h3>
+          <p className="cb-none">Reference files are shared with creators by the Geek team.</p>
+        </section>
+        <section className="br-card cb-box">
+          <h3>
+            <Calendar size={14} /> Key dates
+          </h3>
+          <dl className="cb-dates">
+            {dates.map((x) => (
+              <div key={x.label}>
+                <dt>{x.label}</dt>
+                <dd>{x.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      </aside>
+      {toast}
+    </div>
   );
 }

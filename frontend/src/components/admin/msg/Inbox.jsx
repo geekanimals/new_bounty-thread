@@ -1,41 +1,48 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PageHead } from "@/components/admin/ui";
+import { sbFor, rpc, invoke, errText } from "@/lib/supabase";
+import { ago, fmtDateTime } from "@/components/admin/brand/util";
 
-/* Figma 078 — WhatsApp chats (dummy) */
-export const CHATS = [
-  {
-    id: "knightcrawler",
-    name: "KnightCrawler Studios",
-    av: "K",
-    ago: "12m",
-    sub: "Campaign updates",
-    phone: "+91 82768•••52",
-    unread: 1,
-    msgs: [
-      { me: false, t: "Hi, is the Detan kit shipped?" },
-      { me: false, t: "Tracking please 🙏" },
-      { me: true, t: "Shipped today — DTDC 7D1439… ✓✓" },
-    ],
-  },
-  { id: "swathi", name: "Swathi", av: "S", ago: "1h", sub: "Circle Diwali Declutter", phone: "+91 99001•••18", unread: 2, msgs: [{ me: false, t: "Hi! I got approved for Circle Diwali 🎉" }, { me: false, t: "When should I post the reel?" }] },
-  { id: "9873601", name: "+91 98736•••01", av: "+", ago: "1h", sub: "Campaign updates", phone: "+91 98736•••01", unread: 0, msgs: [{ me: true, t: "Hi! Your application for Vaaree Diwali is under review." }, { me: false, t: "Okay thank you" }] },
-  { id: "smarty", name: "Smarty ❤️", av: "S", ago: "3h", sub: "Campaign updates", phone: "+91 90040•••77", unread: 0, msgs: [{ me: false, t: "Draft uploaded, please check 🙂" }, { me: true, t: "Got it — reviewing today ✓✓" }] },
-  { id: "ansh-notnani", name: "Ansh Notnani", av: "A", ago: "3h", sub: "Campaign updates", phone: "+91 98110•••45", unread: 0, msgs: [{ me: false, t: "Can I change my address?" }, { me: true, t: "Yes — update it in your profile before dispatch." }] },
-  { id: "archi-ranka", name: "Archi Ranka", av: "A", ago: "5h", sub: "Campaign updates", phone: "+91 97690•••03", unread: 0, msgs: [{ me: false, t: "Thank you for the product! Loved it 💛" }] },
-];
-
-const KEY = "geek_admin_wa_sent";
-const readSent = () => {
-  try {
-    return JSON.parse(window.sessionStorage.getItem(KEY) || "{}");
-  } catch {
-    return {};
-  }
+/* naam: members (admin_users) + bulk upload / invites (api.admin_wa_names) — purane whatsapp.js jaisa */
+const digits = (p) => String(p || "").replace(/\D/g, "");
+async function loadNames() {
+  const names = {};
+  const [u, w] = await Promise.all([rpc("admin", "admin_users"), rpc("admin", "api.admin_wa_names")]);
+  const W = w.data || {};
+  Object.keys(W).forEach((k) => (names[k] = { n: W[k].n || "", h: W[k].h || "" }));
+  (u.data || []).forEach((x) => {
+    if (!x.whatsapp) return;
+    const k = digits(x.whatsapp);
+    const o = names[k] || {};
+    names[k] = { n: x.name && x.name !== "Creator" ? x.name : o.n || "", h: x.ig_username || o.h || "" };
+  });
+  return names;
+}
+export const whoOf = (c, names) => {
+  const x = names[digits(c.contact_phone_e164)] || {};
+  return { name: x.n || (x.h ? `@${x.h}` : "") || c.contact_phone_e164 || "—", handle: x.h };
 };
+const TICK = { queued: "…", sent: "✓", delivered: "✓✓", read: "✓✓ read", failed: "⚠ failed" };
+
+/** Saari conversations + naam (inbox list aur new chat dono use karte hain) */
+export function useConversations() {
+  const [st, setSt] = useState({ list: [], names: {}, loading: true, error: null });
+  const load = useCallback(async () => {
+    const [r, names] = await Promise.all([
+      sbFor("admin").from("wa_conversations").select("id,subject,contact_phone_e164,last_message_at").order("last_message_at", { ascending: false, nullsFirst: false }).limit(200),
+      loadNames().catch(() => ({})),
+    ]);
+    setSt({ list: r.data || [], names, loading: false, error: r.error || null });
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  return { ...st, reload: load };
+}
 
 /** Messages ka header + WhatsApp / Instagram tabs */
 export function InboxHead() {
@@ -72,37 +79,74 @@ export function InboxHead() {
  * Desktop: dono saath. Mobile: /admin/inbox par sirf list, /admin/inbox/chat/[id] par sirf chat (← Chats).
  */
 export default function Inbox({ chatId }) {
-  const open = CHATS.find((c) => c.id === chatId) || CHATS[0];
+  const { list: all, names, loading, error, reload } = useConversations();
+  const openId = chatId || all[0]?.id || null;
+  const open = all.find((c) => c.id === openId) || null;
+  const who = open ? whoOf(open, names) : null;
   const [q, setQ] = useState("");
-  const [sent, setSent] = useState({});
-  const [read, setRead] = useState({});
+  const [msgs, setMsgs] = useState([]);
+  const [mLoad, setMLoad] = useState(false);
+  const [mErr, setMErr] = useState("");
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendErr, setSendErr] = useState("");
   const endRef = useRef(null);
 
-  useEffect(() => setSent(readSent()), []);
+  // ek chat ke messages (wa_messages) — realtime ho to live, warna har 6 sec
+  const loadMsgs = useCallback(async (id, quiet) => {
+    if (!quiet) setMLoad(true);
+    const r = await sbFor("admin").from("wa_messages").select("id,direction,body,status,created_at").eq("conversation_id", id).order("created_at", { ascending: true }).limit(500);
+    setMLoad(false);
+    if (r.error) return setMErr(errText(r.error));
+    setMErr("");
+    setMsgs(r.data || []);
+  }, []);
   useEffect(() => {
-    if (chatId) setRead((r) => ({ ...r, [chatId]: true }));
-  }, [chatId]);
+    if (!openId) return;
+    setMsgs([]);
+    loadMsgs(openId);
+    const sb = sbFor("admin");
+    let ch = null;
+    let t = null;
+    if (typeof sb.channel === "function") {
+      ch = sb
+        .channel(`wa:${openId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "wa_messages", filter: `conversation_id=eq.${openId}` }, () => loadMsgs(openId, true))
+        .subscribe();
+    } else {
+      t = setInterval(() => document.visibilityState === "visible" && loadMsgs(openId, true), 6000);
+    }
+    return () => {
+      if (ch) sb.removeChannel(ch);
+      if (t) clearInterval(t);
+    };
+  }, [openId, loadMsgs]);
   useEffect(() => {
     const box = endRef.current?.parentElement;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [sent, open.id]);
+  }, [msgs]);
 
-  const msgs = [...open.msgs, ...(sent[open.id] || []).map((t) => ({ me: true, t }))];
-  const list = CHATS.filter((c) => (c.name + c.sub).toLowerCase().includes(q.trim().toLowerCase()));
+  const qq = q.trim().toLowerCase();
+  const list = all.filter((c) => {
+    const w = whoOf(c, names);
+    return !qq || [w.name, w.handle, c.contact_phone_e164, c.subject].join(" ").toLowerCase().includes(qq);
+  });
 
-  const send = (e) => {
+  const send = async (e) => {
     e.preventDefault();
     const t = text.trim();
-    if (!t) return;
-    const next = { ...sent, [open.id]: [...(sent[open.id] || []), `${t} ✓✓`] };
-    setSent(next);
-    try {
-      window.sessionStorage.setItem(KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
+    if (!t || !openId || sending) return;
+    setSending(true);
+    setSendErr("");
+    const r = await invoke("admin", "wa-send", { conversation_id: openId, text: t });
+    setSending(false);
+    if (r.error) {
+      const m = errText(r.error);
+      return setSendErr(/24-hour/.test(m) ? `${m} — start a “New” chat with an approved template to reopen it.` : `Couldn’t send: ${m}`);
     }
     setText("");
+    loadMsgs(openId, true);
+    reload();
   };
 
   return (
@@ -114,22 +158,30 @@ export default function Inbox({ chatId }) {
         </div>
         <div className="ib-rows">
           {list.map((c) => {
-            const last = (sent[c.id] || []).slice(-1)[0];
-            const unread = read[c.id] || c.id === chatId ? 0 : c.unread;
+            const w = whoOf(c, names);
             return (
-              <Link key={c.id} href={`/admin/inbox/chat/${c.id}`} className={`ib-row ${chatId === c.id ? "is-on" : ""}`}>
-                <span className="ib-av">{c.av}</span>
+              <Link key={c.id} href={`/admin/inbox/chat/${c.id}`} className={`ib-row ${openId === c.id ? "is-on" : ""}`}>
+                <span className="ib-av">{String(w.name).replace(/^[@+]/, "").slice(0, 1).toUpperCase() || "+"}</span>
                 <span className="ib-row__main">
                   <span className="ib-row__t">
-                    <b>{c.name}</b> <em>· {last ? "now" : c.ago}</em>
+                    <b>{w.name}</b> {c.last_message_at && <em>· {ago(c.last_message_at)}</em>}
                   </span>
-                  <span className="ib-row__s">{last ? `You: ${last}` : c.sub}</span>
+                  <span className="ib-row__s">{[w.name !== c.contact_phone_e164 ? c.contact_phone_e164 : "", c.subject || "Campaign updates"].filter(Boolean).join(" · ")}</span>
                 </span>
-                {unread > 0 && <span className="ib-un">{unread}</span>}
               </Link>
             );
           })}
-          {!list.length && <p className="ib-none">No chat matches “{q}”</p>}
+          {loading && <p className="ib-none">Loading chats…</p>}
+          {error && (
+            <p className="ib-none ib-err">
+              Couldn’t load conversations: {errText(error)}{" "}
+              <button type="button" onClick={() => reload()}>
+                Retry
+              </button>
+            </p>
+          )}
+          {!loading && !error && !all.length && <p className="ib-none">No conversations yet. Tap “+ New”.</p>}
+          {!loading && all.length > 0 && !list.length && <p className="ib-none">No chat matches “{q}”</p>}
         </div>
       </section>
 
@@ -137,31 +189,44 @@ export default function Inbox({ chatId }) {
         <Link href="/admin/inbox" className="ib-back">
           ← Chats
         </Link>
-        <div className="ib-chat__head">
-          <div>
-            <h2 className="ad-h2">{open.name}</h2>
-            <p className="ib-chat__s">
-              {open.phone} · {open.sub}
-            </p>
-          </div>
-          <a href="https://web.whatsapp.com/" target="_blank" rel="noreferrer" className="ib-wa">
-            Open in WhatsApp ↗
-          </a>
-        </div>
-        <div className="ib-msgs" aria-live="polite">
-          {msgs.map((m, i) => (
-            <p key={i} className={m.me ? "ib-me" : "ib-them"}>
-              {m.t}
-            </p>
-          ))}
-          <span ref={endRef} />
-        </div>
-        <form className="ib-send" onSubmit={send}>
-          <input className="ad-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message…" aria-label="Type a message" />
-          <button type="submit" className="ad-btn ad-btn--primary" aria-label="Send">
-            ➤
-          </button>
-        </form>
+        {open ? (
+          <>
+            <div className="ib-chat__head">
+              <div>
+                <h2 className="ad-h2">{who.name}</h2>
+                <p className="ib-chat__s">
+                  {open.contact_phone_e164} · {open.subject || "Campaign updates"}
+                </p>
+              </div>
+              <a href={`https://wa.me/${digits(open.contact_phone_e164)}`} target="_blank" rel="noreferrer" className="ib-wa">
+                Open in WhatsApp ↗
+              </a>
+            </div>
+            <div className="ib-msgs" aria-live="polite">
+              {mLoad && !msgs.length && <p className="ib-sys">Loading…</p>}
+              {mErr && <p className="ib-sys">Couldn’t load: {mErr}</p>}
+              {msgs.map((m) => (
+                <p key={m.id} className={m.direction === "outbound" ? "ib-me" : "ib-them"}>
+                  {m.body}
+                  <small>
+                    {fmtDateTime(m.created_at)}
+                    {m.direction === "outbound" ? ` · ${TICK[m.status] || m.status || ""}` : ""}
+                  </small>
+                </p>
+              ))}
+              <span ref={endRef} />
+            </div>
+            {sendErr && <p className="ib-senderr">{sendErr}</p>}
+            <form className="ib-send" onSubmit={send}>
+              <input className="ad-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message…" aria-label="Type a message" disabled={sending} />
+              <button type="submit" className="ad-btn ad-btn--primary" aria-label="Send" disabled={sending || !text.trim()}>
+                ➤
+              </button>
+            </form>
+          </>
+        ) : (
+          <p className="ib-none">{loading ? "Loading…" : "Pick a chat, or start one with “+ New”."}</p>
+        )}
       </section>
 
       <style>{`
@@ -181,6 +246,11 @@ export default function Inbox({ chatId }) {
         .ib-row__s { margin-top: 5px; font-size: 12px; color: #8791a7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .ib-un { min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; display: grid; place-items: center; background: var(--ad-lilac); color: #6857ec; font-size: 11px; font-weight: 700; }
         .ib-none { padding: 12px 4px; font-size: 13px; color: var(--ad-muted); }
+        .ib-err { color: var(--ad-red); }
+        .ib-err button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
+        .ib-msgs p small { display: block; margin-top: 3px; font-size: 10.5px; color: var(--ad-muted); }
+        .ib-msgs p.ib-sys { align-self: center; background: transparent; color: var(--ad-muted); font-size: 12px; }
+        .ib-senderr { margin-top: 8px; font-size: 12px; color: var(--ad-red); }
 
         .ib-chat { padding: 22px 22px 22px; min-width: 0; }
         .ib-back { display: none; }

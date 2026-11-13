@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { createContext, useContext } from "react";
+import { adminCheck, adminSignOut } from "@/lib/adminAuth";
+import { useRpc } from "@/lib/supabase";
+import OwnerAgent from "@/components/admin/OwnerAgent";
+
+/* Login kiye admin ki info — kisi bhi page mein: const me = useAdmin(); me.name */
+const AdminCtx = createContext({ name: "", email: "" });
+export const useAdmin = () => useContext(AdminCtx);
 
 /* Figma sidebar — wahi glyph icons */
 export const NAV = [
@@ -10,10 +18,10 @@ export const NAV = [
     group: "Operate",
     items: [
       { label: "Overview", href: "/admin/overview", icon: "▦" },
-      { label: "Action queue", href: "/admin/action-queue", icon: "⚡", badge: 82 },
-      { label: "Campaigns", href: "/admin/campaigns", icon: "◈", badge: 8 },
-      { label: "Applications", href: "/admin/applications", icon: "✓", badge: 60 },
-      { label: "Logistics", href: "/admin/logistics", icon: "▣", badge: 25 },
+      { label: "Action queue", href: "/admin/action-queue", icon: "⚡", count: "approvals" },
+      { label: "Campaigns", href: "/admin/campaigns", icon: "◈", count: "process" },
+      { label: "Applications", href: "/admin/applications", icon: "✓", count: "applicants" },
+      { label: "Logistics", href: "/admin/logistics", icon: "▣", count: "logistics" },
     ],
   },
   {
@@ -44,18 +52,6 @@ export const NAV = [
 ];
 const ALL = NAV.flatMap((g) => g.items);
 
-/* Owner Agent ke dummy jawab */
-const AGENT = [
-  { k: ["approve", "first", "who"], a: "Start with Circle Diwali — 25 applicants waiting 2 days. Top 5 by engagement: Aisha Khan, Meera Iyer, Pooja Nair, Ishita Jain, Tanvi Shah.", href: "/admin/applications" },
-  { k: ["diwali", "draft", "campaign"], a: "Draft ready: “Diwali Glow Edit” · Barter + ₹1,500 · 1 Reel + 2 Stories · 30 creators in Mumbai, Delhi, Bengaluru. Open the campaign builder to tweak it.", href: "/admin/campaigns/new" },
-  { k: ["perform", "best", "top"], a: "Best last 30 days: Aisha Khan (6.4% eng, 288K views), Meera Iyer (5.8%, 842K), Kritika Rao (8.9% eng). Beardo Detan Express Kit got the cheapest views per rupee.", href: "/admin/reports" },
-  { k: ["whatsapp", "auto", "message"], a: "WhatsApp auto messages are off. Turn them on in Settings → Auto messages so creators get step reminders.", href: "/admin/settings/auto-messages" },
-];
-const agentAnswer = (q) => {
-  const t = q.toLowerCase();
-  return AGENT.find((r) => r.k.some((k) => t.includes(k))) || { a: "I can help with approvals, campaign drafts, creator performance and messaging — try one of the suggestions above." };
-};
-
 /**
  * Super Admin ka frame — sidebar + top bar + popups (⌘K search, Owner Agent, profile menu).
  *  - Desktop (1024px+): Figma jaisa poora sidebar (246px)
@@ -68,8 +64,6 @@ export default function AdminShell({ children, wide = false }) {
   const [panel, setPanel] = useState(null); // search | agent | profile | menu
   const [q, setQ] = useState("");
   const [qi, setQi] = useState(0);
-  const [chat, setChat] = useState([]);
-  const [ask, setAsk] = useState("");
   const [emailOn, setEmailOn] = useState(true);
   const profRef = useRef(null);
   const qRef = useRef(null);
@@ -77,17 +71,32 @@ export default function AdminShell({ children, wide = false }) {
   const isActive = (href) => pathname === href || pathname.startsWith(href + "/");
 
   // Login check — bina login ke koi admin page nahi khulega, seedha /admin (login) par
-  const [authed, setAuthed] = useState(false);
+  // (Supabase session + is_platform_admin — purane app jaisa)
+  const [me, setMe] = useState(null);
   useEffect(() => {
-    let ok = false;
-    try {
-      ok = !!window.localStorage.getItem("geek_admin");
-    } catch {
-      /* ignore */
-    }
-    if (ok) setAuthed(true);
-    else router.replace("/admin");
+    let alive = true;
+    adminCheck()
+      .then((r) => {
+        if (!alive) return;
+        if (r.ok) setMe({ name: r.name, email: r.email });
+        else router.replace("/admin");
+      })
+      .catch(() => alive && router.replace("/admin"));
+    const expired = (e) => e.detail?.door === "admin" && router.replace("/admin");
+    window.addEventListener("geek-session-expired", expired);
+    return () => {
+      alive = false;
+      window.removeEventListener("geek-session-expired", expired);
+    };
   }, [router]);
+  const authed = !!me;
+  // Sidebar ke number (purane app ka nav_counts, har 30 sec)
+  const { data: counts } = useRpc("admin", "api.nav_counts", {}, { skip: !authed, refreshMs: 30000 });
+  const badge = (it) => {
+    const n = Number(counts?.[it.count]) || 0;
+    return it.count && n ? (n > 99 ? "99+" : n) : null;
+  };
+  const first = (me?.name || "").split(" ")[0] || "there";
 
   useEffect(() => setPanel(null), [pathname]);
 
@@ -127,26 +136,16 @@ export default function AdminShell({ children, wide = false }) {
 
   const results = useMemo(() => ALL.filter((i) => i.label.toLowerCase().includes(q.toLowerCase())), [q]);
 
-  const send = (text) => {
-    const t = (text ?? ask).trim();
-    if (!t) return;
-    const r = agentAnswer(t);
-    setChat((c) => [...c, { me: true, text: t }, { me: false, text: r.a, href: r.href }]);
-    setAsk("");
-  };
 
-  const signOut = () => {
-    try {
-      window.localStorage.removeItem("geek_admin");
-    } catch {
-      /* ignore */
-    }
-    router.push("/admin");
+  const signOut = async () => {
+    await adminSignOut();
+    router.replace("/admin");
   };
 
   if (!authed) return <div className="as-wait" aria-busy="true" />;
 
   return (
+    <AdminCtx.Provider value={me}>
     <div className="as">
       {/* ---------- Sidebar ---------- */}
       <aside className="as-side" aria-label="Super Admin menu">
@@ -165,7 +164,7 @@ export default function AdminShell({ children, wide = false }) {
                 <Link key={it.href} href={it.href} title={it.label} className={`as-nav__item ${isActive(it.href) ? "is-active" : ""}`}>
                   <span className="as-nav__ic">{it.icon}</span>
                   <span className="as-nav__txt">{it.label}</span>
-                  {it.badge && <em>{it.badge}</em>}
+                  {badge(it) && <em>{badge(it)}</em>}
                 </Link>
               ))}
             </div>
@@ -173,7 +172,7 @@ export default function AdminShell({ children, wide = false }) {
         </nav>
         <div className="as-side__foot">
           <Link href="/admin/settings/super-admins" className="as-me" title="Super Admin">
-            <span className="as-me__av">M</span>
+            <span className="as-me__av">{(me.name || "A")[0].toUpperCase()}</span>
             <span className="as-me__txt">
               <strong>Super Admin</strong>
               <small>Geek Creative Agency</small>
@@ -212,14 +211,14 @@ export default function AdminShell({ children, wide = false }) {
             </Link>
             <div className="as-prof" ref={profRef}>
               <button type="button" className="as-avatar" onClick={() => setPanel(panel === "profile" ? null : "profile")} aria-label="Profile menu" aria-expanded={panel === "profile"}>
-                M
+                {(me.name || "A")[0].toUpperCase()}
               </button>
               {panel === "profile" && (
                 <div className="as-pmenu" role="menu">
                   <div className="as-pmenu__me">
-                    <span className="as-me__av">M</span>
+                    <span className="as-me__av">{(me.name || "A")[0].toUpperCase()}</span>
                     <span>
-                      <strong>Mayank</strong>
+                      <strong>{me.name}</strong>
                       <small>Super Admin · Geek Creative Agency</small>
                     </span>
                   </div>
@@ -271,7 +270,7 @@ export default function AdminShell({ children, wide = false }) {
                   <Link key={it.href} href={it.href} className={isActive(it.href) ? "is-active" : ""}>
                     <span>{it.icon}</span>
                     {it.label}
-                    {it.badge && <em>{it.badge}</em>}
+                    {badge(it) && <em>{badge(it)}</em>}
                   </Link>
                 ))}
               </div>
@@ -337,44 +336,7 @@ export default function AdminShell({ children, wide = false }) {
             <p className="as-agent__eye">✨ AI assistant</p>
             <h2>Owner Agent</h2>
             <p className="as-agent__sub">Growth &amp; revenue copilot</p>
-            <div className="as-agent__msgs">
-              <p className="as-agent__bot">
-                Hi Mayank — ask me anything about growing on Geek OS, or what to do next.
-                <br />• 60 creators are waiting for a decision
-                <br />• 21 videos need review
-                <br />• WhatsApp auto messages are off
-              </p>
-              <div className="as-agent__chips">
-                {["Who should I approve first?", "Draft a Diwali campaign", "Which creators performed best?"].map((c) => (
-                  <button key={c} type="button" onClick={() => send(c)}>
-                    {c}
-                  </button>
-                ))}
-              </div>
-              {chat.map((m, i) => (
-                <p key={i} className={m.me ? "as-agent__me" : "as-agent__bot"}>
-                  {m.text}
-                  {m.href && (
-                    <>
-                      {" "}
-                      <Link href={m.href}>Open →</Link>
-                    </>
-                  )}
-                </p>
-              ))}
-            </div>
-            <form
-              className="as-agent__ask"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send();
-              }}
-            >
-              <input className="ad-input" value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Ask the Owner Agent..." aria-label="Ask the Owner Agent" />
-              <button type="submit" className="ad-btn ad-btn--primary" disabled={!ask.trim()}>
-                Send
-              </button>
-            </form>
+            <OwnerAgent name={first} />
           </aside>
         </div>
       )}
@@ -542,5 +504,6 @@ export default function AdminShell({ children, wide = false }) {
         }
       `}</style>
     </div>
+    </AdminCtx.Provider>
   );
 }

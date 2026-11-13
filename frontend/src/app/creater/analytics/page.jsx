@@ -1,51 +1,67 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
-import { CREATOR, KIT_POSTS } from "@/components/creater/data";
+import { errText, useMyIg, fmtK, fmtNum, fmtDate, togglePin, pinnedOf, MAX_PINS } from "@/services/creator";
 import { Check } from "@/components/ui/Icons";
 
-// Har post ki dummy date (Instagram se aayegi)
-const POST_DATES = ["22 Feb", "14 Feb", "2 Feb"];
+const imgOf = (m) => (m.media_type === "VIDEO" ? m.thumbnail_url || m.media_url : m.media_url);
 
-/** /creater/analytics — "Creator pulse": Instagram ke numbers, performance, insights, top content (Figma 067 / 079) */
+/**
+ * /creater/analytics — "Creator pulse": Instagram ke numbers, performance, insights, top content (Figma 067 / 079)
+ * Data: social_accounts (Instagram sync, purane Reports / media kit jaisa). Pin → social_accounts.edits.pinned (media kit pehle dikhata hai).
+ */
 export default function Analytics() {
-  const [s] = useSession();
+  const ig = useMyIg();
+  const a = ig.acct;
   const [range, setRange] = useState("3");
-  const [pinned, setPinned] = useState([]);
   const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState(false);
   const flash = (t) => {
     setToast(t);
     setTimeout(() => setToast(""), 2400);
   };
 
-  const posts = KIT_POSTS.map((p, i) => ({ ...p, total: p.likes + p.comments, date: POST_DATES[i] || "Jan" }));
-  const best = posts.reduce((a, b) => (b.total > a.total ? b : a), posts[0]);
+  const media = Array.isArray(a?.recent_media) ? [...a.recent_media].sort((x, y) => String(y.timestamp || "").localeCompare(String(x.timestamp || ""))) : [];
+  // "Last 3 posts" ya "Last 30 days" (timestamp se)
+  // 30 din pehle ka time — render ke baad set (Next prerender rule: Date.now() render mein nahi)
+  const [since, setSince] = useState(0);
+  useEffect(() => setSince(Date.now() - 30 * 86400000), []);
+  const sel = range === "3" ? media.slice(0, 3) : media.filter((m) => m.timestamp && new Date(m.timestamp).getTime() >= since);
+  const posts = sel.map((m) => ({ ...m, total: (Number(m.like_count) || 0) + (Number(m.comments_count) || 0), date: fmtDate(m.timestamp) || "—" })).reverse();
+  const best = posts.length ? posts.reduce((x, y) => (y.total > x.total ? y : x), posts[0]) : null;
   const max = Math.max(...posts.map((p) => p.total), 1);
-  const avgLikes = Math.round(posts.reduce((a, p) => a + p.likes, 0) / posts.length);
-
+  const avgLikes = posts.length ? Math.round(posts.reduce((x, p) => x + (Number(p.like_count) || 0), 0) / posts.length) : 0;
+  const eng = a?.followers_count && posts.length ? ((posts.reduce((x, p) => x + p.total, 0) / posts.length / a.followers_count) * 100).toFixed(2) + "%" : "—";
+  const pinned = pinnedOf(a);
   const tiles = [
-    { v: CREATOR.followers, l: "Followers" },
-    { v: CREATOR.reach, l: "Avg reach" },
-    { v: avgLikes, l: "Avg likes" },
-    { v: CREATOR.eng, l: "Engagement" },
+    { v: fmtK(a?.followers_count || 0), l: "Followers" },
+    { v: a?.avg_reach ? fmtK(a.avg_reach) : "—", l: "Avg reach" },
+    { v: fmtK(avgLikes), l: "Avg likes" },
+    { v: eng, l: "Engagement" },
   ];
+  const label = range === "3" ? "last 3 posts" : "last 30 days";
 
-  const togglePin = (i) => {
-    const on = pinned.includes(i);
-    setPinned(on ? pinned.filter((x) => x !== i) : [...pinned, i]);
-    flash(on ? "Removed from your media kit" : "Pinned to your media kit");
+  const onPin = async (m) => {
+    if (!a || busy) return;
+    setBusy(true);
+    const r = await togglePin(a, m.id);
+    setBusy(false);
+    if (r.full) return flash(`You can pin up to ${MAX_PINS} — unpin one first.`);
+    if (r.error) return flash(errText(r.error) || "Couldn't save.");
+    flash(r.removed ? "Removed from your media kit" : "Pinned to your media kit");
+    ig.reload();
   };
+  const locked = !ig.loading && !a;
 
   return (
     <BountyShell>
       <title>Analytics — Bounty</title>
 
-      <p className={`bx-eyebrow ${s.ig ? "an-mob" : ""}`}>Creator pulse</p>
+      <p className={`bx-eyebrow ${!locked ? "an-mob" : ""}`}>Creator pulse</p>
       <h1 className="bx-title">Analytics</h1>
-      {s.ig ? (
+      {!locked ? (
         <p className="bx-lede">
           <span className="an-desk">Your campaigns and Instagram performance — live, downloadable.</span>
           <span className="an-mob">How your content is doing — from Instagram.</span>
@@ -54,7 +70,9 @@ export default function Analytics() {
         <p className="bx-lede">How your content is doing — from Instagram.</p>
       )}
 
-      {!s.ig ? (
+      {ig.loading ? (
+        <p className="bx-lede">Loading your Instagram numbers…</p>
+      ) : locked ? (
         <section className="bx-card an-lock">
           <span>📊</span>
           <h2>Connect Instagram to see your pulse</h2>
@@ -66,7 +84,7 @@ export default function Analytics() {
       ) : (
         <div className="an">
           <div className="an-acc">
-            <span className="an-acc__me">{CREATOR.handle}</span>
+            <span className="an-acc__me">@{a.username}</span>
             <button type="button" className="an-acc__range" onClick={() => setRange(range === "3" ? "30" : "3")}>
               {range === "3" ? "Last 3 posts" : "Last 30 days"}
             </button>
@@ -85,19 +103,19 @@ export default function Analytics() {
             <div>
               <p className="bx-section-label">Performance over time</p>
               <section className="an-card an-chart">
-                <div className="an-bars" role="img" aria-label="Likes and comments on your last 3 posts">
+                <div className="an-bars" role="img" aria-label={`Likes and comments on your ${label}`}>
                   {posts.map((p, i) => (
                     <span key={i} className={i === posts.length - 1 ? "is-gold" : ""} style={{ height: `${Math.max(6, (p.total / max) * 100)}%` }} title={`${p.total} likes + comments`} />
                   ))}
                 </div>
-                <p>Likes + comments · last 3 posts</p>
+                <p>Likes + comments · {label}</p>
               </section>
             </div>
             <div>
               <p className="bx-section-label">Insights</p>
               <section className="an-card an-ins">
-                <p>Your best post got {best.total} likes + comments — lead with posts like it</p>
-                <p>{posts.length} posts synced from Instagram</p>
+                {best ? <p>Your best post got {fmtNum(best.total)} likes + comments — lead with posts like it</p> : <p>No posts in the {label} yet</p>}
+                <p>{fmtNum(media.length)} posts synced from Instagram</p>
                 <p>Pin your best work below — brands see it first</p>
               </section>
             </div>
@@ -105,18 +123,21 @@ export default function Analytics() {
 
           <p className="bx-section-label">Your top content</p>
           <ul className="an-top">
-            {posts.map((p, i) => (
-              <li key={i} className="an-card">
-                <img src={p.img} alt="" />
+            {[...posts].sort((x, y) => y.total - x.total).map((p) => (
+              <li key={p.id} className="an-card">
+                <a href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
+                  <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
+                </a>
                 <span>
                   <strong>Post · {p.date}</strong>
-                  <small>❤️ {p.total} likes + comments</small>
+                  <small>❤️ {fmtNum(p.total)} likes + comments</small>
                 </span>
-                <button type="button" className={pinned.includes(i) ? "is-on" : ""} onClick={() => togglePin(i)}>
-                  {pinned.includes(i) ? "✓ Pinned" : "📌 Pin to media kit"}
+                <button type="button" className={pinned.includes(String(p.id)) ? "is-on" : ""} onClick={() => onPin(p)} disabled={busy}>
+                  {pinned.includes(String(p.id)) ? "✓ Pinned" : "📌 Pin to media kit"}
                 </button>
               </li>
             ))}
+            {!posts.length && <li className="an-card an-none">No posts in the {label}.</li>}
           </ul>
         </div>
       )}
@@ -129,6 +150,7 @@ export default function Analytics() {
 
       <style>{`
         .an-mob { display: none; }
+        .an-none { padding: 14px; font-size: 13px; color: #7a6a4a; }
         .an { max-width: 980px; margin: 0 auto; }
         .an-acc { display: flex; justify-content: center; gap: 8px; margin: 32px 0 13px; }
         .an-acc__me, .an-acc__range { display: inline-flex; align-items: center; height: 32px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 600; }

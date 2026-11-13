@@ -1,21 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
+import { useCreator, setSkill, setResource } from "@/services/creator";
+import { SKILLS, RESOURCES } from "@/components/creater/data";
 import { Check } from "@/components/ui/Icons";
-
-// Figma ki exact lists
-const SKILLS = ["Modelling", "Live / Video Creator", "Video Editor", "Photographer", "Draw / Paint / Doodle", "Performance Arts", "Content Writer", "Singer", "Dancer", "Comedy / Acting", "Illustrator", "MC / Host", "Research", "DJ / Music", "Graphic Designer / UI UX", "Sustainability", "Performing Artist", "Ethical Hacking", "Coder / Developer", "Caregiver", "Digital Marketing", "Storytelling", "Meme"];
-const RESOURCES = ["Studio", "Camera", "Car", "Bike", "Meeting or Shooting Space", "Tripod", "Speaker", "Mike", "Lights"];
 
 /**
  * /creater/profile/skills — Skills + Resources (Figma: do dropdown, kholne par chips + "Other").
  * Har badlav turant save hota hai (Figma mein Save button nahi).
  */
 export default function Skills() {
-  const [s, update] = useSession();
+  const c = useCreator();
+  const loaded = useRef(false);
   const [skills, setSkills] = useState([]);
   const [res, setRes] = useState([]);
   const [extraS, setExtraS] = useState([]);
@@ -24,31 +22,43 @@ export default function Skills() {
   const [other, setOther] = useState("");
   const [toast, setToast] = useState("");
 
+  // Saved skills / resources (get_my_profile)
   useEffect(() => {
-    const sk = s.skills || [];
-    const rs = s.resources || [];
+    if (loaded.current || !c.ready || !c.profile) return;
+    loaded.current = true;
+    const sk = (c.profile.skills || []).map((x) => x.skill_key);
+    const rs = (c.profile.resources || []).map((x) => x.resource_key);
     setSkills(sk);
     setRes(rs);
     setExtraS(sk.filter((x) => !SKILLS.includes(x)));
     setExtraR(rs.filter((x) => !RESOURCES.includes(x)));
-  }, [s.skills, s.resources]);
+  }, [c]);
 
-  const persist = (sk, rs) => {
-    update({ skills: sk, resources: rs });
-    setToast("Saved");
+  const flash = (t) => {
+    setToast(t);
     clearTimeout(window.__skT);
-    window.__skT = setTimeout(() => setToast(""), 1400);
+    window.__skT = setTimeout(() => setToast(""), 1600);
   };
-  const flip = (kind, v) => {
-    if (kind === "skills") {
-      const next = skills.includes(v) ? skills.filter((x) => x !== v) : [...skills, v];
-      setSkills(next);
-      persist(next, res);
-    } else {
-      const next = res.includes(v) ? res.filter((x) => x !== v) : [...res, v];
-      setRes(next);
-      persist(skills, next);
+  // Har chip turant save: upsert_skill / remove_skill, upsert_resource / remove_resource (purane profile.js jaisa)
+  const persist = async (kind, v, on) => {
+    try {
+      if (kind === "skills")
+        await setSkill(v, on, !SKILLS.includes(v));
+      else
+        await setResource(v, on, !RESOURCES.includes(v));
+      flash("Saved");
+      return true;
+    } catch (e) {
+      flash("Couldn't save: " + (e.message || e));
+      return false;
     }
+  };
+  const flip = async (kind, v) => {
+    const list = kind === "skills" ? skills : res;
+    const setL = kind === "skills" ? setSkills : setRes;
+    const on = !list.includes(v);
+    setL(on ? [...list, v] : list.filter((x) => x !== v));
+    if (!(await persist(kind, v, on))) setL(list); // fail → wapas
   };
 
   // "Other" box se naya chip (jo dropdown khula hai usi mein)
@@ -58,18 +68,10 @@ export default function Skills() {
     if (!t || !open) return;
     if (open === "skills") {
       if (![...SKILLS, ...extraS].includes(t)) setExtraS([...extraS, t]);
-      if (!skills.includes(t)) {
-        const next = [...skills, t];
-        setSkills(next);
-        persist(next, res);
-      }
+      if (!skills.includes(t)) flip("skills", t);
     } else {
       if (![...RESOURCES, ...extraR].includes(t)) setExtraR([...extraR, t]);
-      if (!res.includes(t)) {
-        const next = [...res, t];
-        setRes(next);
-        persist(skills, next);
-      }
+      if (!res.includes(t)) flip("res", t);
     }
     setOther("");
   };

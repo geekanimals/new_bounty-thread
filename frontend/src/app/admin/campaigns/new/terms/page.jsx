@@ -6,7 +6,7 @@ import Wizard, { Field, useDraft } from "@/components/admin/campaign/Wizard";
 export default function NewCampaignTerms() {
   const { d, set } = useDraft();
   return (
-    <Wizard step={2}>
+    <Wizard step={2} draft={{ d, set }}>
       <div className="nc-grid">
         <Field full area label="Video brief — what to shoot" k="brief" d={d} set={set} placeholder="Format, angle, opening hook, product demonstration…" />
         <Field area label="Do’s" k="dos" d={d} set={set} placeholder="Natural lighting, honest product experience…" />

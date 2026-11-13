@@ -1,8 +1,6 @@
-import { BRANDS } from "@/components/admin/data";
-
-// Brand pages pehle se ban jaayein (Next cacheComponents)
+// Brand ids asli UUID hain (database se) — sirf ek sample pehle se banta hai, baaki khulne par (Next cacheComponents)
 export function generateStaticParams() {
-  return BRANDS.map((b) => ({ id: b.id }));
+  return [{ id: "sample" }];
 }
 
 export default function BrandLayout({ children }) {

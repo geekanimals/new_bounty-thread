@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { errText } from "@/lib/supabase";
 
 /**
  * Campaign workspace (payments, messages, attribution, report, bulk upload) ke chhote common blocks.
@@ -93,11 +94,11 @@ export async function copyText(text) {
   }
 }
 
-/* Dummy file download (CSV/Excel) — prototype mein CSV hi banta hai */
+/* rows → CSV file download (Excel bhi khol leta hai) */
 export function downloadFile(name, rows) {
   try {
     const csv = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = name;
@@ -123,6 +124,145 @@ export function TextBtn({ children, onClick, href, className = "" }) {
       {children}
     </button>
   );
+}
+
+/* Table ke andar loading / error / khaali — ek hi row (Figma style) */
+export function TableState({ cols, loading, error, empty, onRetry }) {
+  if (!loading && !error && !empty) return null;
+  return (
+    <tr>
+      <td colSpan={cols} className="c2-state">
+        {loading ? (
+          <span className="c2-skel" aria-label="Loading">Loading…</span>
+        ) : error ? (
+          <>
+            {errText(error)}{" "}
+            {onRetry && (
+              <button type="button" className="c2-tbtn" onClick={() => onRetry()}>
+                Retry
+              </button>
+            )}
+          </>
+        ) : (
+          empty
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/* Card ke bahar ka loading / error (poora panel) */
+export function BoxState({ loading, error, onRetry }) {
+  if (loading) return <p className="c2-state c2-state--box">Loading…</p>;
+  if (error)
+    return (
+      <p className="c2-state c2-state--box">
+        {errText(error)}{" "}
+        {onRetry && (
+          <button type="button" className="c2-tbtn" onClick={() => onRetry()}>
+            Retry
+          </button>
+        )}
+      </p>
+    );
+  return null;
+}
+
+/* Number / rupee / date formatting */
+export const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
+export const inr = (v) => (v == null || v === "" ? "—" : "₹" + Math.round(Number(v) || 0).toLocaleString("en-IN"));
+export function when(t) {
+  if (!t) return "—";
+  try {
+    return new Date(t).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return String(t);
+  }
+}
+export function ago(t) {
+  if (!t) return "—";
+  const m = Math.round((Date.now() - new Date(t).getTime()) / 60000);
+  return m < 1 ? "just now" : m < 60 ? m + "m ago" : m < 1440 ? Math.round(m / 60) + "h ago" : Math.round(m / 1440) + "d ago";
+}
+
+/* Bahar ki script ek baar (Excel / Word padhne ke liye — purane app jaisa CDN se) */
+export function loadScript(src) {
+  return new Promise((ok, bad) => {
+    if (document.querySelector(`script[src="${src}"]`)) return ok();
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = ok;
+    s.onerror = () => bad(new Error("Couldn't load the file reader — check your connection."));
+    document.head.appendChild(s);
+  });
+}
+export const XLSX_SRC = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+export const MAMMOTH_SRC = "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js";
+
+/* CSV / TSV text → rows (quotes samajhta hai) */
+export function splitCsv(text) {
+  const rows = [];
+  let row = [],
+    cur = "",
+    q = false;
+  const t = String(text || "").replace(/\r\n?/g, "\n");
+  const first = t.split("\n")[0];
+  const sep = (first.match(/\t/g) || []).length > (first.match(/,/g) || []).length ? "\t" : ",";
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (q) {
+      if (ch === '"') {
+        if (t[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else q = false;
+      } else cur += ch;
+      continue;
+    }
+    if (ch === '"') {
+      q = true;
+      continue;
+    }
+    if (ch === sep) {
+      row.push(cur.trim());
+      cur = "";
+      continue;
+    }
+    if (ch === "\n") {
+      row.push(cur.trim());
+      rows.push(row);
+      row = [];
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur !== "" || row.length) {
+    row.push(cur.trim());
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((c) => c !== ""));
+}
+
+/* Excel / CSV file → rows (array of arrays) */
+export async function readSheetFile(file) {
+  const name = (file.name || "").toLowerCase();
+  if (/\.(xlsx|xls|xlsm|ods)$/.test(name)) {
+    await loadScript(XLSX_SRC);
+    const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }).map((r) => r.map((c) => String(c == null ? "" : c).trim())).filter((r) => r.some(Boolean));
+  }
+  return splitCsv(await file.text());
+}
+
+/* rows → Excel file download (purane app jaisa SheetJS) */
+export async function downloadXlsx(name, rows, sheet = "Sheet1") {
+  await loadScript(XLSX_SRC);
+  const ws = window.XLSX.utils.aoa_to_sheet(rows);
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, ws, sheet);
+  window.XLSX.writeFile(wb, name);
 }
 
 export function Kit() {
@@ -172,6 +312,10 @@ export function Kit() {
       .c2-t b { font-weight: 700; }
       .c2-t .c2-link { font-weight: 800; color: #6151ea; }
       .c2-t .c2-link:hover { color: var(--ad-primary-2); }
+      .c2-t td.c2-state, .c2-state { text-align: center; color: var(--ad-muted); white-space: normal; font-size: 13px; }
+      .c2-state--box { padding: 26px 0; }
+      .c2-skel { display: inline-block; animation: c2Pulse 1.2s ease-in-out infinite; }
+      @keyframes c2Pulse { 50% { opacity: .45; } }
 
       @media (max-width: 1023px) {
         .c2-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }

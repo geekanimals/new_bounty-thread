@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { captureInvite, readIgReturn, useCreatorGate } from "@/services/creator";
 import OnboardShell, { VideoModal } from "@/components/creater/OnboardShell";
 import Logo from "@/components/creater/Logo";
+import BootLoader from "@/components/creater/BootLoader";
 import { SIDEKICKS } from "@/components/creater/data";
 
 /**
@@ -13,11 +15,26 @@ import { SIDEKICKS } from "@/components/creater/data";
  */
 export default function CreaterWelcome() {
   const router = useRouter();
+  const pathname = usePathname() || "/creater";
   const [video, setVideo] = useState(false);
+  const [igBack, setIgBack] = useState(false);
 
   useEffect(() => {
+    // Instagram se wapsi (/app.html → /legacy → /creater?code&state) → loader page usko poora karega
+    const ig = readIgReturn();
+    if (ig) {
+      setIgBack(true);
+      router.replace("/creater/onboarding/connecting" + window.location.search);
+      return;
+    }
+    captureInvite(); // ?cinv= / ?apply= rakh lo — login ke baad campaign khulega
     if (window.matchMedia("(min-width: 768px)").matches) router.replace("/creater/login");
   }, [router]);
+
+  // Login ho chuka hai to seedha app / agla step (purane app jaisa)
+  const gc = useCreatorGate(igBack ? null : "guest", router, pathname);
+  // Login ho chuka (Back se aaye) ya Instagram se wapsi → welcome mat dikhao, loader + aage
+  if (igBack || !gc.ready || gc.loggedIn) return <BootLoader kid={gc.loggedIn ? gc.prefs?.kid : ""} />;
 
   return (
     <>

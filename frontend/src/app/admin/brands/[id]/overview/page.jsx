@@ -1,57 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import BrandPanel from "@/components/admin/brand/BrandPanel";
-import { brandInfo, getDeleted, setDeleted } from "@/components/admin/brand/store";
+import BrandPanel, { STATUS, useBrand } from "@/components/admin/brand/BrandPanel";
+import { rpc, errText } from "@/lib/supabase";
+import { fmtDate, useToast } from "@/components/admin/brand/util";
 
 /** /admin/brands/[id]/overview — Details + Contacts (Figma 065) */
-export default function BrandOverview() {
+export default function BrandOverviewPage() {
   const { id } = useParams();
+  return (
+    <BrandPanel id={id}>
+      <BrandOverview />
+    </BrandPanel>
+  );
+}
+
+/* brand_detail se: details (brand_save), delete (admin_brand_delete), contacts (brand_contact_save / _delete) */
+function BrandOverview() {
+  const { d, b, reload } = useBrand();
   const router = useRouter();
-  const [b, setB] = useState(() => brandInfo(id));
+  const contacts = d.contacts || [];
   const [edit, setEdit] = useState(false);
-  const [form, setForm] = useState(b);
+  const [form, setForm] = useState({});
   const [confirmDel, setConfirmDel] = useState(false);
-  const [contacts, setContacts] = useState([]);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(null); // null | {} (naya) | contact (edit)
   const [c, setC] = useState({ name: "", role: "", email: "", phone: "" });
-  const [toast, setToast] = useState("");
+  const [rmId, setRmId] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, say] = useToast();
 
-  useEffect(() => {
-    const x = brandInfo(id);
-    setB(x);
-    setForm(x);
-  }, [id]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const save = (e) => {
-    e.preventDefault();
-    setB({ ...b, ...form });
-    setEdit(false);
-    setToast("Brand details saved");
+  const startEdit = () => {
+    setForm({ status: b.status || "active", website: b.website || "", category: b.category || "" });
+    setEdit(true);
   };
 
-  const del = () => {
-    const d = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date());
-    setDeleted([{ id: b.id, name: b.name, on: d, by: "Mayank", kept: b.campaigns }, ...getDeleted().filter((x) => x.id !== b.id)]);
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    const r = await rpc("admin", "api.brand_save", { p: { brand_id: b.brand_id, status: form.status, website: form.website.trim(), category: form.category.trim() } });
+    setBusy(false);
+    if (r.error) return say(errText(r.error));
+    setEdit(false);
+    say("Brand details saved ✓");
+    reload(true);
+  };
+
+  const del = async () => {
+    setBusy(true);
+    const r = await rpc("admin", "api.admin_brand_delete", { p_brand: b.brand_id });
+    setBusy(false);
+    if (r.error) return say(errText(r.error));
     router.push("/admin/brands/deleted");
   };
 
-  const addContact = (e) => {
+  const openContact = (x) => {
+    setC(x ? { name: x.name || "", role: x.role || "", email: x.email || "", phone: x.phone || "" } : { name: "", role: "", email: "", phone: "" });
+    setAdding(x || {});
+  };
+  const saveContact = async (e) => {
     e.preventDefault();
     if (!c.name.trim()) return;
-    setContacts([...contacts, { ...c, name: c.name.trim() }]);
-    setC({ name: "", role: "", email: "", phone: "" });
-    setAdding(false);
-    setToast("Contact added");
+    setBusy(true);
+    const p = { brand_id: b.brand_id, contact_id: adding?.contact_id || null, name: c.name.trim(), role: c.role.trim(), email: c.email.trim(), phone: c.phone.trim(), is_primary: adding?.contact_id ? !!adding.is_primary : !contacts.length };
+    const r = await rpc("admin", "api.brand_contact_save", { p });
+    setBusy(false);
+    if (r.error) return say(errText(r.error));
+    setAdding(null);
+    say(adding?.contact_id ? "Contact saved ✓" : "Contact added ✓");
+    reload(true);
+  };
+  const removeContact = async (x) => {
+    setRmId(null);
+    const r = await rpc("admin", "api.brand_contact_delete", { p_contact: x.contact_id });
+    if (r.error) return say(errText(r.error));
+    say("Contact removed");
+    reload(true);
   };
 
+  const cell = { status: STATUS[b.status] || "Active client", added: fmtDate(b.created_at), website: b.website || "—", category: b.category || "—" };
   const DET = [
     ["Status", "status"],
     ["Added", "added"],
@@ -60,7 +87,7 @@ export default function BrandOverview() {
   ];
 
   return (
-    <BrandPanel id={id}>
+    <>
       <section className="bp-sec bo-sec">
         <h3 className="bp-sec__t">Details</h3>
         {edit ? (
@@ -72,22 +99,26 @@ export default function BrandOverview() {
                     {l}
                   </label>
                   {k === "status" ? (
-                    <select id={`bo-${k}`} className="ad-input" value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })}>
-                      <option>Active client</option>
-                      <option>Lead</option>
-                      <option>Paused</option>
+                    <select id={`bo-${k}`} className="ad-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                      {Object.entries(STATUS).map(([v, t]) => (
+                        <option key={v} value={v}>
+                          {t}
+                        </option>
+                      ))}
                     </select>
+                  ) : k === "added" ? (
+                    <input id={`bo-${k}`} className="ad-input" value={cell.added} disabled />
                   ) : (
-                    <input id={`bo-${k}`} className="ad-input" value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} disabled={k === "added"} />
+                    <input id={`bo-${k}`} className="ad-input" value={form[k]} maxLength={k === "website" ? 200 : 60} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
                   )}
                 </div>
               ))}
             </div>
             <div className="bp-btns">
-              <button type="submit" className="ad-btn ad-btn--primary">
-                Save details
+              <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+                {busy ? "Saving…" : "Save details"}
               </button>
-              <button type="button" className="bp-plain" onClick={() => (setEdit(false), setForm(b))}>
+              <button type="button" className="bp-plain" onClick={() => setEdit(false)}>
                 Cancel
               </button>
             </div>
@@ -98,18 +129,20 @@ export default function BrandOverview() {
               {DET.map(([l, k]) => (
                 <div key={k} className="bo-cell">
                   <span>{l}</span>
-                  <strong>{b[k]}</strong>
+                  <strong title={cell[k]}>{cell[k]}</strong>
                 </div>
               ))}
             </div>
             {confirmDel ? (
               <div className="bo-confirm">
                 <p>
-                  Delete <b>{b.name}</b>? Campaigns, bills and reports are kept — you can restore it any time.
+                  Delete <b>{b.name}</b>?{" "}
+                  {(d.logins || []).length === 1 ? "Its brand login loses access straight away. " : (d.logins || []).length > 1 ? `Its ${(d.logins || []).length} brand logins lose access straight away. ` : ""}
+                  Campaigns, bills and reports are kept — you can restore it any time.
                 </p>
                 <div className="bp-btns">
-                  <button type="button" className="ad-btn ad-btn--danger" onClick={del}>
-                    Yes, delete brand
+                  <button type="button" className="ad-btn ad-btn--danger" onClick={del} disabled={busy}>
+                    {busy ? "Deleting…" : "Yes, delete brand"}
                   </button>
                   <button type="button" className="bp-plain" onClick={() => setConfirmDel(false)}>
                     Keep it
@@ -118,7 +151,7 @@ export default function BrandOverview() {
               </div>
             ) : (
               <div className="bp-btns">
-                <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setEdit(true)}>
+                <button type="button" className="ad-btn ad-btn--ghost" onClick={startEdit}>
                   ✏️ Edit details
                 </button>
                 <button type="button" className="bp-plain" onClick={() => setConfirmDel(true)}>
@@ -134,16 +167,35 @@ export default function BrandOverview() {
         <h3 className="bp-sec__t">Contacts</h3>
         {contacts.length ? (
           <ul className="bo-list">
-            {contacts.map((x, i) => (
-              <li key={i}>
-                <span className="ad-av">{x.name[0].toUpperCase()}</span>
+            {contacts.map((x) => (
+              <li key={x.contact_id}>
+                <span className="ad-av">{String(x.name || "?")[0].toUpperCase()}</span>
                 <div>
-                  <strong>{x.name}</strong>
+                  <strong>
+                    {x.name}
+                    {x.is_primary && <em className="bo-main">Main</em>}
+                  </strong>
                   <small>{[x.role, x.email, x.phone].filter(Boolean).join(" · ") || "No details"}</small>
                 </div>
-                <button type="button" className="bp-plain" onClick={() => setContacts(contacts.filter((_, j) => j !== i))}>
-                  Remove
-                </button>
+                {rmId === x.contact_id ? (
+                  <>
+                    <button type="button" className="bp-plain bo-rm" onClick={() => removeContact(x)}>
+                      Yes, remove
+                    </button>
+                    <button type="button" className="bp-plain" onClick={() => setRmId(null)}>
+                      Keep
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="bp-plain" onClick={() => openContact(x)}>
+                      Edit
+                    </button>
+                    <button type="button" className="bp-plain" onClick={() => setRmId(x.contact_id)}>
+                      Remove
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -151,7 +203,7 @@ export default function BrandOverview() {
           <p className="bp-sec__s">No contacts yet.</p>
         )}
         {adding ? (
-          <form className="bo-form" onSubmit={addContact}>
+          <form className="bo-form" onSubmit={saveContact}>
             <div className="bo-grid">
               {[
                 ["name", "Name", "Rahul Sharma"],
@@ -163,29 +215,29 @@ export default function BrandOverview() {
                   <label className="ad-label" htmlFor={`bc-${k}`}>
                     {l}
                   </label>
-                  <input id={`bc-${k}`} className="ad-input" placeholder={ph} value={c[k]} onChange={(e) => setC({ ...c, [k]: e.target.value })} />
+                  <input id={`bc-${k}`} className="ad-input" placeholder={ph} value={c[k]} type={k === "email" ? "email" : "text"} maxLength={k === "email" ? 120 : k === "phone" ? 20 : 80} onChange={(e) => setC({ ...c, [k]: e.target.value })} />
                 </div>
               ))}
             </div>
             <div className="bp-btns">
-              <button type="submit" className="ad-btn ad-btn--primary" disabled={!c.name.trim()}>
-                Save contact
+              <button type="submit" className="ad-btn ad-btn--primary" disabled={!c.name.trim() || busy}>
+                {busy ? "Saving…" : "Save contact"}
               </button>
-              <button type="button" className="bp-plain" onClick={() => setAdding(false)}>
+              <button type="button" className="bp-plain" onClick={() => setAdding(null)}>
                 Cancel
               </button>
             </div>
           </form>
         ) : (
           <div className="bp-btns bo-addc">
-            <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAdding(true)}>
+            <button type="button" className="ad-btn ad-btn--ghost" onClick={() => openContact(null)}>
               ➕ Add contact
             </button>
           </div>
         )}
       </section>
 
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ad-toast">{toast}</div>}
 
       <style>{`
         .bo-sec { padding-bottom: 24px; }
@@ -206,8 +258,11 @@ export default function BrandOverview() {
         .bo-list strong { display: block; font-size: 14px; font-weight: 700; }
         .bo-list small { display: block; margin-top: 2px; font-size: 12px; color: var(--ad-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .bo-list .bp-plain { height: 32px; padding: 0 6px; font-size: 13px; }
+        .bo-list .bo-rm { color: var(--ad-red); }
+        .bo-main { margin-left: 6px; padding: 1px 7px; border-radius: 8px; background: var(--ad-green-bg); color: var(--ad-green); font-style: normal; font-size: 10.5px; font-weight: 700; vertical-align: 1px; }
+        .bo-cell strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         @media (max-width: 560px) { .bo-grid { grid-template-columns: 1fr; } }
       `}</style>
-    </BrandPanel>
+    </>
   );
 }

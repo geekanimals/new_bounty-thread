@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Grid,
   CheckSquare,
@@ -35,14 +35,25 @@ import {
   Package,
   User,
 } from "@/components/ui/Icons";
-import { BRAND, USER, WORKSPACES, NOTIFICATIONS } from "@/components/brands/data";
+import {
+  useBrandGate,
+  brandView,
+  signOut,
+  useNotifications,
+  markRead,
+  markAllRead,
+  routeFor,
+  notifLook,
+  ago,
+  useOpenBillsCount,
+} from "@/services/brand";
 
 const NAV = [
   {
     group: "Today",
     items: [
       { label: "Dashboard", href: "/brands/dashboard", icon: Grid, also: ["/brands/notifications", "/brands/assistant"] },
-      { label: "Approvals", href: "/brands/approvals", icon: CheckSquare, badge: 7, tone: "red" },
+      { label: "Approvals", href: "/brands/approvals", icon: CheckSquare, badgeKey: "approvals", tone: "red" },
     ],
   },
   {
@@ -64,7 +75,7 @@ const NAV = [
     group: "Insights",
     items: [
       { label: "Reports", href: "/brands/reports", icon: BarChart },
-      { label: "Billing", href: "/brands/billing", icon: Receipt, badge: 1, tone: "orange" },
+      { label: "Billing", href: "/brands/billing", icon: Receipt, badgeKey: "billing", tone: "orange" },
     ],
   },
 ];
@@ -115,14 +126,22 @@ export function ToneIcon({ icon, tone = "violet", size = 34 }) {
  */
 export default function BrandShell({ children, crumbs }) {
   const pathname = usePathname() || "";
+  const router = useRouter();
+  // login zaroori — nahi to /brands (purana door guard); non-brand login auth.jsx khud logout karta hai
+  const b = useBrandGate("app", router);
+  const v = brandView(b);
+  const notif = useNotifications();
+  const openBills = useOpenBillsCount();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [wsOpen, setWsOpen] = useState(false);
-  const [ws, setWs] = useState(WORKSPACES[0]);
-  const [read, setRead] = useState(false);
+  const [now, setNow] = useState(0); // "5m ago" ke liye — render mein Date.now() mana hai
   const notifRef = useRef(null);
   const wsRef = useRef(null);
   const activeRef = useRef(null);
+  const ws = v.workspaces[0];
+  const badges = { approvals: v.approvalsCount, billing: openBills };
+  const badgeOf = (item) => (item.badgeKey ? badges[item.badgeKey] || 0 : 0);
 
   const isActive = (item) =>
     pathname === item.href || pathname.startsWith(item.href + "/") || (item.also || []).some((p) => pathname.startsWith(p));
@@ -154,8 +173,42 @@ export default function BrandShell({ children, crumbs }) {
     activeRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [pathname]);
 
-  const latest = NOTIFICATIONS.slice(0, 5);
-  const unread = read ? 0 : NOTIFICATIONS.filter((n) => n.unread).length;
+  useEffect(() => {
+    setNow(Date.now());
+  }, [notif.list, notifOpen]);
+
+  // Sign out — pehle state saaf (auth.signOut), phir login par (Back se dashboard wapas nahi aata: guard)
+  const doSignOut = async (e) => {
+    e?.preventDefault();
+    await signOut();
+    router.replace("/brands");
+  };
+  // Alert par click — read karo, phir uske page par (purana action_route "?go=…")
+  const openAlert = (e, x) => {
+    e.preventDefault();
+    if (!x.read) markRead(x.notification_id);
+    setNotifOpen(false);
+    router.push(routeFor(x.action_route));
+  };
+
+  const latest = notif.list.slice(0, 5);
+  const unread = notif.unread;
+
+  // pehli load / logout ho raha hai → sirf loader (login ke bina page kabhi nahi dikhta)
+  if (!b.ready || !b.loggedIn) {
+    return (
+      <div className="bs-gate" role="status" aria-label="Loading">
+        <span className="bs-logo__mark">g</span>
+        <i />
+        <style>{`
+          .bs-gate { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 16px; background: var(--br-bg); }
+          .bs-gate .bs-logo__mark { width: 44px; height: 44px; border-radius: 12px; background: var(--br-grad); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 22px; }
+          .bs-gate i { width: 120px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, #e7e0ff 0%, #6d4aff 50%, #e7e0ff 100%); background-size: 200% 100%; animation: bsGate 1s infinite linear; }
+          @keyframes bsGate { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="bs">
@@ -168,7 +221,7 @@ export default function BrandShell({ children, crumbs }) {
         </Link>
 
         <div className="bs-ws" ref={wsRef}>
-          <button type="button" className="bs-ws__btn" onClick={() => setWsOpen(!wsOpen)} aria-expanded={wsOpen} title={ws.name}>
+          <button type="button" className="bs-ws__btn" onClick={() => setWsOpen(!wsOpen)} aria-expanded={wsOpen} title={v.name}>
             <span className="bs-ws__logo" style={{ background: ws.gradient }}>
               {ws.letter}
             </span>
@@ -180,21 +233,14 @@ export default function BrandShell({ children, crumbs }) {
           </button>
           {wsOpen && (
             <div className="bs-ws__menu">
-              <p>Switch workspace</p>
-              {WORKSPACES.map((w) => (
-                <button
-                  type="button"
-                  key={w.name}
-                  onClick={() => {
-                    setWs(w);
-                    setWsOpen(false);
-                  }}
-                >
+              <p>Your brands</p>
+              {v.workspaces.map((w) => (
+                <button type="button" key={w.id} onClick={() => setWsOpen(false)}>
                   <span className="bs-ws__logo" style={{ background: w.gradient }}>
                     {w.letter}
                   </span>
                   {w.name}
-                  {w.name === ws.name && <Check size={13} />}
+                  <Check size={13} />
                 </button>
               ))}
             </div>
@@ -216,7 +262,7 @@ export default function BrandShell({ children, crumbs }) {
                   <Link key={item.href} href={item.href} title={item.label} className={`bs-nav__item ${isActive(item) ? "is-active" : ""}`}>
                     <Icon size={16} />
                     <span>{item.label}</span>
-                    {item.badge && <em className={`is-${item.tone}`}>{item.badge}</em>}
+                    {badgeOf(item) > 0 && <em className={`is-${item.tone}`}>{badgeOf(item)}</em>}
                   </Link>
                 );
               })}
@@ -239,16 +285,16 @@ export default function BrandShell({ children, crumbs }) {
             <span>Settings</span>
           </Link>
           <div className="bs-user">
-            <span className="bs-avatar" style={{ background: USER.gradient }}>
-              {USER.initials}
+            <span className="bs-avatar" style={{ background: v.user.gradient }}>
+              {v.user.initials}
             </span>
             <span className="bs-user__name">
-              <strong>{USER.name}</strong>
-              <small>{USER.role}</small>
+              <strong>{v.user.name}</strong>
+              <small>{v.user.role}</small>
             </span>
-            <Link href="/brands" className="bs-user__out" aria-label="Sign out" title="Sign out">
+            <a href="/brands" className="bs-user__out" aria-label="Sign out" title="Sign out" onClick={doSignOut}>
               <LogOut />
-            </Link>
+            </a>
           </div>
         </div>
       </aside>
@@ -286,7 +332,7 @@ export default function BrandShell({ children, crumbs }) {
                 </button>
               )}
               <Link href="/brands/campaigns" className="bs-live">
-                {BRAND.liveCount} campaigns live
+                {v.liveCount} campaign{v.liveCount === 1 ? "" : "s"} live
               </Link>
 
               <div className="bs-notif" ref={notifRef}>
@@ -310,23 +356,29 @@ export default function BrandShell({ children, crumbs }) {
                         <p className="bs-panel__title">Notifications</p>
                         <p className="bs-panel__sub">{unread} new · also on WhatsApp &amp; email</p>
                       </div>
-                      <button type="button" className="bs-panel__mark" onClick={() => setRead(true)}>
+                      <button type="button" className="bs-panel__mark" onClick={() => markAllRead()} disabled={!unread}>
                         Mark all read
                       </button>
                     </div>
                     <ul className="bs-panel__list">
-                      {latest.map((n) => (
-                        <li key={n.id} className={!read && n.unread ? "is-unread" : ""}>
-                          <Link href={n.href || "/brands/notifications"}>
-                            <ToneIcon icon={n.icon} tone={n.tone} size={32} />
-                            <span className="bs-panel__body">
-                              <strong>{n.title}</strong>
-                              <small>{n.text}</small>
-                            </span>
-                            <span className="bs-panel__time">{n.time}</span>
-                          </Link>
-                        </li>
-                      ))}
+                      {latest.map((n) => {
+                        const look = notifLook(n);
+                        return (
+                          <li key={n.notification_id} className={!n.read ? "is-unread" : ""}>
+                            <a href={routeFor(n.action_route)} onClick={(e) => openAlert(e, n)}>
+                              <ToneIcon icon={look.icon} tone={look.tone} size={32} />
+                              <span className="bs-panel__body">
+                                <strong>{n.title}</strong>
+                                <small>{n.body}</small>
+                              </span>
+                              <span className="bs-panel__time">{ago(n.created_at, now)}</span>
+                            </a>
+                          </li>
+                        );
+                      })}
+                      {!latest.length && (
+                        <li className="bs-panel__none">{notif.loading ? "Loading…" : notif.error ? notif.error : "No alerts yet — you're all caught up."}</li>
+                      )}
                     </ul>
                     <Link href="/brands/notifications" className="bs-panel__all">
                       See all notifications <ChevronRight size={12} />
@@ -335,8 +387,8 @@ export default function BrandShell({ children, crumbs }) {
                 )}
               </div>
 
-              <Link href="/brands/settings" className="bs-avatar bs-avatar--top" style={{ background: USER.gradient }} aria-label="Settings">
-                {USER.initials}
+              <Link href="/brands/settings" className="bs-avatar bs-avatar--top" style={{ background: v.user.gradient }} aria-label="Settings">
+                {v.user.initials}
               </Link>
 
               <button
@@ -363,7 +415,7 @@ export default function BrandShell({ children, crumbs }) {
                 <Link key={item.href} href={item.href} ref={on ? activeRef : null} className={on ? "is-active" : ""}>
                   <Icon size={14} />
                   {item.label}
-                  {item.badge && <em>{item.badge}</em>}
+                  {badgeOf(item) > 0 && <em>{badgeOf(item)}</em>}
                 </Link>
               );
             })}
@@ -377,7 +429,7 @@ export default function BrandShell({ children, crumbs }) {
                   {ws.letter}
                 </span>
                 <span className="bs-mpanel__ws">
-                  <strong>{ws.name}</strong>
+                  <strong>{v.name}</strong>
                   <small>{ws.note}</small>
                 </span>
                 <Link href="/brands/campaigns/new" className="br-btn br-btn--primary br-btn--sm">
@@ -398,7 +450,7 @@ export default function BrandShell({ children, crumbs }) {
                         <Link key={item.href} href={item.href} className={isActive(item) ? "is-active" : ""}>
                           <Icon size={15} />
                           {item.label}
-                          {item.badge && <em>{item.badge}</em>}
+                          {badgeOf(item) > 0 && <em>{badgeOf(item)}</em>}
                         </Link>
                       );
                     })}
@@ -414,16 +466,16 @@ export default function BrandShell({ children, crumbs }) {
                 </Link>
               </div>
               <div className="bs-user bs-user--light">
-                <span className="bs-avatar" style={{ background: USER.gradient }}>
-                  {USER.initials}
+                <span className="bs-avatar" style={{ background: v.user.gradient }}>
+                  {v.user.initials}
                 </span>
                 <span className="bs-user__name">
-                  <strong>{USER.name}</strong>
-                  <small>{USER.role}</small>
+                  <strong>{v.user.name}</strong>
+                  <small>{v.user.role}</small>
                 </span>
-                <Link href="/brands" className="bs-user__out">
+                <a href="/brands" className="bs-user__out" onClick={doSignOut}>
                   <LogOut /> Sign out
-                </Link>
+                </a>
               </div>
             </div>
           )}
@@ -607,6 +659,8 @@ export default function BrandShell({ children, crumbs }) {
         .bs-panel__list a { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px; }
         .bs-panel__list a:hover { background: #f7f7fb; }
         .bs-panel__list li.is-unread a { background: var(--br-lilac); }
+        .bs-panel__mark:disabled { color: var(--br-faint); cursor: default; }
+        .bs-panel__none { padding: 18px 12px; text-align: center; font-size: 12.5px; color: var(--br-muted); }
         .bs-panel__body { flex: 1; min-width: 0; }
         .bs-panel__body strong { display: block; font-size: 13px; font-weight: 700; }
         .bs-panel__body small { display: block; font-size: 11.5px; color: var(--br-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

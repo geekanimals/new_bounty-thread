@@ -1,49 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import DiscoveryHead from "@/components/admin/discovery/DiscoveryHead";
-import { CREATORS } from "@/components/admin/data";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { kNum, cap1 } from "@/components/admin/creator/live";
 
-const ENG = { "aarav-shah": "4.2%", "nisha-rao": "3.1%", "ritika-sen": "5.6%", "kabir-mehta": "2.8%", "ananya-iyer": "3.9%", "rohan-das": "4.6%", "aisha-khan": "6.4%", "meera-iyer": "5.8%", "pooja-nair": "3.4%" };
+/* Figma ke chips — purane app ke CS_CATS se */
 const CATS = ["Lifestyle", "Fashion", "Beauty", "Food", "Travel", "Fitness", "Parenting", "Tech", "Comedy", "Pets"];
-const LANG = { Bengaluru: "Kannada", Mumbai: "Hindi", Kolkata: "Bengali", Delhi: "Hindi", Chennai: "Tamil", Pune: "Hindi", Kochi: "Malayalam" };
-const kNum = (s) => parseFloat(s) * (/k/i.test(s) ? 1000 : 1);
+const CITIES = ["Delhi NCR", "Mumbai", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh", "Indore", "Surat", "Kochi", "Goa"];
 const FOL = [
-  ["Any followers", 0, Infinity],
-  ["Under 10k", 0, 10000],
+  ["Any followers", null, null],
+  ["Under 10k", null, 10000],
   ["10k – 25k", 10000, 25000],
   ["25k – 50k", 25000, 50000],
-  ["50k+", 50000, Infinity],
+  ["50k+", 50000, null],
 ];
 
-/* Discovery → Creator search (Figma 052) */
+/* Discovery → Creator search (Figma 052). api.creator_search — Geek OS creators + Instagram list (purane app jaisa) */
 export default function DiscoverySearch() {
   const [form, setForm] = useState({ q: "", fol: "Any followers", city: "Any city", lang: "Any language" });
-  const [cats, setCats] = useState(["Lifestyle", "Fashion"]);
-  const [applied, setApplied] = useState(null); // null = Figma ki default list
+  const [cats, setCats] = useState([]);
+  const [res, setRes] = useState({ rows: [], total: 0, loading: true, error: null });
+  const { data: opts } = useRpc("admin", "api.creator_search_options", {});
 
   const toggle = (c) => setCats((l) => (l.includes(c) ? l.filter((x) => x !== c) : [...l, c]));
-  const run = (e) => {
+  const run = async (e, f = form, cs = cats) => {
     e?.preventDefault();
-    setApplied({ ...form, cats });
+    const [, lo, hi] = FOL.find((x) => x[0] === f.fol) || FOL[0];
+    const filters = { q: f.q.trim(), categories: cs, location: f.city === "Any city" ? "" : f.city, sort: "followers_desc", language: f.lang === "Any language" ? "" : f.lang.toLowerCase() };
+    if (lo != null) filters.min_followers = lo;
+    if (hi != null) filters.max_followers = hi;
+    Object.keys(filters).forEach((k) => (filters[k] === "" || filters[k] == null) && delete filters[k]);
+    setRes((r) => ({ ...r, loading: true, error: null }));
+    // dono list ek saath: Geek OS (platform) + Instagram (external) — purane "Everyone" jaisa
+    const ask = (source, size) => rpc("admin", "api.creator_search", { p_filters: { ...filters, source }, p_page: 1, p_size: size, p_campaign: null });
+    const [P, X] = await Promise.all([ask("platform", 12), ask("external", 24)]);
+    const error = P.error || X.error;
+    if (error) return setRes({ rows: [], total: 0, loading: false, error });
+    const rows = [...((P.data && P.data.rows) || []).map((r) => ({ ...r, onGeek: true })), ...((X.data && X.data.rows) || [])];
+    setRes({ rows, total: ((P.data && P.data.total) || 0) + ((X.data && X.data.total) || 0), loading: false, error: null });
   };
+  useEffect(() => {
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  let rows = CREATORS.slice(0, 5);
-  if (applied) {
-    const t = applied.q.trim().toLowerCase();
-    const [, lo, hi] = FOL.find((f) => f[0] === applied.fol);
-    rows = CREATORS.filter(
-      (c) =>
-        (!t || [c.name, c.handle, c.city].some((v) => v.toLowerCase().includes(t))) &&
-        kNum(c.followers) >= lo &&
-        kNum(c.followers) < hi &&
-        (applied.city === "Any city" || c.city === applied.city) &&
-        (applied.lang === "Any language" || LANG[c.city] === applied.lang || applied.lang === "English") &&
-        (!applied.cats.length || applied.cats.includes(c.category) || applied.cats.length === 2)
-    );
-  }
+  const rows = res.rows;
+  const langs = ["Any language", ...((opts && opts.languages) || [])];
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -61,12 +66,12 @@ export default function DiscoverySearch() {
             ))}
           </select>
           <select className="ad-input ds-sel" value={form.city} onChange={set("city")} aria-label="City">
-            {["Any city", ...new Set(CREATORS.map((c) => c.city))].map((c) => (
+            {["Any city", ...CITIES].map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
           <select className="ad-input ds-sel" value={form.lang} onChange={set("lang")} aria-label="Language">
-            {["Any language", "English", "Hindi", "Kannada", "Tamil", "Bengali", "Malayalam"].map((c) => (
+            {langs.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
@@ -95,32 +100,56 @@ export default function DiscoverySearch() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => (
-                <tr key={c.id}>
+              {rows.map((c, i) => (
+                <tr key={(c.member_id || c.handle || "") + i}>
                   <td>
-                    <Link href={`/admin/creators/${c.id}/profile`} className="ds-name">
-                      {c.name}
-                    </Link>
-                    <span className="ds-handle">{c.handle}</span>
+                    {c.member_id ? (
+                      <Link href={`/admin/creators/${c.member_id}/profile`} className="ds-name">
+                        {c.name || "@" + c.handle}
+                      </Link>
+                    ) : (
+                      <a href={`https://instagram.com/${encodeURIComponent(c.handle || "")}`} target="_blank" rel="noopener noreferrer" className="ds-name">
+                        {c.name || "@" + c.handle}
+                      </a>
+                    )}
+                    <span className="ds-handle">{c.handle ? "@" + c.handle : ""}{c.onGeek ? "" : " · Instagram"}</span>
                   </td>
-                  <td>{c.followers}</td>
-                  <td>{c.city}</td>
-                  <td>{c.category}</td>
-                  <td>{ENG[c.id]}</td>
+                  <td>{kNum(c.followers)}</td>
+                  <td>{c.city || "—"}</td>
+                  <td>{(c.categories || []).slice(0, 2).map(cap1).join(", ") || "—"}</td>
+                  <td>{c.engagement != null ? c.engagement + "%" : "—"}</td>
                   <td>
-                    <Link href={`/admin/creators/${c.id}/profile`} className="ds-link">
-                      View 360° →
-                    </Link>
+                    {c.member_id ? (
+                      <Link href={`/admin/creators/${c.member_id}/profile`} className="ds-link">
+                        View 360° →
+                      </Link>
+                    ) : (
+                      <a href={`https://instagram.com/${encodeURIComponent(c.handle || "")}`} target="_blank" rel="noopener noreferrer" className="ds-link">
+                        Open ↗
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {!rows.length && <p className="ds-empty">No creators match — try fewer filters.</p>}
+          {res.error && (
+            <p className="ds-empty">
+              {errText(res.error)}{" "}
+              <button type="button" className="ds-retry" onClick={() => run()}>
+                Retry
+              </button>
+            </p>
+          )}
+          {res.loading && !rows.length && <p className="ds-empty">Searching…</p>}
+          {!res.loading && !res.error && !rows.length && <p className="ds-empty">No creators match — try fewer filters.</p>}
+          {!!rows.length && <p className="ds-count">{res.total.toLocaleString("en-IN")} creators found</p>}
         </div>
       </section>
 
       <style>{`
+        .ds-retry { border: 0; background: none; font-weight: 800; color: #6657e9; }
+        .ds-count { margin-top: 12px; font-size: 12px; color: var(--ad-muted); }
         .ds-card { padding: 25px 22px 30px; }
         .ds-sub { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .ds-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 17px; }

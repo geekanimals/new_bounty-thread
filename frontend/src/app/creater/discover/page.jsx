@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import BountyShell from "@/components/creater/BountyShell";
 import CampaignCard from "@/components/creater/CampaignCard";
 import { RumiTip } from "@/components/creater/OnboardShell";
 import Link from "next/link";
-import { useSession } from "@/components/creater/session";
-import { CAMPAIGNS, MY_CAMPAIGNS, getSidekick } from "@/components/creater/data";
+import { useSession, useJoinGate, useOpenCampaigns, useCovers, campaignCard, kindOf, isCeleb, takeApply, errText } from "@/services/creator";
+import { getSidekick } from "@/components/creater/data";
 import { ChevronDown } from "@/components/ui/Icons";
 
 const FILTERS = [
@@ -17,19 +18,37 @@ const FILTERS = [
 ];
 const FIRST = 6;
 
-/** /creater/discover — "Made for your world": saari campaigns, filter ke saath */
+// Purane app ka matchFilter: Paid = paid + barter_paid, Barter = barter + barter_paid (story nahi), Paid + Barter = barter_paid
+const match = (f, x) => {
+  const t = kindOf(x);
+  if (f === "paid") return t === "paid" || t === "barter_paid";
+  if (f === "barter") return (t === "barter" || t === "barter_paid") && !isCeleb(x);
+  if (f === "both") return t === "barter_paid";
+  return true;
+};
+
+/**
+ * /creater/discover — "Made for your world": saari open campaigns (Supabase), filter ke saath.
+ * Instagram/WhatsApp abhi connect nahi (my_join_status) → public list sirf dekhne ke liye, Apply par Instagram maangte hain.
+ */
 export default function Discover() {
+  const router = useRouter();
   const [s] = useSession();
-  const locked = !s.ig;
+  const gate = useJoinGate();
+  const locked = gate.locked;
   const sk = getSidekick(s.sidekick);
   const [f, setF] = useState("for");
   const [shown, setShown] = useState(FIRST);
-  const applied = new Set(MY_CAMPAIGNS.filter((m) => !m.notSelected).map((m) => m.id));
+  const covers = useCovers();
+  const { loading, list: rows, error, reload } = useOpenCampaigns({ publicList: locked, skip: gate.loading });
 
-  // Filter: For you = sab, Paid, Barter, Paid + Barter = hybrid
-  const list = CAMPAIGNS.filter((c) =>
-    f === "paid" ? c.type === "paid" : f === "barter" ? c.type === "barter" : f === "both" ? c.type === "hybrid" : true
-  );
+  // guest ne login se pehle Apply dabaya tha → wahi campaign kholo (purane applyHandoff)
+  useEffect(() => {
+    const id = takeApply();
+    if (id) router.push(`/creater/discover/${encodeURIComponent(id)}`);
+  }, [router]);
+
+  const list = useMemo(() => rows.filter((x) => match(f, x)).map((x) => campaignCard(x, covers)), [rows, f, covers]);
 
   return (
     <BountyShell tone="forest">
@@ -62,8 +81,17 @@ export default function Discover() {
         </div>
       )}
 
-      {list.length === 0 ? (
-        <p className="dc-empty">No campaigns in this filter right now — check back soon.</p>
+      {gate.loading || loading ? (
+        <p className="dc-empty">Loading campaigns…</p>
+      ) : error ? (
+        <p className="dc-empty">
+          Couldn&apos;t load campaigns — {errText(error)}{" "}
+          <button type="button" className="dc-retry" onClick={() => reload()}>
+            Retry
+          </button>
+        </p>
+      ) : list.length === 0 ? (
+        <p className="dc-empty">{rows.length ? "Nothing here right now — try another filter." : "No campaigns are open right now. New ones will show up here."}</p>
       ) : (
         <div className="dc-grid">
           {list.slice(0, shown).map((c) => (
@@ -72,7 +100,7 @@ export default function Discover() {
               c={c}
               href={`/creater/discover/${c.id}`}
               locked={locked}
-              applied={!locked && applied.has(c.id)}
+              applied={!locked && !!c.myStage}
               mobile={locked || f !== "for" ? "dark" : "compact"}
             />
           ))}
@@ -108,6 +136,7 @@ export default function Discover() {
         .dc-lock a { flex-shrink: 0; display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 999px; border: 1.5px solid #3fd9e8; font-family: var(--bx-jak); font-size: 12px; font-weight: 700; color: #fbf3e2; }
         .dc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
         .dc-empty { margin: 30px auto; text-align: center; font-size: 14px; color: #3e4b52; }
+        .dc-retry { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; color: inherit; cursor: pointer; }
         .dc-more { display: flex; justify-content: center; margin-top: 22px; }
         .dc-rumi { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 24px; }
         .dc-rumi img { width: 56px; height: 56px; object-fit: contain; }

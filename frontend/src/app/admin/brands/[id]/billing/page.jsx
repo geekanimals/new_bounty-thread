@@ -1,54 +1,127 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
-import BrandPanel from "@/components/admin/brand/BrandPanel";
+import BrandPanel, { useBrand } from "@/components/admin/brand/BrandPanel";
 import PTable from "@/components/admin/brand/PTable";
-import { brandInfo } from "@/components/admin/brand/store";
-import { CAMPAIGNS, brandById } from "@/components/admin/data";
+import { rpc, invoke, useRpc, errText } from "@/lib/supabase";
+import { fmtDate, inr, inrFull, useToast } from "@/components/admin/brand/util";
 
-const inr = (n) => (n >= 100000 ? `₹${(n / 100000).toFixed(1).replace(".0", "")}L` : n >= 1000 ? `₹${(n / 1000).toFixed(1).replace(".0", "")}K` : `₹${n}`);
-
-/** /admin/brands/[id]/billing — Billing (Figma 070) */
-export default function BrandBilling() {
+/**
+ * /admin/brands/[id]/billing — Billing (Figma 070), purane app jaisa:
+ *  bills: api.brand_invoices · GST default: api.admin_billing_settings
+ *  new bill: api.admin_invoice_save · paid / undo / cancel: api.admin_invoice_mark · Razorpay pay link: brand-billing { action: "pay" }
+ */
+export default function BrandBillingPage() {
   const { id } = useParams();
-  const b = brandById(id);
-  const camps = CAMPAIGNS.filter((c) => !c.hidden && c.brand === b.name);
-  const [value, setValue] = useState(() => brandInfo(id).value);
-  const [inv, setInv] = useState([]);
-  const [adding, setAdding] = useState(false);
-  const [f, setF] = useState({ campaign: camps[0]?.name || "", amount: "" });
-  const [toast, setToast] = useState("");
-
-  useEffect(() => setValue(brandInfo(id).value), [id]);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const billed = inv.reduce((s, i) => s + i.amount, 0);
-  const paid = inv.filter((i) => i.status === "Paid").reduce((s, i) => s + i.amount, 0);
-
-  const add = (e) => {
-    e.preventDefault();
-    const amount = parseInt(String(f.amount).replace(/\D/g, ""), 10);
-    if (!amount) return setToast("Enter an amount");
-    const no = `GEEK-${b.name.slice(0, 3).toUpperCase()}-${String(inv.length + 1).padStart(3, "0")}`;
-    setInv([...inv, { no, campaign: f.campaign || "General", amount, status: "Due" }]);
-    setF({ ...f, amount: "" });
-    setAdding(false);
-    setToast(`Invoice ${no} created`);
-  };
-
   return (
     <BrandPanel id={id}>
+      <BrandBilling />
+    </BrandPanel>
+  );
+}
+
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+function BrandBilling() {
+  const { d, b } = useBrand();
+  const inv = useRpc("admin", "api.brand_invoices", { p_brand: b.brand_id });
+  const set = useRpc("admin", "api.admin_billing_settings", { p: null });
+  const L = inv.data?.invoices || [];
+  const camps = d.campaigns || [];
+  const T = d.totals || {};
+  const [adding, setAdding] = useState(false);
+  const [f, setF] = useState({ campaign: "", amount: "" });
+  const [pay, setPay] = useState(null); // bill jise "paid" mark kar rahe
+  const [pf, setPf] = useState({ amt: "", on: "", ref: "" });
+  const [ask, setAsk] = useState(null); // { kind: "cancel" | "unpay", i }
+  const [busy, setBusy] = useState(false);
+  const [toast, say] = useToast();
+
+  const billed = L.filter((i) => i.status !== "cancelled").reduce((s, i) => s + (Number(i.total) || 0), 0);
+  const product = Number(T.product_value) ? inr(T.product_value) : "—";
+
+  const add = async (e) => {
+    e.preventDefault();
+    const rate = parseFloat(String(f.amount).replace(/[^\d.]/g, ""));
+    if (!rate) return say("Enter an amount");
+    setBusy(true);
+    const p = {
+      invoice_id: null, brand_id: b.brand_id, campaign_id: f.campaign || null, title: "Campaign services",
+      gst_pct: set.data?.default_gst ?? 18, due_on: null, notes: "",
+      items: [{ description: "Influencer campaign management", qty: 1, rate }],
+    };
+    const r = await rpc("admin", "api.admin_invoice_save", { p });
+    setBusy(false);
+    if (r.error) return say(errText(r.error));
+    setF({ campaign: "", amount: "" });
+    setAdding(false);
+    say(`✓ Payment request sent to ${b.name}`);
+    inv.reload(true);
+  };
+
+  const openPay = (i) => {
+    setPay(i);
+    setPf({ amt: String(i.total ?? ""), on: today(), ref: "" });
+  };
+  const markPaid = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    const r = await rpc("admin", "api.admin_invoice_mark", { p_invoice: pay.invoice_id, p_action: "paid", p_ref: pf.ref || null, p_amount: parseFloat(pf.amt) || null, p_paid_on: pf.on || null, p_note: null });
+    setBusy(false);
+    if (r.error) return say(errText(r.error));
+    setPay(null);
+    say("✓ Marked paid — the brand gets the receipt");
+    inv.reload(true);
+  };
+  const confirm = async () => {
+    const { kind, i } = ask;
+    setAsk(null);
+    const r = await rpc("admin", "api.admin_invoice_mark", { p_invoice: i.invoice_id, p_action: kind });
+    if (r.error) return say(errText(r.error));
+    say(kind === "cancel" ? "Bill cancelled" : "Back to unpaid");
+    inv.reload(true);
+  };
+  const payLink = async (i) => {
+    const r = await invoke("admin", "brand-billing", { action: "pay", invoice_id: i.invoice_id });
+    if (r.error) return say(errText(r.error));
+    if (r.data?.paid) {
+      say("Already paid ✓");
+      return inv.reload(true);
+    }
+    try {
+      await navigator.clipboard.writeText(r.data.url);
+      say("Razorpay pay link copied ✓ — send it to the brand");
+    } catch {
+      say(`Pay link: ${r.data.url}`);
+    }
+    inv.reload(true);
+  };
+
+  const status = (i) =>
+    i.status === "paid" ? (
+      <button type="button" className="ad-badge ad-badge--green bb-st" title={i.paid_via === "manual" ? "Paid by hand — click to undo" : "Paid on Razorpay"} onClick={() => i.paid_via === "manual" && setAsk({ kind: "unpay", i })}>
+        Paid
+      </button>
+    ) : i.status === "cancelled" ? (
+      <span className="ad-badge">Cancelled</span>
+    ) : (
+      <button type="button" className={`ad-badge ad-badge--${i.overdue ? "red" : "orange"} bb-st`} title="Click to mark paid" onClick={() => openPay(i)}>
+        {i.overdue ? "Overdue" : "Due"}
+      </button>
+    );
+
+  return (
+    <>
       <div className="bb-stats">
         {[
-          [value, "Product value"],
-          [inr(billed), "Fees billed"],
-          [inr(paid), "Paid"],
-          [inr(billed - paid), "Due"],
+          [product, "Product value"],
+          [inv.loading ? "—" : inr(billed), "Fees billed"],
+          [inv.loading ? "—" : inr(inv.data?.paid), "Paid"],
+          [inv.loading ? "—" : inr(inv.data?.due), "Due"],
         ].map(([n, l]) => (
           <div key={l}>
             <strong>{n}</strong>
@@ -57,39 +130,105 @@ export default function BrandBilling() {
         ))}
       </div>
       <section className="bp-sec bb-sec">
-        <PTable
-          minW={600}
-          rowH={50}
-          cols={[
-            { label: "Invoice", w: "22%" },
-            { label: "Campaign", w: "35.5%" },
-            { label: "Amount", w: "22.5%" },
-            { label: "Status", w: "20%" },
-          ]}
-          rows={
-            inv.length
-              ? inv.map((i, k) => [
-                  i.no,
-                  i.campaign,
-                  inr(i.amount),
-                  <button key="s" type="button" className={`ad-badge ad-badge--${i.status === "Paid" ? "green" : "orange"} bb-st`} title="Click to mark paid / due" onClick={() => setInv(inv.map((x, j) => (j === k ? { ...x, status: x.status === "Paid" ? "Due" : "Paid" } : x)))}>
-                    {i.status}
-                  </button>,
-                ])
-              : [["—", "No invoices yet", "—", "—"]]
-          }
-        />
+        {inv.error ? (
+          <p className="bb-state">
+            Couldn’t load bills: {errText(inv.error)}{" "}
+            <button type="button" onClick={() => inv.reload()}>
+              Retry
+            </button>
+          </p>
+        ) : (
+          <PTable
+            minW={660}
+            rowH={50}
+            cols={[
+              { label: "Invoice", w: "20%" },
+              { label: "Campaign", w: "31%" },
+              { label: "Amount", w: "18%" },
+              { label: "Status", w: "14%" },
+              { label: "", w: "17%" },
+            ]}
+            rows={
+              inv.loading
+                ? [["…", "Loading bills…", "—", "—", ""]]
+                : L.length
+                  ? L.map((i) => [
+                      <span key="n" title={`${i.title || ""} · issued ${fmtDate(i.issued_on)}`}>
+                        {i.invoice_no}
+                      </span>,
+                      <span key="c" title={i.campaign || "General"}>
+                        {i.campaign || "General"}
+                      </span>,
+                      inrFull(i.total),
+                      status(i),
+                      i.status === "requested" ? (
+                        <span key="a" className="bb-acts">
+                          <button type="button" className="pt-link" onClick={() => payLink(i)}>
+                            🔗 Pay link
+                          </button>
+                          <button type="button" className="pt-link" onClick={() => setAsk({ kind: "cancel", i })}>
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <span key="a" className="bb-when">
+                          {i.status === "paid" ? fmtDate(i.paid_at) : ""}
+                        </span>
+                      ),
+                    ])
+                  : [["—", "No invoices yet", "—", "—", ""]]
+            }
+          />
+        )}
+
+        {pay && (
+          <form className="bb-pay" onSubmit={markPaid}>
+            <p>
+              Mark <b>{pay.invoice_no}</b> paid — for a bank transfer, UPI or cheque outside Razorpay.
+            </p>
+            <div className="bb-pay__grid">
+              <input className="ad-input" type="number" min="0" step="0.01" value={pf.amt} onChange={(e) => setPf({ ...pf, amt: e.target.value })} aria-label="Amount received (₹)" placeholder="Amount received (₹)" />
+              <input className="ad-input" type="date" value={pf.on} onChange={(e) => setPf({ ...pf, on: e.target.value })} aria-label="Paid on" />
+              <input className="ad-input" maxLength={120} value={pf.ref} onChange={(e) => setPf({ ...pf, ref: e.target.value })} placeholder="UTR / UPI ref / cheque no" aria-label="Reference" />
+            </div>
+            <div className="bp-btns">
+              <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+                {busy ? "Saving…" : "Mark paid & send receipt"}
+              </button>
+              <button type="button" className="bp-plain" onClick={() => setPay(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {ask && (
+          <div className="bb-ask">
+            <p>{ask.kind === "cancel" ? `Cancel ${ask.i.invoice_no}? The brand won’t be able to pay it.` : `Undo the manual “paid” on ${ask.i.invoice_no}? The bill goes back to unpaid.`}</p>
+            <div className="bp-btns">
+              <button type="button" className="ad-btn ad-btn--danger" onClick={confirm}>
+                {ask.kind === "cancel" ? "Yes, cancel bill" : "Yes, undo"}
+              </button>
+              <button type="button" className="bp-plain" onClick={() => setAsk(null)}>
+                Keep it
+              </button>
+            </div>
+          </div>
+        )}
+
         {adding && (
           <form className="bb-form" onSubmit={add}>
             <select className="ad-input" value={f.campaign} onChange={(e) => setF({ ...f, campaign: e.target.value })} aria-label="Campaign">
+              <option value="">General (no campaign)</option>
               {camps.map((c) => (
-                <option key={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
-              <option>General</option>
             </select>
-            <input className="ad-input" inputMode="numeric" placeholder="Amount (₹)" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} aria-label="Amount" autoFocus />
-            <button type="submit" className="ad-btn ad-btn--primary">
-              Create
+            <input className="ad-input" inputMode="decimal" placeholder="Amount (₹, before GST)" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} aria-label="Amount" autoFocus />
+            <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+              {busy ? "Sending…" : "Create"}
             </button>
           </form>
         )}
@@ -99,7 +238,7 @@ export default function BrandBilling() {
           </button>
         </div>
       </section>
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ad-toast">{toast}</div>}
       <style>{`
         .bb-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-top: 0; }
         .bb-stats div { display: flex; flex-direction: column; padding: 18px 16px 16px; border-radius: 13px; background: var(--ad-soft-2); }
@@ -109,12 +248,20 @@ export default function BrandBilling() {
         .bb-sec .pt th { height: 36px; }
         .bb-sec .bp-btns { margin-top: 10px; }
         .bb-st { border: 0; cursor: pointer; }
+        .bb-acts { display: inline-flex; gap: 10px; }
+        .bb-when { font-size: 12px; color: var(--ad-muted); }
+        .bb-state { padding: 14px 0; font-size: 13px; color: var(--ad-red); }
+        .bb-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
         .bb-form { display: grid; grid-template-columns: 1.6fr 1fr auto; gap: 8px; margin-top: 12px; }
+        .bb-pay, .bb-ask { margin-top: 12px; padding: 12px 14px; border-radius: 13px; font-size: 13px; }
+        .bb-pay { background: var(--ad-soft-2); border: 1px solid var(--ad-line); color: var(--ad-ink); }
+        .bb-pay__grid { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 8px; margin-top: 10px; }
+        .bb-ask { background: var(--ad-red-bg); color: var(--ad-red); }
         @media (max-width: 640px) {
           .bb-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0; }
-          .bb-form { grid-template-columns: 1fr; }
+          .bb-form, .bb-pay__grid { grid-template-columns: 1fr; }
         }
       `}</style>
-    </BrandPanel>
+    </>
   );
 }

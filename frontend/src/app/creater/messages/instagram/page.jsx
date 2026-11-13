@@ -4,45 +4,102 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
 import InboxTabs from "@/components/creater/InboxTabs";
-import { useSession } from "@/components/creater/session";
-import { CREATOR, IG_THREADS } from "@/components/creater/data";
+import { errText, useMyIg, igConversations, igThread, igSend } from "@/services/creator";
 import { ArrowLeft, Send, Instagram } from "@/components/ui/Icons";
 
-/** /creater/messages/instagram — Instagram DMs (connected account se reply) */
-export default function InboxInstagram() {
-  const [s] = useSession();
-  const [threads, setThreads] = useState(IG_THREADS);
-  const [open, setOpen] = useState(null); // mobile par null = list
-  const [active, setActive] = useState(IG_THREADS[0].id);
-  const [text, setText] = useState("");
-  const endRef = useRef(null);
-  const t = threads.find((x) => x.id === active);
+function ago(x, now) {
+  if (!x || !now) return "";
+  const m = Math.round((now - new Date(x).getTime()) / 60000);
+  return m < 60 ? Math.max(m, 0) + "m" : m < 1440 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d";
+}
+const hhmm = (t) => {
+  const d = new Date(t);
+  return isNaN(d) ? "" : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+};
+// Instagram ne mana kiya to kyun, aur kya karna hai (purane mkDmProblem jaisa)
+const PROBLEM = {
+  reconnect: ["🔁 Reconnect Instagram once to allow messages", "This connection was made before messages were allowed. Reconnect Instagram and keep every permission switched on.", true],
+  token_expired: ["🔁 Your Instagram connection expired", "Reconnect Instagram — takes 10 seconds.", true],
+  messages_access_off: ["📱 Turn on “Allow access to messages” in Instagram", "Instagram → Settings → Messages and story replies → Message controls → Connected tools → Allow access to messages. Then try again.", false],
+  app_access: ["🛠 Instagram messages aren't open for Geek yet", "Meta still has to approve messages for this app. Your DMs will show here once it does.", false],
+};
 
+/**
+ * /creater/messages/instagram — Instagram DMs (connected account se reply)
+ * Purane media kit inbox jaisa: instagram-dm function → conversations · thread · send
+ */
+export default function InboxInstagram() {
+  const ig = useMyIg();
+  const [threads, setThreads] = useState(null);
+  const [me, setMe] = useState({});
+  const [problem, setProblem] = useState(null);
+  const [open, setOpen] = useState(null); // mobile par null = list
+  const [active, setActive] = useState(null);
+  const [msgs, setMsgs] = useState(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [now, setNow] = useState(0);
+  const endRef = useRef(null);
+  const t = (threads || []).find((x) => x.id === active);
+
+  const loadThreads = async () => {
+    setProblem(null);
+    const { data, error } = await igConversations();
+    if (error || data?.reason) return setProblem({ ...(data || {}), error: data?.error || errText(error) });
+    setMe(data?.me || {});
+    const list = data?.threads || [];
+    setThreads(list);
+    setActive((a) => a || list[0]?.id || null);
+  };
+  const loadThread = async (id) => {
+    setMsgs(null);
+    const { data, error } = await igThread(id);
+    if (error || data?.reason) return setProblem({ ...(data || {}), error: data?.error || errText(error) });
+    setMsgs((data?.messages || []).slice().reverse());
+  };
+  useEffect(() => {
+    setNow(Date.now());
+    if (ig.acct) loadThreads();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!ig.acct]);
+  useEffect(() => {
+    if (active) loadThread(active);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
   useEffect(() => {
     const box = endRef.current?.parentElement;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [active, threads]);
+  }, [active, msgs]);
 
+  const mine = (m) => m.from && (String(m.from.id) === String(me.id) || m.from.username === me.username);
   const pick = (id) => {
     setActive(id);
     setOpen(id);
-    setThreads((all) => all.map((x) => (x.id === id ? { ...x, unread: false } : x)));
+    setNote("");
   };
-  const send = (e) => {
+  const send = async (e) => {
     e.preventDefault();
     const v = text.trim();
-    if (!v) return;
-    const now = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
-    setThreads((all) => all.map((x) => (x.id === active ? { ...x, last: v, time: "now", msgs: [...x.msgs, { me: true, text: v, time: now }] } : x)));
+    if (!v || !t?.with_id || busy) return;
+    setBusy(true);
+    setNote("");
+    const { data, error } = await igSend(t.with_id, v);
+    setBusy(false);
+    if (error || data?.error) return setNote(data?.error || errText(error));
     setText("");
+    loadThread(t.id);
   };
+  const P = problem && PROBLEM[problem.reason];
 
   return (
     <BountyShell>
       <title>Instagram DMs — Bounty</title>
       <InboxTabs />
 
-      {!s.ig ? (
+      {ig.loading ? (
+        <p className="ig-of">Loading…</p>
+      ) : !ig.acct ? (
         <section className="bx-card ig-lock">
           <span>📷</span>
           <h2>Connect Instagram to read your DMs here</h2>
@@ -54,8 +111,32 @@ export default function InboxInstagram() {
       ) : (
         <>
           <p className="ig-of">
-            Instagram inbox of <b>{CREATOR.handle}</b> — replies send from this account.
+            Instagram inbox of <b>@{ig.acct.username}</b> — replies send from this account.
           </p>
+          {problem ? (
+            <section className="bx-card ig-lock">
+              <span>💬</span>
+              <h2>{P ? P[0] : "Couldn't load your inbox"}</h2>
+              <p>{P ? P[1] : problem.error}</p>
+              {P && P[2] ? (
+                <Link href="/creater/profile/instagram" className="bx-btn bx-btn--dark">
+                  <Instagram size={14} /> Reconnect Instagram
+                </Link>
+              ) : (
+                <button type="button" className="bx-btn bx-btn--dark" onClick={loadThreads}>
+                  Try again
+                </button>
+              )}
+            </section>
+          ) : threads === null ? (
+            <p className="ig-of">Loading your Instagram inbox…</p>
+          ) : threads.length === 0 ? (
+            <section className="bx-card ig-lock">
+              <span>📭</span>
+              <h2>No conversations yet</h2>
+              <p>When brands or followers message you on Instagram, they show up here.</p>
+            </section>
+          ) : (
           <div className={`ig ${open ? "is-open" : ""}`}>
             <aside className="bx-card ig-list">
               <h2>Instagram inbox</h2>
@@ -63,17 +144,17 @@ export default function InboxInstagram() {
                 {threads.map((x) => (
                   <li key={x.id}>
                     <button type="button" className={x.id === active ? "is-on" : ""} onClick={() => pick(x.id)}>
-                      <span className="ig-av">{x.name[0]}</span>
+                      <span className="ig-av">{String(x.with_username || "u")[0].toUpperCase()}</span>
                       <span className="ig-txt">
                         <strong>
-                          {x.name} <small>{x.handle}</small>
+                          @{x.with_username || "user"}
                         </strong>
-                        <small>{x.last}</small>
+                        <small>
+                          {x.last_from_me ? "You: " : ""}
+                          {x.last_text || ""}
+                        </small>
                       </span>
-                      <span className="ig-time">
-                        {x.time}
-                        {x.unread && <i />}
-                      </span>
+                      <span className="ig-time">{ago(x.last_at || x.updated_time, now)}</span>
                     </button>
                   </li>
                 ))}
@@ -85,29 +166,32 @@ export default function InboxInstagram() {
                 <button type="button" className="ig-back" onClick={() => setOpen(null)} aria-label="Back to chats">
                   <ArrowLeft size={15} />
                 </button>
-                <span className="ig-av">{t.name[0]}</span>
+                <span className="ig-av">{String(t?.with_username || "u")[0].toUpperCase()}</span>
                 <span>
-                  <strong>{t.name}</strong>
-                  <small>{t.handle}</small>
+                  <strong>@{t?.with_username || "user"}</strong>
+                  <small>Replies within 24 h of their last message</small>
                 </span>
               </div>
               <div className="ig-msgs">
-                {t.msgs.map((m, i) => (
-                  <p key={i} className={m.me ? "is-me" : ""}>
-                    {m.text}
-                    <small>{m.time}</small>
+                {msgs === null && <p className="ig-hint">Loading…</p>}
+                {(msgs || []).map((m, i) => (
+                  <p key={m.id || i} className={mine(m) ? "is-me" : ""}>
+                    {m.message || m.text || ""}
+                    <small>{hhmm(m.created_time)}</small>
                   </p>
                 ))}
                 <span ref={endRef} />
               </div>
               <form className="ig-send" onSubmit={send}>
-                <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${t.name}…`} aria-label="Message" />
-                <button type="submit" disabled={!text.trim()} aria-label="Send">
+                <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Reply to @${t?.with_username || ""}…`} aria-label="Message" />
+                <button type="submit" disabled={!text.trim() || busy} aria-label="Send">
                   <Send size={15} />
                 </button>
               </form>
+              {note && <p className="ig-note">{note}</p>}
             </section>
           </div>
+          )}
         </>
       )}
 
@@ -116,6 +200,8 @@ export default function InboxInstagram() {
         .ig-lock > span { font-size: 32px; }
         .ig-lock h2 { margin: 8px 0; font-family: var(--bx-serif); font-size: 21px; font-weight: 600; }
         .ig-lock p { margin: 0 auto 16px; max-width: 420px; font-size: 13.5px; color: var(--bx-text); }
+        .ig-note { margin: 6px 4px 0; font-size: 12.5px; color: #b8401f; }
+        .ig-hint { font-size: 13px; color: #7a6a4a; }
         .ig-of { max-width: 720px; margin: 0 auto 10px; font-size: 12.5px; color: #7a6a4a; }
         .ig { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 12px; max-width: 720px; margin: 0 auto; height: min(560px, calc(100vh - 300px)); min-height: 420px; }
         .ig-list { display: flex; flex-direction: column; padding: 14px; overflow: hidden; }

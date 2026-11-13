@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Wizard, { useDraft } from "@/components/admin/campaign/Wizard";
+import Wizard, { useDraft, saveCampaign } from "@/components/admin/campaign/Wizard";
 
 /* Figma: New campaign — 5 Review */
 export default function NewCampaignReview() {
   const router = useRouter();
-  const { d, clear } = useDraft();
-  const [done, setDone] = useState(false);
+  const { d, set, clear } = useDraft();
+  const [done, setDone] = useState("");
+  const [err, setErr] = useState("");
   const n = (k) => Number(d[k]) || 0;
   const plural = (v, one, many) => `${v} ${v === 1 ? one : many}`;
   const parts = [n("reels") && plural(n("reels"), "Reel", "Reels"), n("stories") && plural(n("stories"), "Story", "Stories"), n("posts") && plural(n("posts"), "Post", "Posts"), n("carousels") && plural(n("carousels"), "Carousel", "Carousels")].filter(Boolean);
@@ -21,19 +22,27 @@ export default function NewCampaignReview() {
     { t: "Tracking destination, if enabled", ok: !d.tracking || !!d.url.trim() },
   ];
 
-  const finish = () => {
-    setDone(true);
-    clear();
-    setTimeout(() => router.push("/admin/campaigns/draft"), 1200);
+  /* Save — public.campaigns insert/update (purana openCampaignModal). Naya campaign → seedha Bulk sheet (creators add karo) */
+  const finish = async () => {
+    setErr("");
+    try {
+      const r = await saveCampaign(d);
+      const wasEdit = !!d.editId;
+      clear();
+      setDone(wasEdit ? "✓ Campaign saved" : d.status === "Draft" ? "✓ Saved as draft" : "✓ Campaign launched — add creators next");
+      setTimeout(() => router.push(r.id ? (wasEdit ? `/admin/campaigns/${r.id}/overview` : `/admin/campaigns/${r.id}/upload`) : "/admin/campaigns"), 900);
+    } catch (e) {
+      setErr(e.message || "Couldn't save.");
+    }
     return false;
   };
 
   return (
-    <Wizard step={4} onNext={finish} nextLabel="Finish preview">
+    <Wizard step={4} draft={{ d, set }} onNext={finish} error={err} nextLabel={d.editId ? "Save changes" : d.status === "Draft" ? "Save as draft" : "Launch campaign"}>
       <div className="nr-box">
         <h2>Review campaign draft</h2>
         <p>
-          <b>{d.name.trim() || "Winter Essentials Launch"}</b>· {d.brand.trim() || "Beardo"} · {d.type}
+          <b>{d.name.trim() || "Untitled campaign"}</b>· {d.brand.trim() || "No brand yet"} · {d.type}
         </p>
         <p>
           {parts.join(" · ") || "No deliverables"} · {n("target")} creators · {n("due")} days due after delivery
@@ -60,8 +69,8 @@ export default function NewCampaignReview() {
           </div>
         ))}
       </div>
-      <p className="nr-note">The prototype saves a local preview only. Real publishing requires validation, roles and audit history.</p>
-      {done && <div className="ad-toast">✓ Draft preview saved — opening Drafts</div>}
+      <p className="nr-note">Saving creates the campaign for every admin; creators see it once it is Live.</p>
+      {done && <div className="ad-toast">{done}</div>}
 
       <style>{`
         .nr-box { padding: 18px 16px 22px; border-radius: 14px; background: #f5f3ff; border: 1px solid #e3dfff; color: #6257a1; }

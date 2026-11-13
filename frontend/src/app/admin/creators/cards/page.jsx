@@ -4,31 +4,19 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
-import { CARDS } from "@/components/admin/creator/profiles";
+import { useCreatorsList, creatorCounts, rowOf, matchQ, CARD_FILTERS, CARD_SORTS, filterOptions, csv, CSV_COLS, errText } from "@/components/admin/creator/live";
 
+/* Figma: 12 filters, sab "Any" se shuru — rules purane app ke (live.jsx) */
+const PER = 24;
 
-/* Figma: 12 filters, sab "Any" se shuru */
-const FILTERS = [
-  ["Profile", ["Any", "Complete", "Incomplete"]],
-  ["Instagram", ["Any", "Connected", "Not connected"]],
-  ["Barter & rates", ["Any", "Open to barter", "Reel rate added"]],
-  ["WhatsApp", ["Any", "ON", "OFF"]],
-  ["Last active", ["Any", "Today", "This week", "This month"]],
-  ["Joined", ["Any", "Today", "This week", "This month"]],
-  ["Joined via", ["Any", "Website", "Bulk upload", "Referral"]],
-  ["Campaigns", ["Any", "Applied", "Approved", "None"]],
-  ["State", ["Any", "Karnataka", "Maharashtra", "Delhi", "Tamil Nadu"]],
-  ["Language", ["Any", "English", "Hindi", "Kannada", "Tamil"]],
-  ["Marital status", ["Any", "Single", "Married"]],
-  ["Blocklist", ["Any", "Not blocked", "Blocked"]],
-];
-
-// snapshot = drawer ke peeche wala view (Figma 059–064 mein ye numbers hain)
+// snapshot = drawer ke peeche wala view (same live data, bina extra refresh)
 export default function AdminCreatorCards({ snapshot = false }) {
-  const N = snapshot ? { total: 304, ig: 174, done: 34, todo: 270, applied: 185, approved: 162 } : { total: 298, ig: 169, done: 35, todo: 263, applied: 183, approved: 151 };
+  const { all, loading, error, reload } = useCreatorsList();
+  const N = creatorCounts(all);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Newest first");
   const [f, setF] = useState({});
+  const [page, setPage] = useState(0);
   const [toast, setToast] = useState("");
 
   const flash = (t) => {
@@ -37,21 +25,21 @@ export default function AdminCreatorCards({ snapshot = false }) {
   };
 
   const list = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    let l = CARDS.filter((c) => !t || [c.name, c.handle, c.city].some((v) => v.toLowerCase().includes(t)));
-    if (f.Profile && f.Profile !== "Any") l = l.filter((c) => c.profile === f.Profile);
-    if (f["Barter & rates"] === "Open to barter") l = l.filter((c) => c.barter);
-    if (f["Barter & rates"] === "Reel rate added") l = l.filter((c) => c.reel !== "—");
-    if (sort === "Most followers") l = [...l].sort((a, b) => parseFloat(b.followers) * (/K/.test(b.followers) ? 1000 : 1) - parseFloat(a.followers) * (/K/.test(a.followers) ? 1000 : 1));
-    if (sort === "Oldest first") l = [...l].sort((a, b) => a.joined - b.joined);
-    return l;
-  }, [q, sort, f]);
+    const t = q.trim();
+    return all
+      .filter((c) => matchQ(c, t))
+      .filter((c) => CARD_FILTERS.every(([k, , test]) => !f[k] || f[k] === "Any" || test(c, f[k])))
+      .sort(CARD_SORTS[sort] || CARD_SORTS["Newest first"]);
+  }, [all, q, sort, f]);
   const active = q || Object.values(f).some((v) => v && v !== "Any");
+  const pages = Math.max(1, Math.ceil(list.length / PER));
+  const pg = Math.min(page, pages - 1);
+  const shown = list.slice(pg * PER, pg * PER + PER).map(rowOf);
 
   return (
     <AdminShell>
       <PageHead title="Creators" sub="Every creator on Geek OS — Instagram, profile, campaigns and contact in one place.">
-        <button type="button" className="ad-btn cc2-csv" onClick={() => flash("CSV export started — 298 creators")}>
+        <button type="button" className="ad-btn cc2-csv" onClick={() => (csv(list, CSV_COLS, "creators.csv"), flash(`CSV downloaded — ${list.length} creators`))}>
           ⬇️ CSV
         </button>
         <Link href="/admin/creator-upload" className="ad-btn ad-btn--primary">
@@ -63,17 +51,17 @@ export default function AdminCreatorCards({ snapshot = false }) {
         items={[
           { value: N.total, label: "Creators", note: "Live · refreshes every 30s" },
           { value: N.ig, label: "Instagram connected" },
-          { value: N.done, label: "Profile complete" },
-          { value: N.todo, label: "Profile incomplete" },
-          { value: 5, label: "Open to barter" },
+          { value: N.complete, label: "Profile complete" },
+          { value: N.incomplete, label: "Profile incomplete" },
+          { value: N.barter, label: "Open to barter" },
         ]}
       />
       <div className="cc2-more">
         {[
-          ["5", "Reel rate added"],
+          [String(N.rate), "Reel rate added"],
           [String(N.applied), "Applied to campaigns"],
           [String(N.approved), "Approved in campaigns"],
-          ["1", "2+ Instagram accounts"],
+          [String(N.multi), "2+ Instagram accounts"],
         ].map(([n, l]) => (
           <div key={l} className="cc2-stat">
             <strong>{n}</strong>
@@ -86,7 +74,7 @@ export default function AdminCreatorCards({ snapshot = false }) {
         <div className="cc2-top">
           <div>
             <h2 className="ad-h2">Creator directory</h2>
-            <p className="cc2-sub">{active ? `${list.length} of ${N.total} creators match` : `${N.ig} of ${N.total} creators match`}</p>
+            <p className="cc2-sub">{loading && !all.length ? "Loading creators…" : `${list.length} of ${N.total} creators match`}</p>
           </div>
           <div className="cc2-view">
             <span className="ad-tab is-on">▦ Cards</span>
@@ -97,20 +85,20 @@ export default function AdminCreatorCards({ snapshot = false }) {
         </div>
 
         <div className="cc2-row">
-          <input className="ad-input cc2-search" placeholder="Name, @handle, phone, city…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search creators" />
+          <input className="ad-input cc2-search" placeholder="Name, @handle, phone, city…" value={q} onChange={(e) => (setQ(e.target.value), setPage(0))} aria-label="Search creators" />
           <select className="ad-input cc2-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
-            {["Newest first", "Oldest first", "Most followers"].map((o) => (
+            {Object.keys(CARD_SORTS).map((o) => (
               <option key={o}>{o}</option>
             ))}
           </select>
         </div>
 
         <div className="cc2-filters">
-          {FILTERS.map(([label, opts]) => (
+          {CARD_FILTERS.map(([label, opts]) => (
             <label key={label} className="cc2-f">
               <span>{label}</span>
-              <select value={f[label] || "Any"} onChange={(e) => setF({ ...f, [label]: e.target.value })}>
-                {opts.map((o) => (
+              <select value={f[label] || "Any"} onChange={(e) => (setF({ ...f, [label]: e.target.value }), setPage(0))}>
+                {(opts || filterOptions(all, label)).map((o) => (
                   <option key={o}>{o}</option>
                 ))}
               </select>
@@ -119,17 +107,19 @@ export default function AdminCreatorCards({ snapshot = false }) {
         </div>
 
         <div className="cc2-grid">
-          {list.map((c) => (
-            <Link key={c.handle} href={`/admin/creators/${c.id}/profile`} className="cc2-c">
+          {shown.map((c) => (
+            <Link key={c.id} href={`/admin/creators/${c.id}/profile`} className="cc2-c">
               <div className="cc2-c__top">
-                <span className="ad-av">{c.name[0]}</span>
+                {c.pic ? <img className="ad-av cc2-pic" src={c.pic} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} /> : <span className="ad-av">{c.name[0]}</span>}
                 <span className="cc2-c__who">
                   <strong>{c.name}</strong>
                   <small>{c.handle}</small>
                 </span>
-                <span className="ad-badge ad-badge--orange">{c.score}</span>
+                <span className={`ad-badge ${c.complete ? "ad-badge--green" : "ad-badge--orange"}`}>{c.score}</span>
               </div>
-              <p className="cc2-c__meta">🟢 WhatsApp ON · 📸 1 Instagram account</p>
+              <p className="cc2-c__meta">
+                {c.wa ? "🟢 WhatsApp ON" : "⚪ WhatsApp OFF"} · 📸 {c.igCount ? `${c.igCount} Instagram ${c.igCount > 1 ? "accounts" : "account"}` : "No Instagram"}
+              </p>
               <div className="cc2-c__nums">
                 {[
                   [c.followers, "Followers"],
@@ -146,13 +136,37 @@ export default function AdminCreatorCards({ snapshot = false }) {
               <p className="cc2-c__city">📍 {c.city}</p>
             </Link>
           ))}
-          {!list.length && <p className="cc2-empty">No creators match these filters.</p>}
+          {!loading && !error && !list.length && <p className="cc2-empty">{all.length ? "No creators match these filters." : "No creators yet."}</p>}
+          {error && (
+            <p className="cc2-empty">
+              {errText(error)}{" "}
+              <button type="button" className="cc2-retry" onClick={() => reload()}>
+                Retry
+              </button>
+            </p>
+          )}
         </div>
+        {pages > 1 && (
+          <div className="cc2-pager">
+            <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" disabled={!pg} onClick={() => setPage(pg - 1)}>
+              ← Prev
+            </button>
+            <span>
+              Page {pg + 1} of {pages} · {list.length} creators
+            </span>
+            <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>
+              Next →
+            </button>
+          </div>
+        )}
       </section>
 
       {toast && <div className="ad-toast">✓ {toast}</div>}
 
       <style>{`
+        .cc2-pic { object-fit: cover; }
+        .cc2-retry { border: 0; background: none; font-weight: 800; color: #6657e9; }
+        .cc2-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 20px; font-size: 12.5px; color: var(--ad-muted); }
         .cc2-csv { background: transparent; color: #6657e9; padding: 0 8px; }
         .cc2-more { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin: -10px 0 23px; }
         .cc2-stat { display: flex; flex-direction: column; min-height: 105px; padding: 24px 19px 16px; border-radius: 18px; background: #fff; border: 1px solid var(--ad-line); }

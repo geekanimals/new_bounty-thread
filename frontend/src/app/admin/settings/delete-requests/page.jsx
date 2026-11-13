@@ -3,22 +3,41 @@
 import { useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
-import { SettingsTabs, Panel, Table, useToast } from "@/components/admin/settings/kit";
+import { SettingsTabs, Panel, Table, useToast, fmtDateTime, emptyState } from "@/components/admin/settings/kit";
+import { rpc, useRpc, errText } from "@/lib/supabase";
 
-/** /admin/settings/delete-requests — brand/agency delete maange, super admin decide kare */
+/**
+ * /admin/settings/delete-requests — brand/agency delete maange, super admin decide kare
+ * list = admin_campaign_delete_requests('pending') · Keep / Delete = admin_decide_campaign_delete(p_request, p_approve, p_note)
+ */
 export default function SettingsDeleteRequests() {
-  const [reqs, setReqs] = useState([{ id: "demo-foods", campaign: "Demo Foods Trial", by: "Demo Foods", reason: "Test campaign", when: "28 Oct 2026" }]);
+  const list = useRpc("admin", "admin_campaign_delete_requests", { p_status: "pending" });
+  const reqs = Array.isArray(list.data) ? list.data : [];
   const [confirm, setConfirm] = useState(null);
+  const [typed, setTyped] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
   const [toast, say] = useToast();
+  const nameOf = (r) => r.campaign_name || "Campaign";
 
-  const keep = (r) => {
-    setReqs((l) => l.filter((x) => x.id !== r.id));
-    say(`Kept “${r.campaign}” — ${r.by} has been told`);
+  const keep = async (r) => {
+    setBusy(true);
+    const { error } = await rpc("admin", "admin_decide_campaign_delete", { p_request: r.id, p_approve: false, p_note: null });
+    setBusy(false);
+    if (error) return say(errText(error), true);
+    say(`Kept “${nameOf(r)}” — ${r.requester || "they"} will be told`);
+    list.reload();
   };
-  const del = () => {
-    setReqs((l) => l.filter((x) => x.id !== confirm.id));
-    say(`“${confirm.campaign}” deleted`);
+  const del = async () => {
+    const r = confirm;
+    if (typed.trim().toLowerCase() !== nameOf(r).trim().toLowerCase()) return say(`Type “${nameOf(r)}” exactly to confirm.`, true);
+    setBusy(true);
+    const { error } = await rpc("admin", "admin_decide_campaign_delete", { p_request: r.id, p_approve: true, p_note: note.trim() || null });
+    setBusy(false);
+    if (error) return say(errText(error), true);
+    say(`Approved — “${nameOf(r)}” deleted`);
     setConfirm(null);
+    list.reload();
   };
 
   return (
@@ -29,7 +48,7 @@ export default function SettingsDeleteRequests() {
         <Table
           rowH={62}
           minW={720}
-          empty="No delete requests waiting."
+          empty={emptyState({ loading: list.loading, error: list.error, reload: list.reload, empty: "No delete requests waiting." })}
           cols={[
             { label: "Campaign", w: 240 },
             { label: "Asked by", w: 179 },
@@ -38,15 +57,28 @@ export default function SettingsDeleteRequests() {
             { label: "", w: 267 },
           ]}
           rows={reqs.map((r) => [
-            <b key="c">{r.campaign}</b>,
-            r.by,
-            r.reason,
-            r.when,
+            <b key="c" title={[r.brand, `${Number(r.creators || 0)} creators`].filter(Boolean).join(" · ")}>
+              {nameOf(r)}
+              {r.still_exists === false ? " · already gone" : ""}
+            </b>,
+            [r.requester, r.org_name].filter(Boolean).join(" · ") || "—",
+            <span key="r" title={r.reason || ""}>
+              {r.reason || "—"}
+            </span>,
+            fmtDateTime(r.created_at),
             <span key="a" className="sx-acts">
-              <button type="button" className="sk-link" onClick={() => keep(r)}>
+              <button type="button" className="sk-link" disabled={busy} onClick={() => keep(r)}>
                 Keep
               </button>
-              <button type="button" className="ad-btn ad-btn--primary sx-del" onClick={() => setConfirm(r)}>
+              <button
+                type="button"
+                className="ad-btn ad-btn--primary sx-del"
+                onClick={() => {
+                  setTyped("");
+                  setNote("");
+                  setConfirm(r);
+                }}
+              >
                 Delete
               </button>
             </span>,
@@ -57,15 +89,24 @@ export default function SettingsDeleteRequests() {
       {confirm && (
         <div className="ad-overlay" onClick={() => setConfirm(null)}>
           <div className="ad-modal sx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete campaign">
-            <h2 className="ad-h2">Delete “{confirm.campaign}”?</h2>
+            <h2 className="ad-h2">Delete “{nameOf(confirm)}”?</h2>
             <p className="sx-modal__p">
-              Asked by <b>{confirm.by}</b> · {confirm.reason}. The campaign, its applications and messages are removed for everyone. This can’t be undone.
+              Asked by <b>{confirm.requester || "—"}</b>
+              {confirm.reason ? ` · “${confirm.reason}”` : ""}. The campaign, its {Number(confirm.creators || 0)} creators’ applications and messages are removed for everyone. This can’t be undone.
             </p>
+            <label className="ad-label sx-l" htmlFor="sx-type">
+              Type “{nameOf(confirm)}” to confirm
+            </label>
+            <input id="sx-type" className="ad-input" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+            <label className="ad-label sx-l" htmlFor="sx-note">
+              Note (optional)
+            </label>
+            <input id="sx-note" className="ad-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why it was approved" />
             <div className="sx-modal__btns">
               <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setConfirm(null)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" onClick={del}>
+              <button type="button" className="ad-btn ad-btn--danger" onClick={del} disabled={busy || typed.trim().toLowerCase() !== nameOf(confirm).trim().toLowerCase()}>
                 Delete campaign
               </button>
             </div>
@@ -81,6 +122,7 @@ export default function SettingsDeleteRequests() {
         .sx-modal { width: min(460px, 100%); padding: 24px; }
         .sx-modal__p { margin-top: 10px; font-size: 13.5px; line-height: 1.5; color: var(--ad-muted); }
         .sx-modal__p b { color: var(--ad-ink); }
+        .sx-l { margin-top: 14px; }
         .sx-modal__btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
         @media (max-width: 640px) { .sx-modal__btns > * { flex: 1; } }
       `}</style>

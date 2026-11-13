@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import { RumiTip } from "@/components/creater/OnboardShell";
-import { useSession } from "@/components/creater/session";
-import { STEPS, TYPE_LABEL, getCampaign, getMyCampaign, getSidekick } from "@/components/creater/data";
+import { useSession, useMyCampaigns, useCovers, coverOf, typeKey, compLine, delivLine, fdate, stepOf, noShip, noteOf, DECLINED, errText } from "@/services/creator";
+import { STEPS, TYPE_LABEL, getSidekick } from "@/components/creater/data";
 import { ArrowLeft, Check, WhatsApp, FileText, Gift, Film, Calendar } from "@/components/ui/Icons";
 
-/* Har step ka apna page (Back button ek step peeche) — step key → route */
+/* Har step ka apna page (Back button ek step peeche) — step key → route.
+   id = participation_id (har "meri campaign" ka apna id). */
 export const stepPath = (id, key, revision = false) => {
   const base = `/creater/my-campaigns/${id}`;
   if (key === "applied" || key === "selected") return base;
@@ -15,30 +16,105 @@ export const stepPath = (id, key, revision = false) => {
   return `${base}/${key}`;
 };
 
-/** Campaign + uska data (har tracker page isse shuru hota hai) */
+/** participation row ka abhi wala page (changes_requested → revision) */
+export const currentPath = (m) => stepPath(m.participation_id, stepOf(m), m.stage === "changes_requested");
+
+/**
+ * Campaign + uska data (har tracker page isse shuru hota hai) — Supabase: api.get_my_campaigns.
+ * → { loading, error, reload, id, m (participation row), c (summary), isPaid, ship, steps, base, afterSign, step }
+ */
 export function useTracker() {
   const { id } = useParams();
-  const m = getMyCampaign(id);
-  const c = getCampaign(id);
-  if (!m || !c) notFound();
-  const isPaid = c.type === "paid";
-  // Paid campaign mein address + package nahi hota
-  const steps = STEPS.filter((x) => !(isPaid && (x.key === "address" || x.key === "package")));
-  const base = `/creater/my-campaigns/${id}`;
-  // Address/package ke baad wala step (agreement sign karne par kahan jaana hai)
-  const afterSign = isPaid ? `${base}/draft` : `${base}/address`;
-  return { id, m, c, isPaid, steps, base, afterSign };
+  const covers = useCovers();
+  const { loading, list, error, reload } = useMyCampaigns();
+  // purane links campaign_id bhi bhejte the — dono se dhoondo
+  const m = list.find((x) => String(x.participation_id) === String(id)) || list.find((x) => String(x.campaign_id) === String(id)) || null;
+  const base = `/creater/my-campaigns/${m ? m.participation_id : id}`;
+  if (!m) return { loading, error, reload, id, m: null, base };
+  const ship = !noShip(m);
+  const isPaid = !!(m._flow && m._flow.paid) || m.campaign_type === "paid" || m.comp_type === "cash";
+  // Paid / product-free campaign mein address + package nahi hota (purane noShip)
+  const steps = STEPS.filter((x) => ship || (x.key !== "address" && x.key !== "package")).map((x) =>
+    x.key === "paid" && !isPaid ? { ...x, label: "Done" } : x
+  );
+  const t = (m.contract && m.contract.content_days) || (m.terms && m.terms.content_days);
+  const c = {
+    id: m.campaign_id,
+    title: m.campaign || "Campaign",
+    brand: m.brand || "",
+    type: typeKey(m),
+    img: coverOf(m, covers),
+    rewardKit: compLine(m),
+    deliver: delivLine(m),
+    deadline: m.deadline ? `Due ${fdate(m.deadline)}` : t ? `${t} days after ${ship ? "delivery" : "the brief"}` : "Shown in your agreement",
+  };
+  const afterSign = ship ? `${base}/address` : `${base}/draft`;
+  return { loading, error, reload, id: m.participation_id, m, c, isPaid, ship, steps, base, afterSign, step: stepOf(m) };
+}
+
+/** data aane tak / nahi mila to (har step page pehle yahi check karta hai) */
+export function TrackerWait({ t }) {
+  return (
+    <>
+      <Link href="/creater/my-campaigns" className="bx-back">
+        <ArrowLeft size={13} /> My campaigns
+      </Link>
+      <div className="bx-card ts-wait">
+        {t.loading ? (
+          <p>Loading your campaign…</p>
+        ) : t.error ? (
+          <p>
+            Couldn&apos;t load: {errText(t.error)}{" "}
+            <button type="button" onClick={() => t.reload()}>
+              Retry
+            </button>
+          </p>
+        ) : (
+          <p>
+            This campaign isn&apos;t on your account any more. <Link href="/creater/my-campaigns">Back to My campaigns</Link>
+          </p>
+        )}
+      </div>
+      <style>{`
+        .ts-wait { max-width: 640px; margin: 10px auto; padding: 22px; text-align: center; font-size: 14px; color: #3e4b52; }
+        .ts-wait p { margin: 0; }
+        .ts-wait button { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+        .ts-wait a { font-weight: 700; text-decoration: underline; }
+      `}</style>
+    </>
+  );
+}
+
+/**
+ * Jis step ka page khula hai wo abhi ka step nahi (pehle ho chuka / abhi aaya nahi) →
+ * "You're at: X" + abhi wale step ka button. (Back ek step peeche hi jaata hai — auto redirect nahi.)
+ */
+export function StepMismatch({ t }) {
+  const label = (t.steps.find((x) => x.key === t.step) || {}).label || "Overview";
+  const declined = DECLINED.includes(t.m.stage);
+  return (
+    <>
+      <span className="ts-ic">👉</span>
+      <h2>{declined ? "Not selected this time" : `You’re at: ${label}`}</h2>
+      <p>{noteOf(t.m)}</p>
+      <Link href={declined ? t.base : currentPath(t.m)} className="bx-btn bx-btn--dark bx-btn--lg">
+        {declined ? "See details →" : `Continue: ${label} →`}
+      </Link>
+    </>
+  );
 }
 
 /**
  * Tracker ka common frame: "← Campaign overview" (ya My campaigns), stepper,
  * beech mein us step ka card (children), side mein campaign summary + help + Rumi.
+ * `t` = useTracker() ka result (page ek hi baar load kare).
  */
-export default function TrackerFrame({ step, overview = false, children }) {
-  const { c, steps, base } = useTracker();
+export default function TrackerFrame({ t, step, overview = false, children }) {
+  const { c, steps, base } = t;
   const [s] = useSession();
   const sk = getSidekick(s.sidekick);
-  const idx = steps.findIndex((x) => x.key === step);
+  // abhi ka step — pehle wale sab ✓ (campaign complete ho to sab ✓)
+  const nowIdx = t.m.stage === "completed" ? steps.length : steps.findIndex((x) => x.key === (step || t.step));
 
   return (
     <>
@@ -56,8 +132,8 @@ export default function TrackerFrame({ step, overview = false, children }) {
         <div className="ts-main">
           <ol className="ts-stepper" data-scroll>
             {steps.map((st, i) => (
-              <li key={st.key} className={i < idx ? "is-done" : i === idx ? "is-now" : ""}>
-                <span>{i < idx ? <Check size={11} /> : i + 1}</span>
+              <li key={st.key} className={i < nowIdx ? "is-done" : i === nowIdx ? "is-now" : ""}>
+                <span>{i < nowIdx ? <Check size={11} /> : i + 1}</span>
                 <small>{st.label}</small>
               </li>
             ))}
@@ -82,7 +158,7 @@ export default function TrackerFrame({ step, overview = false, children }) {
               <p>
                 <Calendar size={13} /> {c.deadline}
               </p>
-              <Link href={`/creater/discover/${c.id}`} className="ts-link">
+              <Link href={`${base}#brief`} className="ts-link">
                 <FileText size={13} /> Read the brief
               </Link>
             </div>
@@ -120,6 +196,8 @@ export default function TrackerFrame({ step, overview = false, children }) {
         .ts-ic--gold { background: #fbe7b5; }
         .ts-ic--green { background: var(--bx-ok-bg); color: var(--bx-ok); font-weight: 800; }
         .ts-ic--red { background: #f8dcd2; color: var(--bx-red); font-weight: 800; }
+        .ts-err { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--bx-red); }
+        .ts-note { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: #fffaf0; border: 1px solid var(--bx-line); font-size: 13px; line-height: 1.5; }
         .ts-demo { display: inline-block; border: 1px dashed var(--bx-gold); border-radius: 999px; background: #fffaf0; padding: 8px 14px; font-size: 12.5px; font-weight: 700; color: var(--bx-rust); }
         .ts-demos { display: flex; gap: 8px; flex-wrap: wrap; }
         .ts-mt { margin-top: 14px; }

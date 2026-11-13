@@ -6,98 +6,114 @@ import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Note } from "@/components/admin/campaign2/kit";
-import { UploadCard, MsgOff, loadUpload, saveUpload } from "@/components/admin/campaign2/upload";
+import { UploadCard, MsgOff, loadUpload, saveUpload, fieldsFor, GRID_ORDER, restatus, useUploadKind } from "@/components/admin/campaign2/upload";
 
-/* Geek OS field → sheet ka column (auto match) */
-const FIELDS = [
-  ["Name", "Name"],
-  ["Instagram", "Instagram"],
-  ["WhatsApp", "WhatsApp"],
-  ["Email", "Email"],
-  ["City", "City"],
-  ["Followers", ""],
-  ["Status", "Status"],
-  ["Address", ""],
-  ["State", ""],
-  ["Pin code", ""],
-  ["Courier", ""],
-  ["Tracking", ""],
-  ["Video link", ""],
-  ["Post link", ""],
-  ["Coupon code", ""],
-  ["Fee (₹)", "Fee"],
-  ["Advance %", ""],
-  ["Pay days", ""],
-  ["Terms", ""],
-  ["UPI ID", "UPI"],
-  ["Account no", ""],
-  ["IFSC", ""],
-  ["Account holder", ""],
-];
-const HEADINGS = ["Name", "Instagram", "WhatsApp", "Email", "City", "Status", "Fee", "UPI", "Address", "Courier", "Notes"];
-
+/*
+ * Bulk upload · step 2 — Geek OS field → sheet ka column (purane bkMap / auto match jaisa).
+ * Sheet pichle step se sessionStorage mein aata hai; koi sheet nahi → wapas step 1.
+ */
 export default function BulkUploadMatch() {
   const { id } = useParams();
   const router = useRouter();
   const base = `/admin/campaigns/${id}/upload`;
+  const kind = useUploadKind(id);
   const [up, setUp] = useState(null);
-  const [map, setMap] = useState(() => Object.fromEntries(FIELDS));
+  const [none, setNone] = useState(false);
 
-  // Sheet load nahi hua (seedha link khola) → sample sheet
   useEffect(() => {
-    const u = loadUpload(id) || { source: "Mysore creators.xlsx" };
-    setUp(u);
+    const u = loadUpload(id);
+    if (u && u.rows) setUp(u);
+    else setNone(true);
   }, [id]);
 
-  const src = up?.source || "Mysore creators.xlsx";
+  const fields = fieldsFor(kind);
+  const grid = GRID_ORDER.map((k) => fields.find((f) => f[0] === k)).filter(Boolean);
+  const setCol = (k, v) =>
+    setUp((u) => {
+      const map = { ...u.map };
+      if (v === "") delete map[k];
+      else {
+        // ek column sirf ek field ko
+        Object.keys(map).forEach((x) => map[x] === +v && delete map[x]);
+        map[k] = +v;
+      }
+      const nu = { ...u, map };
+      return k === "status" ? restatus(nu, kind) : nu;
+    });
   const go = () => {
-    saveUpload(id, { ...(up || {}), source: src, map });
+    const u = up.map.status != null ? restatus(up, kind) : up;
+    saveUpload(id, { ...u, preview: null });
     router.push(`${base}/check`);
   };
+  const n = up ? up.rows.length : 0;
+  const hasContact = up && ["phone", "email", "handle"].some((k) => up.map[k] != null);
 
   return (
     <AdminShell>
       <WorkspaceHead id={id} />
-      <UploadCard step={2}>
-        <Note tone="green" icon="✅">
-          <b>4 rows loaded</b>from {src} — check the preview below · ✎{" "}
-          <Link href={`${base}/help`}>
-            <u>Change sheet / columns · guide</u>
-          </Link>
-        </Note>
-        <MsgOff />
+      <UploadCard id={id} step={2}>
+        {none ? (
+          <Note tone="amber" icon="📄">
+            <b>No sheet loaded yet</b>— <Link href={base}><u>choose a file or paste a Google Sheet link</u></Link> first.
+          </Note>
+        ) : !up ? (
+          <div className="c2-skel" style={{ height: 120 }} />
+        ) : (
+          <>
+            <Note tone="green" icon="✅">
+              <b>
+                {n} row{n !== 1 ? "s" : ""} loaded
+              </b>
+              from {up.src} — check the preview below · ✎{" "}
+              <Link href={`${base}/help`}>
+                <u>Change sheet / columns · guide</u>
+              </Link>
+            </Note>
+            <MsgOff id={id} />
 
-        <p className="um-h">
-          <b>Match the columns</b> <span>— picked automatically from your sheet’s headings</span>
-        </p>
-        <Note tone="amber" icon="💰">
-          <b>Paid campaign:</b>add Fee, Advance %, Pay days, Terms and UPI / Account no + IFSC + Account holder columns to set each creator’s payment as they are uploaded. Their contract carries their own fee — nobody else sees it.
-        </Note>
+            <p className="um-h">
+              <b>Match the columns</b> <span>— picked automatically from your sheet’s headings</span>
+            </p>
+            {kind !== "barter" && (
+              <Note tone="amber" icon="💰">
+                <b>{kind === "paid" ? "Paid campaign:" : "Barter + Paid campaign:"}</b>add Fee, Advance %, Pay days, Terms and UPI / Account no + IFSC + Account holder columns to set each creator’s payment as they are uploaded. Their contract carries their own fee — nobody else sees it.
+              </Note>
+            )}
+            {!hasContact && (
+              <Note tone="red" icon="⚠️">
+                <b>Pick at least one of WhatsApp, Email or Instagram</b>— without one nobody can be invited.
+              </Note>
+            )}
 
-        <div className="um-grid">
-          {FIELDS.map(([f]) => (
-            <label key={f} className="um-f">
-              <span>{f}</span>
-              <select value={map[f]} onChange={(e) => setMap((m) => ({ ...m, [f]: e.target.value }))} className={map[f] ? "is-set" : ""}>
-                <option value="">—</option>
-                {HEADINGS.map((h) => (
-                  <option key={h} value={h}>
-                    {h}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
+            <div className="um-grid">
+              {grid.map(([k, label]) => {
+                const v = up.map[k] != null ? String(up.map[k]) : "";
+                return (
+                  <label key={k} className="um-f">
+                    <span>{label}</span>
+                    <select value={v} onChange={(e) => setCol(k, e.target.value)} className={v ? "is-set" : ""}>
+                      <option value="">—</option>
+                      {up.head.map((h, i) => (
+                        <option key={i} value={i}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+            </div>
 
-        <div className="um-act">
-          <button type="button" className="ad-btn ad-btn--primary" onClick={go}>
-            Use these columns →
-          </button>
-          <Link href={base} className="c2-tbtn">
-            Change sheet
-          </Link>
-        </div>
+            <div className="um-act">
+              <button type="button" className="ad-btn ad-btn--primary" onClick={go} disabled={!hasContact}>
+                Use these columns →
+              </button>
+              <Link href={base} className="c2-tbtn">
+                Change sheet
+              </Link>
+            </div>
+          </>
+        )}
       </UploadCard>
 
       <style>{`

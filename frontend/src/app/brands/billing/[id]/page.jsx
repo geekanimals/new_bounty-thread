@@ -2,29 +2,94 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useParams, notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import BrandShell from "@/components/brands/BrandShell";
-import { getBill, BRAND } from "@/components/brands/data";
+import { BrLoading, BrError, BrEmpty } from "@/components/brands/BrandStates";
+import { useInvoices, payInvoice, resetOpenBills, printInvoice, inr, fdate } from "@/services/brand";
 import { ArrowLeft, Download, CreditCard, Check, Copy, Bank, QrCode } from "@/components/ui/Icons";
 
-/** /brands/billing/[id] — tax invoice + pay (Razorpay ya Bank/UPI) */
+// bank_note (Super Admin ka likha) → "Account no.: 123" jaisi lines alag rows mein; UPI id alag
+const bankRows = (note) =>
+  String(note || "")
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const m = l.match(/^([^:]{2,30}):\s*(.+)$/);
+      return m ? [m[1].trim(), m[2].trim()] : ["", l];
+    });
+const upiOf = (note) => (String(note || "").match(/\b[\w.-]{2,}@[a-z]{2,}\b(?![.\w])/i) || [""])[0];
+
+/**
+ * /brands/billing/[id] — ek bill (id = invoice_id): purane bill print jaisi details + pay.
+ *  - Pay with Razorpay → brand-billing { action:"pay" } → Razorpay link (wapsi /app.html?rzpbill → /brands/billing)
+ *  - Download PDF / Receipt → printInvoice (purana BrandBilling.print — "Save as PDF")
+ *  - Bank / UPI → bill ke seller.bank_note se
+ */
 export default function BillPage() {
   const { id } = useParams();
-  const b = getBill(id);
-  const [mode, setMode] = useState(null); // null | "bank" | "paying"
-  const [status, setStatus] = useState(b ? b.status : "paid"); // due | paying | paid | sent
+  const inv = useInvoices();
+  const d = inv.data;
+  const b = inv.list.find((x) => x.invoice_id === id);
+  const [mode, setMode] = useState(null); // null | "bank"
+  const [paying, setPaying] = useState(false);
   const [toast, setToast] = useState("");
-  if (!b) notFound();
 
   const flash = (t) => {
     setToast(t);
-    setTimeout(() => setToast(""), 2400);
+    setTimeout(() => setToast(""), 2800);
   };
 
-  // Dummy Razorpay — asli payment backend ke saath judega
-  const payRazorpay = () => {
-    setStatus("paying");
-    setTimeout(() => setStatus("paid"), 1400);
+  if (inv.loading && !d) {
+    return (
+      <BrandShell crumbs={[{ label: "Billing", href: "/brands/billing" }, { label: "Bill" }]}>
+        <BrLoading rows={6} />
+      </BrandShell>
+    );
+  }
+  if (inv.error && !d) {
+    return (
+      <BrandShell crumbs={[{ label: "Billing", href: "/brands/billing" }, { label: "Bill" }]}>
+        <BrError error={inv.error} onRetry={inv.reload} />
+      </BrandShell>
+    );
+  }
+  if (!b) {
+    return (
+      <BrandShell crumbs={[{ label: "Billing", href: "/brands/billing" }, { label: "Bill" }]}>
+        <BrEmpty title="Bill not found" text="This bill isn't in your account any more.">
+          <Link href="/brands/billing" className="br-btn br-btn--soft br-btn--sm">
+            Back to Billing
+          </Link>
+        </BrEmpty>
+      </BrandShell>
+    );
+  }
+
+  const s = b.seller || {};
+  const by = b.buyer || {};
+  const status = b.status; // requested | paid | cancelled
+  const isDue = status === "requested";
+  const canPay = isDue && d && d.can_pay;
+
+  // Pay now (purana data-bpxpay)
+  const payRazorpay = async () => {
+    setPaying(true);
+    const r = await payInvoice(b.invoice_id);
+    if (r.error || (r.data && r.data.error)) {
+      setPaying(false);
+      return flash((r.error && r.error.message) || r.data.error);
+    }
+    if (r.data && r.data.paid) {
+      setPaying(false);
+      resetOpenBills();
+      flash("This bill is already paid ✓");
+      return inv.reload();
+    }
+    window.location.href = r.data.url;
+  };
+  const download = () => {
+    if (!printInvoice(b)) flash("Allow pop-ups to download the bill.");
   };
 
   const copy = async (text) => {
@@ -35,12 +100,12 @@ export default function BillPage() {
     }
     flash("Copied");
   };
-
-  const isDue = status === "due" || status === "paying";
+  const rows = bankRows(s.bank_note);
+  const upi = upiOf(s.bank_note);
 
   return (
-    <BrandShell crumbs={[{ label: "Billing", href: "/brands/billing" }, { label: b.no }]}>
-      <title>{`${b.no} — Geek OS Brand`}</title>
+    <BrandShell crumbs={[{ label: "Billing", href: "/brands/billing" }, { label: b.invoice_no }]}>
+      <title>{`${b.invoice_no} — Geek OS Brand`}</title>
 
       <Link href="/brands/billing" className="br-back">
         <span>
@@ -53,33 +118,36 @@ export default function BillPage() {
         <header className="iv-head">
           <div>
             <p className="iv-from">
-              <span>g</span> Geek Creative Agency
+              <span>g</span> {s.trade_name || s.legal_name || "Geek Creative Agency"}
             </p>
-            <h1>Tax invoice</h1>
+            <h1>{status === "paid" ? "Payment receipt" : "Tax invoice"}</h1>
           </div>
           <div className="iv-no">
             {status === "paid" ? (
-              <span className="br-badge br-badge--green">Paid</span>
-            ) : status === "sent" ? (
-              <span className="br-badge br-badge--orange">Confirming payment</span>
+              <span className="br-badge br-badge--green">Paid{b.paid_at ? ` · ${fdate(b.paid_at)}` : ""}</span>
+            ) : status === "cancelled" ? (
+              <span className="br-badge br-badge--grey">Cancelled</span>
             ) : (
-              <span className="br-badge br-badge--red">Due {b.due}</span>
+              <span className={`br-badge br-badge--${b.overdue ? "red" : "orange"}`}>
+                {b.overdue ? "Overdue" : "Due"}
+                {b.due_on ? ` ${fdate(b.due_on)}` : ""}
+              </span>
             )}
-            <strong>{b.no}</strong>
-            <small>Issued {b.issued}</small>
+            <strong>{b.invoice_no}</strong>
+            <small>Issued {fdate(b.issued_on)}</small>
           </div>
         </header>
 
         <div className="iv-parties">
           <div>
             <small>Billed to</small>
-            <strong>{BRAND.legal}</strong>
-            <span>GSTIN on file</span>
+            <strong>{by.name || b.brand || "—"}</strong>
+            <span>{by.gstin ? `GSTIN ${by.gstin}` : by.address || "GSTIN not on file"}</span>
           </div>
           <div>
             <small>For</small>
-            <strong>{b.campaign}</strong>
-            <span>{b.milestone}</span>
+            <strong>{b.campaign || b.title}</strong>
+            <span>{b.campaign ? b.title : s.sac_code ? `SAC ${s.sac_code}` : ""}</span>
           </div>
         </div>
 
@@ -89,11 +157,11 @@ export default function BillPage() {
             <span>Qty</span>
             <span>Amount</span>
           </div>
-          {b.items.map((it) => (
-            <div key={it.item} className="iv-row">
-              <span>{it.item}</span>
+          {(b.items || []).map((it, k) => (
+            <div key={k} className="iv-row">
+              <span>{it.description}</span>
               <span>{it.qty}</span>
-              <strong>{it.amount}</strong>
+              <strong>{inr((Number(it.qty) || 0) * (Number(it.rate) || 0), true)}</strong>
             </div>
           ))}
         </div>
@@ -101,20 +169,20 @@ export default function BillPage() {
         <div className="iv-total">
           <div>
             <span>Subtotal</span>
-            <span>{b.subtotal}</span>
+            <span>{inr(b.subtotal, true)}</span>
           </div>
           <div>
-            <span>GST 18%</span>
-            <span>{b.gst}</span>
+            <span>GST {Number(b.gst_pct)}%</span>
+            <span>{inr(b.gst_amount, true)}</span>
           </div>
           <div className="iv-total__big">
             <strong>{isDue ? "Total due" : "Total"}</strong>
-            <strong>{b.total}</strong>
+            <strong>{inr(b.total, true)}</strong>
           </div>
         </div>
 
         <footer className="iv-foot" id="pay">
-          <button type="button" className="br-btn br-btn--ghost" onClick={() => flash(`${b.no}.pdf is downloading…`)}>
+          <button type="button" className="br-btn br-btn--ghost" onClick={download}>
             <Download size={15} /> Download PDF
           </button>
           {isDue && (
@@ -122,13 +190,15 @@ export default function BillPage() {
               <button type="button" className={`br-btn br-btn--ghost ${mode === "bank" ? "is-on" : ""}`} onClick={() => setMode(mode === "bank" ? null : "bank")}>
                 Bank / UPI
               </button>
-              <button type="button" className="br-btn br-btn--primary" onClick={payRazorpay} disabled={status === "paying"}>
-                <CreditCard size={15} /> {status === "paying" ? "Opening Razorpay…" : "Pay with Razorpay"}
-              </button>
+              {canPay && (
+                <button type="button" className="br-btn br-btn--primary" onClick={payRazorpay} disabled={paying}>
+                  <CreditCard size={15} /> {paying ? "Opening Razorpay…" : "Pay with Razorpay"}
+                </button>
+              )}
             </div>
           )}
           {status === "paid" && (
-            <button type="button" className="br-btn br-btn--soft" onClick={() => flash(`Receipt for ${b.no} is downloading…`)}>
+            <button type="button" className="br-btn br-btn--soft" onClick={download}>
               <Download size={15} /> Receipt
             </button>
           )}
@@ -141,58 +211,44 @@ export default function BillPage() {
               <p className="iv-bank__title">
                 <Bank size={15} /> Bank transfer
               </p>
-              {[
-                ["Account name", "Geek Creative Agency"],
-                ["Account no.", "50200012345678"],
-                ["IFSC", "HDFC0001234"],
-                ["Reference", b.no],
-              ].map(([k, v]) => (
-                <div key={k} className="iv-bank__row">
+              {[...rows, ["Reference", b.invoice_no]].map(([k, v], i) => (
+                <div key={i} className="iv-bank__row">
                   <span>{k}</span>
                   <strong>{v}</strong>
-                  <button type="button" onClick={() => copy(v)} aria-label={`Copy ${k}`}>
+                  <button type="button" onClick={() => copy(v)} aria-label={`Copy ${k || "line"}`}>
                     <Copy size={13} />
                   </button>
                 </div>
               ))}
+              {!rows.length && <p className="iv-bank__none">The Geek team hasn&apos;t added bank details yet — ask your account manager.</p>}
             </div>
-            <div className="iv-bank__qr">
-              <p className="iv-bank__title">
-                <QrCode size={15} /> UPI
-              </p>
-              <div className="iv-qr" aria-label="UPI QR code">
-                {Array.from({ length: 49 }).map((_, i) => (
-                  <i key={i} className={(i * 7 + (i % 5)) % 3 === 0 || [0, 1, 7, 8, 5, 6, 12, 13, 35, 36, 42, 43].includes(i) ? "on" : ""} />
-                ))}
+            {upi && (
+              <div className="iv-bank__qr">
+                <p className="iv-bank__title">
+                  <QrCode size={15} /> UPI
+                </p>
+                <button type="button" className="iv-upi" onClick={() => copy(upi)}>
+                  {upi} <Copy size={12} />
+                </button>
               </div>
-              <small>geekcreative@hdfcbank</small>
-            </div>
+            )}
             <div className="iv-bank__done">
               <p>Paid by bank or UPI? Tell Geek — they confirm it the same day.</p>
-              <button
-                type="button"
-                className="br-btn br-btn--dark"
-                onClick={() => {
-                  setStatus("sent");
-                  setMode(null);
-                }}
-              >
+              <button type="button" className="br-btn br-btn--dark" onClick={() => flash("Telling Geek from here — coming soon. Share the UTR with your account manager.")}>
                 <Check size={14} /> I’ve paid
               </button>
             </div>
           </section>
         )}
 
-        {status === "paid" && b.status === "due" && (
+        {status === "paid" && (
           <p className="iv-msg iv-msg--ok">
-            <Check size={14} /> Payment received — thank you! Receipt sent to your email and WhatsApp.
+            <Check size={14} /> Payment received{b.paid_amount || b.total ? ` — ${inr(b.paid_amount || b.total, true)}` : ""} on {fdate(b.paid_at)} ·{" "}
+            {b.paid_via === "razorpay" ? "Online (Razorpay)" : "Bank transfer / UPI / cheque"}
+            {b.paid_ref ? ` · Ref ${b.paid_ref}` : ""}
           </p>
         )}
-        {status === "sent" && (
-          <p className="iv-msg">
-            <Check size={14} /> Thanks — Geek will confirm your transfer and mark this bill paid (usually same day).
-          </p>
-        )}
+        {b.notes && <p className="iv-msg">{b.notes}</p>}
       </article>
 
       {toast && (
@@ -203,6 +259,8 @@ export default function BillPage() {
 
       <style>{`
         .iv { padding: 28px; }
+        .iv-bank__none { margin: 6px 0 0; font-size: 12.5px; color: var(--br-muted); }
+        .iv-upi { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 8px 12px; border: 1px dashed var(--br-border-2); border-radius: 10px; background: #fff; font-size: 13px; font-weight: 700; }
         .iv-head { display: flex; justify-content: space-between; gap: 16px; }
         .iv-from { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 700; }
         .iv-from span { width: 26px; height: 26px; border-radius: 8px; background: var(--br-grad); color: #fff; display: grid; place-items: center; font-weight: 800; }

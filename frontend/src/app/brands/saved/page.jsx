@@ -3,43 +3,77 @@
 import { useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
-import { CREATORS, SAVED_LISTS } from "@/components/brands/data";
+import { BrLoading, BrError, BrAvatar } from "@/components/brands/BrandStates";
+import { useBrand, canAct, useFavorites, setFavorite, pickCreator, creatorHref, short as fmt, fdate } from "@/services/brand";
 import { Compass, Plus, Search, Star, Check, ChevronDown, Close } from "@/components/ui/Icons";
 
-/** /brands/saved — star kiye hue creators, lists mein */
+/**
+ * /brands/saved — purana paintSaved: api.brand_favorites (⭐ saved creators), "Remove ⭐" → api.brand_favorite_set p_on:false.
+ * Lists = jin campaigns mein creator tha (backend mein custom lists nahi — "New list" coming soon).
+ * Shortlist → Discovery wala api.brand_discover_pick (Geek team ko jaata hai).
+ */
 export default function SavedCreators() {
-  const [lists, setLists] = useState(SAVED_LISTS);
+  const b = useBrand();
+  const act = canAct(b);
+  const fav = useFavorites();
   const [active, setActive] = useState("all");
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [q, setQ] = useState("");
-  const [unsaved, setUnsaved] = useState([]);
   const [short, setShort] = useState([]);
+  const [busy, setBusy] = useState("");
   const [shown, setShown] = useState(8);
   const [toast, setToast] = useState("");
 
   const flash = (t) => {
     setToast(t);
-    setTimeout(() => setToast(""), 2200);
+    setTimeout(() => setToast(""), 2400);
   };
 
-  const all = CREATORS.filter((c) => !unsaved.includes(c.id));
+  const all = fav.list.map((f) => {
+    const c = f.creator || {};
+    return { ...f, c, key: f.favorite_id || f.participation_id || f.invite_id || c.username, name: c.name || c.username || "Creator", camps: String(f.campaigns || "").split(", ").filter(Boolean) };
+  });
+  const lists = [{ key: "all", label: "All saved", count: all.length }];
+  all.forEach((f) =>
+    f.camps.forEach((k) => {
+      const l = lists.find((x) => x.key === k);
+      if (l) l.count++;
+      else lists.push({ key: k, label: k, count: 1 });
+    })
+  );
   const list = all
-    .filter((c) => active === "all" || c.saved.includes(active))
-    .filter((c) => {
+    .filter((f) => active === "all" || f.camps.includes(active))
+    .filter((f) => {
       const s = q.trim().toLowerCase();
-      return !s || c.name.toLowerCase().includes(s) || c.handle.includes(s) || c.city.toLowerCase().includes(s);
+      return !s || f.name.toLowerCase().includes(s) || String(f.c.username || "").toLowerCase().includes(s) || String(f.c.city || "").toLowerCase().includes(s);
     });
 
   const addList = (e) => {
     e.preventDefault();
-    const name = newName.trim();
-    if (!name) return;
-    if (!lists.some((l) => l.key.toLowerCase() === name.toLowerCase())) setLists([...lists, { key: name, label: name, count: 0 }]);
-    setActive(name);
     setNewName("");
     setAdding(false);
-    flash(`List “${name}” created`);
+    flash("Your own lists — coming soon. Saved creators are grouped by campaign for now.");
+  };
+  // ⭐ hatao (purana data-bpxunstar)
+  const unsave = async (f) => {
+    setBusy(f.key);
+    const r = await setFavorite(f.participation_id, f.invite_id, false);
+    setBusy("");
+    if (r.error) return flash(r.error.message);
+    flash(`${f.name} removed from saved`);
+    fav.reload();
+  };
+  // Shortlist (purana brandPick → brand_discover_pick)
+  const shortlist = async (f) => {
+    if (!act) return flash("View-only login — ask your team's admin to shortlist creators.");
+    if (short.includes(f.key)) return;
+    setBusy(f.key);
+    const r = await pickCreator({ handle: f.c.username, name: f.c.name, followers: f.c.followers, engagement: f.c.engagement, city: f.c.city, profile_picture_url: f.c.profile_picture_url });
+    setBusy("");
+    if (r.error) return flash(r.error.message);
+    setShort([...short, f.key]);
+    flash(`@${f.c.username} shortlisted — the Geek team will take it from here`);
   };
 
   return (
@@ -69,7 +103,7 @@ export default function SavedCreators() {
               }}
             >
               {l.label}
-              <em>{l.key === "all" ? l.count - unsaved.length : l.count}</em>
+              <em>{l.count}</em>
             </button>
           ))}
           {adding ? (
@@ -94,76 +128,78 @@ export default function SavedCreators() {
         </label>
       </div>
 
-      {list.length === 0 ? (
+      {fav.loading && !fav.list.length ? (
+        <BrLoading cards={4} />
+      ) : fav.error && !fav.list.length ? (
+        <BrError error={fav.error} onRetry={fav.reload} />
+      ) : list.length === 0 ? (
         <div className="br-card sv-empty">
-          <p>{q ? `No saved creators match “${q}”.` : "No creators in this list yet — star creators in Discovery to add them."}</p>
+          <p>
+            {q
+              ? `No saved creators match “${q}”.`
+              : "No saved creators yet. Open any creator in a campaign and tap Save — they show up here so you can ask for them again."}
+          </p>
           <Link href="/brands/discovery" className="br-btn br-btn--primary br-btn--sm">
             Open Discovery
           </Link>
         </div>
       ) : (
         <div className="sv-grid">
-          {list.slice(0, shown).map((c) => {
-            const on = short.includes(c.id);
+          {list.slice(0, shown).map((f) => {
+            const c = f.c;
+            const on = short.includes(f.key);
+            const href = creatorHref(f.participation_id, f.invite_id);
             return (
-              <article key={c.id} className="br-card sv-card">
+              <article key={f.key} className="br-card sv-card">
                 <div className="sv-card__top">
-                  <span className="br-av br-av--lg" style={{ background: c.av }}>
-                    {c.initials}
-                  </span>
-                  <button
-                    type="button"
-                    className="sv-star"
-                    aria-label="Remove from saved"
-                    title="Remove from saved"
-                    onClick={() => {
-                      setUnsaved([...unsaved, c.id]);
-                      flash(`${c.name} removed from saved`);
-                    }}
-                  >
+                  <BrAvatar name={f.name} src={c.profile_picture_url} cls="br-av--lg" />
+                  <button type="button" className="sv-star" aria-label="Remove from saved" title="Remove from saved" onClick={() => unsave(f)} disabled={busy === f.key}>
                     <Star size={14} />
                   </button>
                 </div>
-                <h2>{c.name}</h2>
+                <h2>{f.name}</h2>
                 <p className="sv-handle">
-                  {c.handle} · {c.city}
+                  {c.username ? `@${c.username}` : ""}
+                  {c.city ? ` · ${c.city}` : ""}
                 </p>
                 <div className="sv-nums">
                   <span>
-                    <strong>{c.followers}</strong>
+                    <strong>{c.followers != null ? fmt(c.followers) : "—"}</strong>
                     <small>followers</small>
                   </span>
                   <span>
-                    <strong>{c.eng}</strong>
+                    <strong>{c.engagement != null ? `${Math.round(Number(c.engagement) * 10) / 10}%` : "—"}</strong>
                     <small>eng.</small>
                   </span>
                   <span>
-                    <strong>{c.fee}</strong>
-                    <small>fee</small>
+                    <strong>{c.avg_reach != null ? fmt(c.avg_reach) : "—"}</strong>
+                    <small>reach</small>
                   </span>
                 </div>
                 <div className="sv-tags">
-                  {(c.saved.length ? c.saved : [c.niche[0]]).map((t) => (
+                  {(c.categories || []).slice(0, 2).map((t) => (
                     <span key={t} className="br-badge br-badge--violet">
                       {t}
                     </span>
                   ))}
-                  {c.workedWithYou && <span className="br-badge br-badge--green">Worked with you</span>}
+                  {f.camps.length > 0 && <span className="br-badge br-badge--green">Worked with you</span>}
+                  <span className="br-badge br-badge--plain">Saved {fdate(f.added_at)}</span>
                 </div>
                 <div className="sv-actions">
-                  <Link href={`/brands/creators/${c.id}`} className="br-btn br-btn--ghost br-btn--sm">
-                    Profile
-                  </Link>
-                  <button
-                    type="button"
-                    className={`br-btn br-btn--sm ${on ? "sv-shorted" : "br-btn--soft"}`}
-                    onClick={() => {
-                      setShort(on ? short.filter((x) => x !== c.id) : [...short, c.id]);
-                      if (!on) flash(`${c.name} added to your shortlist`);
-                    }}
-                  >
-                    {on ? <Check size={13} /> : <Plus size={13} />} {on ? "Shortlisted" : "Shortlist"}
-                  </button>
+                  {href ? (
+                    <Link href={href} className="br-btn br-btn--ghost br-btn--sm">
+                      Profile
+                    </Link>
+                  ) : (
+                    <a href={`https://instagram.com/${c.username || ""}`} target="_blank" rel="noreferrer" className="br-btn br-btn--ghost br-btn--sm">
+                      Profile
+                    </a>
+                  )}
+                  {act && (
+                    <button type="button" className={`br-btn br-btn--sm ${on ? "sv-shorted" : "br-btn--soft"}`} onClick={() => shortlist(f)} disabled={busy === f.key}>
+                      {on ? <Check size={13} /> : <Plus size={13} />} {on ? "Shortlisted" : "Shortlist"}
+                    </button>
+                  )}
                 </div>
               </article>
             );

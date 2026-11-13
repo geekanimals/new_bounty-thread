@@ -1,69 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
+import { useCreator, addDreamBrand, removeDreamBrand } from "@/services/creator";
 import { DREAM_BRANDS } from "@/components/creater/data";
 import { Check, Close } from "@/components/ui/Icons";
 
 const MAX = 10;
-const toId = (n) => n.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
 /**
  * /creater/profile/dream-brands — Figma: simple list (10 tak), naam likho → "+ Add".
  * Session: dreamBrands (ids) + customBrands ({id, name}). Har badlav turant save.
  */
 export default function DreamBrands() {
-  const [s, update] = useSession();
-  const [picked, setPicked] = useState([]);
-  const [custom, setCustom] = useState([]);
+  const c = useCreator();
+  // Asli list: get_my_profile.dream_brands (naam + aspiration_id)
+  const list = (c.profile?.dream_brands || []).filter((d) => d.submitted_brand_name);
+  const picked = list.map((d) => d.aspiration_id);
   const [name, setName] = useState("");
   const [msg, setMsg] = useState("");
   const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    setPicked(s.dreamBrands || []);
-    setCustom(s.customBrands || []);
-  }, [s.dreamBrands, s.customBrands]);
-
-  const label = (id) => DREAM_BRANDS.find((b) => b.id === id)?.name || custom.find((c) => c.id === id)?.name || id;
-  const img = (id) => DREAM_BRANDS.find((b) => b.id === id)?.img;
-
-  const persist = (p, c) => {
-    update({ dreamBrands: p, customBrands: c });
-    setToast("Saved");
+  const row = (id) => list.find((d) => d.aspiration_id === id) || {};
+  const label = (id) => row(id).submitted_brand_name || "";
+  const img = (id) => DREAM_BRANDS.find((b) => b.name.toLowerCase() === label(id).toLowerCase())?.img;
+  const flash = (t) => {
+    setToast(t);
     clearTimeout(window.__dbT);
-    window.__dbT = setTimeout(() => setToast(""), 1400);
+    window.__dbT = setTimeout(() => setToast(""), 1600);
   };
-
-  const add = (e) => {
+  // upsert_dream_brand (rank = list ke end mein) — purane profile.js jaisa
+  const add = async (e) => {
     e.preventDefault();
     const n = name.trim();
-    if (!n) return;
+    if (!n || busy) return;
     if (picked.length >= MAX) {
       setMsg(`You can add up to ${MAX} — remove one first.`);
       return;
     }
-    const known = DREAM_BRANDS.find((b) => b.name.toLowerCase() === n.toLowerCase());
-    const id = known ? known.id : toId(n);
-    if (picked.includes(id)) {
-      setMsg(`${label(id)} is already on your list.`);
+    if (list.some((d) => d.submitted_brand_name.toLowerCase() === n.toLowerCase())) {
+      setMsg(`${n} is already on your list.`);
       return;
     }
-    const nextC = known || custom.some((c) => c.id === id) ? custom : [...custom, { id, name: n }];
-    const nextP = [...picked, id];
-    setCustom(nextC);
-    setPicked(nextP);
-    persist(nextP, nextC);
-    setName("");
-    setMsg("");
+    const known = DREAM_BRANDS.find((b) => b.name.toLowerCase() === n.toLowerCase());
+    setBusy(true);
+    try {
+      await addDreamBrand(known ? known.name : n, list.length + 1);
+      setName("");
+      setMsg("");
+      flash("Saved");
+    } catch (ex) {
+      setMsg("Couldn't save: " + (ex.message || ex));
+    }
+    setBusy(false);
   };
-
-  const remove = (id) => {
-    const nextP = picked.filter((x) => x !== id);
-    setPicked(nextP);
-    persist(nextP, custom);
+  const remove = async (id) => {
+    try {
+      await removeDreamBrand(id);
+      flash("Removed");
+    } catch (ex) {
+      setMsg("Couldn't remove: " + (ex.message || ex));
+    }
   };
 
   return (
@@ -83,8 +82,8 @@ export default function DreamBrands() {
           <p className="dbx-empty">No dream brands yet — add the brands you love (up to {MAX}).</p>
         ) : (
           <ul className="dbx-list">
-            {picked.map((id) => (
-              <li key={id}>
+            {picked.map((id, i) => (
+              <li key={`${id}-${i}`}>
                 {img(id) ? <img src={img(id)} alt="" /> : <span className="dbx-dot">{label(id).slice(0, 1)}</span>}
                 {label(id)}
                 <button type="button" onClick={() => remove(id)} aria-label={`Remove ${label(id)}`}>
@@ -97,7 +96,7 @@ export default function DreamBrands() {
 
         <form className="dbx-add" onSubmit={add}>
           <input className="pf-input" placeholder="Brand name" value={name} onChange={(e) => setName(e.target.value)} aria-label="Brand name" />
-          <button type="submit" className="pf-btn dbx-btn">
+          <button type="submit" className="pf-btn dbx-btn" disabled={busy}>
             + Add
           </button>
         </form>

@@ -1,45 +1,62 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
-import { CREATORS } from "@/components/admin/data";
+import { useCreatorsList, creatorCounts, rowOf, matchQ, csv, CSV_COLS, cap1, errText } from "@/components/admin/creator/live";
 
-const PER = 6;
-const CATS = ["All categories", ...Array.from(new Set(CREATORS.map((c) => c.category)))];
+const PER = 24;
 
+/* Creators (list) — admin_creators + admin_ig_accounts + admin_creator_facts (purane app jaisa, har 30 sec) */
 export default function AdminCreators() {
+  const { all, loading, error, reload } = useCreatorsList();
+  const N = creatorCounts(all);
   const [q, setQ] = useState("");
   const [ig, setIg] = useState("All");
   const [cat, setCat] = useState("All categories");
   const [page, setPage] = useState(0);
   const [toast, setToast] = useState("");
 
+  // "Save view" se rakha filter wapas
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem("geek_acr_view_list") || "null");
+      if (v) {
+        setQ(v.q || "");
+        setIg(v.ig || "All");
+        setCat(v.cat || "All categories");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const flash = (t) => {
     setToast(t);
     setTimeout(() => setToast(""), 2200);
   };
 
-  const rows = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return CREATORS.filter(
+  const cats = useMemo(() => ["All categories", ...[...new Set(all.flatMap((c) => (c.categories || []).map((x) => cap1(String(x).toLowerCase()))))].sort()], [all]);
+  const list = useMemo(() => {
+    const t = q.trim();
+    return all.filter(
       (c) =>
-        (!t || [c.name, c.handle, c.city, c.category].some((v) => v.toLowerCase().includes(t))) &&
-        (ig === "All" || (ig === "Connected" ? c.ig : !c.ig)) &&
-        (cat === "All categories" || c.category === cat)
+        matchQ(c, t) &&
+        (ig === "All" || (ig === "Connected" ? !!c.ig_username : !c.ig_username)) &&
+        (cat === "All categories" || (c.categories || []).some((x) => String(x).toLowerCase() === cat.toLowerCase()))
     );
-  }, [q, ig, cat]);
-  const pages = Math.max(1, Math.ceil(rows.length / PER));
+  }, [all, q, ig, cat]);
+  const pages = Math.max(1, Math.ceil(list.length / PER));
   const p = Math.min(page, pages - 1);
-  const shown = rows.slice(p * PER, p * PER + PER);
-  const filtered = q || ig !== "All" || cat !== "All categories";
-  const total = filtered ? rows.length : 298;
+  const shown = list.slice(p * PER, p * PER + PER).map(rowOf);
+  const total = list.length;
+  const pct = (n) => (N.total ? `${Math.round((100 * n) / N.total)}% of accounts` : "—");
 
   return (
     <AdminShell>
       <PageHead title="Creators" sub="A trusted creator directory: verified Instagram signals, fit and campaign history.">
-        <button type="button" className="ad-btn cl-csv" onClick={() => flash("CSV export started — 298 creators")}>
+        <button type="button" className="ad-btn cl-csv" onClick={() => (csv(list, CSV_COLS, "creators.csv"), flash(`CSV downloaded — ${list.length} creators`))}>
           ⬇️ CSV
         </button>
         <Link href="/admin/creator-upload" className="ad-btn ad-btn--primary">
@@ -49,11 +66,11 @@ export default function AdminCreators() {
 
       <Stats
         items={[
-          { value: 298, label: "Total registered", note: "Live · refreshes every 30s" },
-          { value: 169, label: "Instagram linked", note: "57% of accounts" },
-          { value: 35, label: "Profiles complete", note: "Optional details" },
-          { value: 228, label: "Applied", note: "At least one campaign" },
-          { value: 151, label: "Approved", note: "Across campaigns" },
+          { value: N.total, label: "Total registered", note: "Live · refreshes every 30s" },
+          { value: N.ig, label: "Instagram linked", note: pct(N.ig) },
+          { value: N.complete, label: "Profiles complete", note: "Optional details" },
+          { value: N.applied, label: "Applied", note: "At least one campaign" },
+          { value: N.approved, label: "Approved", note: "Across campaigns" },
         ]}
       />
 
@@ -87,11 +104,22 @@ export default function AdminCreators() {
             ))}
           </select>
           <select className="ad-input cl-sel" value={cat} onChange={(e) => (setCat(e.target.value), setPage(0))} aria-label="Category">
-            {CATS.map((o) => (
+            {cats.map((o) => (
               <option key={o}>{o}</option>
             ))}
           </select>
-          <button type="button" className="cl-save" onClick={() => flash("View saved")}>
+          <button
+            type="button"
+            className="cl-save"
+            onClick={() => {
+              try {
+                localStorage.setItem("geek_acr_view_list", JSON.stringify({ q, ig, cat }));
+              } catch {
+                /* ignore */
+              }
+              flash("View saved");
+            }}
+          >
             Save view
           </button>
         </div>
@@ -118,7 +146,9 @@ export default function AdminCreators() {
                     </Link>
                     <span className="cl-handle">{c.handle}</span>
                   </td>
-                  <td>{c.followers}</td>
+                  <td>
+                    <b>{c.followers}</b>
+                  </td>
                   <td>{c.city}</td>
                   <td>{c.category}</td>
                   <td>
@@ -137,7 +167,20 @@ export default function AdminCreators() {
               {!shown.length && (
                 <tr>
                   <td colSpan={7} className="cl-empty">
-                    No creators match these filters.
+                    {error ? (
+                      <>
+                        {errText(error)}{" "}
+                        <button type="button" className="cl-retry" onClick={() => reload()}>
+                          Retry
+                        </button>
+                      </>
+                    ) : loading ? (
+                      "Loading creators…"
+                    ) : all.length ? (
+                      "No creators match these filters."
+                    ) : (
+                      "No creators yet."
+                    )}
                   </td>
                 </tr>
               )}
@@ -167,7 +210,7 @@ export default function AdminCreators() {
               </div>
             </Link>
           ))}
-          {!shown.length && <p className="cl-empty">No creators match these filters.</p>}
+          {!shown.length && <p className="cl-empty">{error ? errText(error) : loading ? "Loading creators…" : all.length ? "No creators match these filters." : "No creators yet."}</p>}
         </div>
 
         <div className="cl-foot">
@@ -188,6 +231,7 @@ export default function AdminCreators() {
       {toast && <div className="ad-toast">✓ {toast}</div>}
 
       <style>{`
+        .cl-retry { border: 0; background: none; font-weight: 800; color: #6657e9; }
         .cl-csv { background: transparent; color: #6657e9; padding: 0 8px; }
         .cl-card { padding: 22px 22px 26px; }
         .cl-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

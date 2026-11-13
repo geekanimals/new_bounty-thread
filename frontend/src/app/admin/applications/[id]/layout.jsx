@@ -1,10 +1,8 @@
-import { APPLICATIONS } from "@/components/admin/queue/queueData";
-
-/* /admin/applications/<creator> — review drawer */
+/* id database se aata hai (UUID) — sirf ek sample pehle se banta hai, baaki pehli baar khulne par */
 export function generateStaticParams() {
-  return APPLICATIONS.map((a) => ({ id: a.id }));
+  return [{ id: "sample" }];
 }
 
-export default function ApplicationLayout({ children }) {
+export default function IdLayout({ children }) {
   return children;
 }

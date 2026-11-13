@@ -1,8 +1,6 @@
-import { ALL_CREATOR_IDS } from "@/components/admin/creator/profiles";
-
-// Creator profile ke saare pages pehle se ban jaayein (dummy ids)
+// Creator profile (id = member id, database se) — pages pehli baar khulne par bante hain
 export function generateStaticParams() {
-  return ALL_CREATOR_IDS.map((id) => ({ id }));
+  return [{ id: "sample" }];
 }
 
 export default function CreatorLayout({ children }) {

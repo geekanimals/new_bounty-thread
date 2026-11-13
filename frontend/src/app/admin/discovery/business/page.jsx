@@ -1,35 +1,61 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { invoke, rpc, useRpc, errText } from "@/lib/supabase";
+import InviteModal from "@/components/admin/discovery/InviteModal";
 import AdminShell from "@/components/admin/AdminShell";
 import DiscoveryHead from "@/components/admin/discovery/DiscoveryHead";
 
-const ACCOUNTS = {
-  kabirfoodtrail: { name: "Kabir Mehta", bio: "Delhi food trails, street food and honest reviews.", nums: ["41.2k", "612", "388", "2.8%"], posts: [[640, 31], [1280, 62], [1920, 93], [2560, 124]] },
-  nishastories: { name: "Nisha Rao", bio: "Skincare that works on Indian skin. Mumbai.", nums: ["28.1k", "455", "302", "3.1%"], posts: [[910, 44], [1430, 70], [760, 28], [2210, 98]] },
-};
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-IN"));
 
-/* Discovery → Business discovery (Figma 055) */
+/* Discovery → Business discovery (Figma 055) — ig-discover {action:"lookup"} (purane app jaisa).
+   Lookup apne aap creator search mein save karta hai; "Add to Geek OS" = import_creators (ek row). */
 export default function DiscoveryBusiness() {
   const [user, setUser] = useState("");
-  const [acc, setAcc] = useState("kabirfoodtrail");
+  const [st, setSt] = useState({ data: null, busy: false });
   const [err, setErr] = useState("");
+  const [inv, setInv] = useState(null);
   const [toast, setToast] = useState("");
+  const { data: dc } = useRpc("admin", "my_discovery_connection", {});
+  const igName = dc && ((dc.team && dc.team.ig_username) || dc.ig_username);
 
   const flash = (t) => {
     setToast(t);
-    setTimeout(() => setToast(""), 2200);
+    setTimeout(() => setToast(""), 2600);
+  };
+  const lookup = async (raw) => {
+    const q = String(raw || "").trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/^@/, "").replace(/[/?].*$/, "").toLowerCase();
+    if (!/^[a-z0-9._]{2,30}$/.test(q)) return setErr("Type an Instagram username, e.g. virat.kohli");
+    setErr("");
+    setSt({ data: null, busy: true });
+    const r = await invoke("admin", "ig-discover", { action: "lookup", username: q, media_limit: 24 });
+    if (r.data && r.data.profile) return setSt({ data: r.data, busy: false });
+    setSt({ data: null, busy: false });
+    setErr((r.data && r.data.error) || errText(r.error) || "Couldn't reach Instagram.");
   };
   const search = (e) => {
     e.preventDefault();
-    const u = user.trim().replace(/^@/, "").toLowerCase() || "kabirfoodtrail";
-    if (ACCOUNTS[u]) {
-      setAcc(u);
-      setErr("");
-    } else setErr(`@${u} isn’t a public Business or Creator account (or doesn’t exist).`);
+    lookup(user);
   };
-  const a = ACCOUNTS[acc];
+  // hashtag page ke "@account" se aaye → seedha dhundo (?u=)
+  useEffect(() => {
+    const u = new URLSearchParams(window.location.search).get("u");
+    if (u) {
+      setUser(u);
+      lookup(u);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const P = st.data && st.data.profile;
+  const posts = (st.data && st.data.posts) || [];
+  const handle = P ? P.username || P.handle : "";
+  const eng = P && P.followers ? Math.round((1000 * ((Number(P.avg_likes) || 0) + (Number(P.avg_comments) || 0))) / P.followers) / 10 : null;
+  const add = async () => {
+    const r = await rpc("admin", "api.import_creators", { p_rows: [{ handle, name: P.name || "", followers: P.followers != null ? String(P.followers) : undefined, engagement: eng != null ? String(eng) : undefined, bio: P.bio || "" }] });
+    if (r.error) return flash("Couldn't add: " + errText(r.error));
+    const d = r.data || {};
+    flash(d.added ? `@${handle} added to your creator search` : `@${handle} is already on Geek OS / in your search`);
+  };
 
   return (
     <AdminShell>
@@ -40,46 +66,74 @@ export default function DiscoveryBusiness() {
             <h2 className="ad-h2">Instagram Business discovery</h2>
             <p className="dbz-sub">Type any public Business or Creator username — see their profile and latest posts.</p>
           </div>
-          <span className="ad-badge">Searching with @geekanimals</span>
+          <span className="ad-badge">{igName ? `Searching with @${igName}` : "Searching with the team's Instagram"}</span>
         </div>
         <form className="dbz-row" onSubmit={search}>
           <input className="ad-input dbz-q" placeholder="@kabirfoodtrail" value={user} onChange={(e) => setUser(e.target.value)} aria-label="Instagram username" />
-          <button type="submit" className="ad-btn ad-btn--primary dbz-go">
-            🔎 Search
+          <button type="submit" className="ad-btn ad-btn--primary dbz-go" disabled={st.busy}>
+            {st.busy ? "Searching…" : "🔎 Search"}
           </button>
         </form>
         {err && <p className="dbz-err">{err}</p>}
 
-        <div className="dbz-nums">
-          {["Followers", "Following", "Posts", "Engagement"].map((l, i) => (
-            <div key={l}>
-              <strong>{a.nums[i]}</strong>
-              <span>{l}</span>
+        {st.busy && <p className="dbz-none">Looking up on Instagram…</p>}
+        {!P && !st.busy && !err && <p className="dbz-none">Type a public Business or Creator username, e.g. virat.kohli</p>}
+        {P && (
+          <>
+            <div className="dbz-nums">
+              {[
+                [fmt(P.followers), "Followers"],
+                [fmt(P.follows), "Following"],
+                [fmt(P.media_count), "Posts"],
+                [eng != null ? eng + "%" : "—", "Engagement"],
+              ].map(([n, l]) => (
+                <div key={l}>
+                  <strong>{n}</strong>
+                  <span>{l}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <p className="dbz-bio">
-          <b>{a.name}</b>· <span>{a.bio}</span>
-        </p>
-        <div className="dbz-grid">
-          {a.posts.map(([l, c], i) => (
-            <a key={i} href={`https://instagram.com/${acc}`} target="_blank" rel="noreferrer" className="dbz-post">
-              <span />
-              <small>
-                ❤️ {l} · 💬 {c}
-              </small>
-            </a>
-          ))}
-        </div>
-        <div className="dbz-acts">
-          <button type="button" className="ad-btn ad-btn--primary" onClick={() => flash(`${a.name} added to Geek OS creators`)}>
-            Add to Geek OS
-          </button>
-          <Link href="/admin/campaigns" className="ad-btn ad-btn--ghost">
-            Invite to a campaign
-          </Link>
-        </div>
+            <p className="dbz-bio">
+              <a href={`https://instagram.com/${encodeURIComponent(handle)}`} target="_blank" rel="noopener noreferrer">
+                <b>{P.name || "@" + handle}</b>
+              </a>
+              · <span>{P.bio || `@${handle}`}</span>
+            </p>
+            <div className="dbz-grid">
+              {posts.slice(0, 8).map((m, i) => {
+                const img = m.thumbnail_url || (m.media_type !== "VIDEO" && m.media_url) || "";
+                return (
+                  <a key={(m.id || "") + i} href={m.permalink || `https://instagram.com/${handle}`} target="_blank" rel="noopener noreferrer" className="dbz-post">
+                    <span>{img && <img src={img} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />}</span>
+                    <small>
+                      ❤️ {fmt(m.like_count)} · 💬 {fmt(m.comments_count)}
+                    </small>
+                  </a>
+                );
+              })}
+              {!posts.length && <p className="dbz-none">No posts shared.</p>}
+            </div>
+            <div className="dbz-acts">
+              <button type="button" className="ad-btn ad-btn--primary" onClick={add}>
+                Add to Geek OS
+              </button>
+              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setInv({ handle, member_id: null, name: P.name })}>
+                Invite to a campaign
+              </button>
+            </div>
+          </>
+        )}
       </section>
+      {inv && (
+        <InviteModal
+          who={inv}
+          onClose={() => setInv(null)}
+          onDone={(m) => {
+            setInv(null);
+            flash(m);
+          }}
+        />
+      )}
       {toast && <div className="ad-toast">✓ {toast}</div>}
 
       <style>{`
@@ -101,7 +155,10 @@ export default function DiscoveryBusiness() {
         .dbz-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 15px; }
         .dbz-post { display: flex; flex-direction: column; padding: 20px 19px 20px; border-radius: 16px; border: 1px solid var(--ad-line); transition: border-color .15s; }
         .dbz-post:hover { border-color: #cfd2ee; }
-        .dbz-post span { display: block; aspect-ratio: 220 / 110; border-radius: 12px; background: #ebe7fc; }
+        .dbz-post span { display: block; aspect-ratio: 220 / 110; overflow: hidden; border-radius: 12px; background: #ebe7fc; }
+        .dbz-post span img { width: 100%; height: 100%; object-fit: cover; }
+        .dbz-none { margin-top: 14px; font-size: 12.5px; color: var(--ad-muted); }
+        .dbz-bio a:hover { color: var(--ad-primary); }
         .dbz-post small { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .dbz-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
         @media (max-width: 1023px) { .dbz-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -3,34 +3,70 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell, { RumiTip } from "@/components/creater/OnboardShell";
-import { writeSession, readSession } from "@/components/creater/session";
+import { finishInstagram, readIgReturn, getCreator, track } from "@/services/creator";
 import { getSidekick } from "@/components/creater/data";
 
 const STEPS = ["Connecting your Instagram…", "Gathering your creator details…", "Building your media kit…", "Matching campaigns for you…"];
 
-/** /creater/onboarding/connecting — Instagram connect ke baad media kit ban raha hai (loader) */
+/**
+ * /creater/onboarding/connecting — Instagram se wapsi (?code&state). Asli kaam (purana finishInstagram):
+ *  login hai → instagram-auth · login nahi → instagram-login (ticket ho to usi account se) → session
+ * Steps asli progress se chalte hain; kaam poora hote hi Media kit (ya apply ke liye Discover).
+ */
 export default function ConnectingLoader() {
   const router = useRouter();
-  const [done, setDone] = useState(0); // kitne steps poore
-  const [sk, setSk] = useState(getSidekick("rumi"));
+  const [done, setDone] = useState(0); // kitne steps poore (dikhawa)
+  const [ok, setOk] = useState(false); // server ne connect kar diya
+  const [dest, setDest] = useState("/creater/media-kit");
+  const [err, setErr] = useState("");
+  const [sk, setSk] = useState(getSidekick("pip"));
   const went = useRef(false);
+  const ran = useRef(false);
 
-  const finish = () => {
+  const finish = (to = dest) => {
     if (went.current) return;
     went.current = true;
-    writeSession({ ig: true });
-    router.push("/creater/media-kit");
+    router.replace(to);
   };
 
   useEffect(() => {
-    setSk(getSidekick(readSession().sidekick));
-    const t = setInterval(() => setDone((d) => d + 1), 1000);
-    return () => clearInterval(t);
+    setSk(getSidekick(getCreator().prefs?.kid));
+    if (ran.current) return;
+    ran.current = true;
+    const ig = readIgReturn();
+    if (!ig) {
+      setErr("Instagram didn't send a sign-in back. Please try connecting again.");
+      return;
+    }
+    if (!ig.code) {
+      setErr(ig.error ? `Instagram connect was cancelled (${ig.error}).` : "Instagram connect was cancelled.");
+      return;
+    }
+    // code address bar mein na rahe
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+    finishInstagram(ig.code, ig.state)
+      .then((r) => {
+        track("instagram_connected");
+        if (r.signIn) {
+          setErr("Instagram connected ✓ — sign in with WhatsApp to continue.");
+          setDest("/creater/login");
+          return;
+        }
+        setDest(r.after === "discover" ? "/creater/discover" : "/creater/media-kit");
+        setOk(true);
+      })
+      .catch((e) => setErr("Instagram sign-in failed: " + (e.message || e)));
   }, []);
 
+  // Dikhawe ke steps: aakhri step tabhi jab server ne connect kar diya
   useEffect(() => {
-    if (done >= STEPS.length + 1) finish();
-  }, [done]); // eslint-disable-line react-hooks/exhaustive-deps
+    const t = setInterval(() => setDone((d) => Math.min(d + 1, ok ? STEPS.length + 1 : STEPS.length - 1)), 900);
+    return () => clearInterval(t);
+  }, [ok]);
+
+  useEffect(() => {
+    if (ok && done >= STEPS.length + 1) finish();
+  }, [done, ok]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pct = Math.min(100, Math.round((done / STEPS.length) * 100));
 
@@ -38,30 +74,45 @@ export default function ConnectingLoader() {
     <OnboardShell tone="dark">
       <title>Building your media kit — Bounty</title>
       <div className="cn">
-        <p className="cn-ok">Instagram connected ✓</p>
+        <p className="cn-ok">{err ? "Instagram" : ok ? "Instagram connected ✓" : "Connecting Instagram…"}</p>
         <div className="cn-glow">
           <img src={sk.img} alt="" />
         </div>
         {/* Bada sidekick hi bolta hai — alag se doosra nahi */}
-        <RumiTip inline mobileDark className="cn-rumi" name={sk.name} img={sk.img} text="Hang tight — I'm planting your media kit. 🌱" />
-        <h2 className="cn-h">Building your media kit…</h2>
-        <ul className="cn-steps" aria-live="polite">
-          {STEPS.map((s, i) => (
-            <li key={s} className={i < done ? "is-done" : i === done ? "is-now" : ""}>
-              <i>{i < done ? "✓" : ""}</i>
-              {s}
-            </li>
-          ))}
-        </ul>
-        <div className="cn-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <i style={{ width: `${pct}%` }} />
-        </div>
-        <button type="button" className="bx-btn bx-btn--outline-light bx-btn--lg bx-btn--block" onClick={finish}>
-          Continue while we finish
-        </button>
+        <RumiTip inline mobileDark className="cn-rumi" name={sk.name} img={sk.img} text={err ? "No worries — let's try that again." : "Hang tight — I'm planting your media kit. 🌱"} />
+        <h2 className="cn-h">{err ? "Couldn't finish connecting" : "Building your media kit…"}</h2>
+        {err ? (
+          <p className="cn-err" role="alert">
+            {err}
+          </p>
+        ) : (
+          <>
+            <ul className="cn-steps" aria-live="polite">
+              {STEPS.map((s, i) => (
+                <li key={s} className={i < done ? "is-done" : i === done ? "is-now" : ""}>
+                  <i>{i < done ? "✓" : ""}</i>
+                  {s}
+                </li>
+              ))}
+            </ul>
+            <div className="cn-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+              <i style={{ width: `${pct}%` }} />
+            </div>
+          </>
+        )}
+        {err ? (
+          <button type="button" className="bx-btn bx-btn--outline-light bx-btn--lg bx-btn--block" onClick={() => finish(dest === "/creater/login" ? dest : "/creater/onboarding/instagram")}>
+            {dest === "/creater/login" ? "Sign in →" : "Try again"}
+          </button>
+        ) : (
+          <button type="button" className="bx-btn bx-btn--outline-light bx-btn--lg bx-btn--block" onClick={() => finish()} disabled={!ok}>
+            Continue while we finish
+          </button>
+        )}
       </div>
 
       <style>{`
+        .cn-err { margin: 14px 0 18px; font-size: 14px; line-height: 1.5; color: #ffd9c9; }
         /* Figma 015/022 — loader */
         .cn { text-align: center; color: #fbf3e2; }
         .cn-ok { margin: -12px 0 14px; font-family: var(--bx-sans); font-size: 13px; font-weight: 500; color: #fbf3e2; }

@@ -3,32 +3,35 @@
 import { useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
+import { useSession, useCreator } from "@/services/creator";
 import { RumiTip } from "@/components/creater/OnboardShell";
 import { getSidekick } from "@/components/creater/data";
 
-// Bache hue kaam — har ek apne sub-page par le jaata hai
-const TODO = [
-  { label: "Dream brands (at least 1)", href: "/creater/profile/dream-brands", key: "dream" },
-  { label: "Delivery address with city, state & PIN", href: "/creater/profile/address" },
-  { label: "Birthday", href: "/creater/profile/about" },
-  { label: "Gender", href: "/creater/profile/about" },
-  { label: "Married / unmarried", href: "/creater/profile/about" },
-  { label: "Skills (at least 1)", href: "/creater/profile/skills" },
-  { label: "Resources / equipment (at least 1)", href: "/creater/profile/skills" },
-  { label: "Backup email (account recovery)", href: "/creater/profile/contact" },
-  { label: "Content formats", href: "/creater/profile/content", key: "formats" },
-];
+// Checklist section → kis page par bharna hai (purane creatorProfileGate items)
+const HREF = {
+  dreams: "/creater/profile/dream-brands",
+  address: "/creater/profile/address",
+  personal: "/creater/profile/about",
+  skills: "/creater/profile/skills",
+  contact: "/creater/profile/contact",
+  professional: "/creater/profile/content",
+  pages: "/creater/profile/instagram",
+  terms: "/creater/profile/terms",
+};
 
-/** /creater/profile/finish — campaign-ready status + bache hue 9 kaam */
+/** /creater/profile/finish — campaign-ready status + bache hue kaam (asli checklist: get_profile_requirements) */
 export default function FinishProfile() {
   const [s] = useSession();
-  const locked = !s.ig;
+  const c = useCreator();
+  const needs = c.joinNeeds || [];
+  const igOk = c.hasIg && !needs.some((x) => /instagram/i.test(x));
+  const waOk = !needs.some((x) => /whatsapp/i.test(x));
+  const locked = !igOk || !waOk;
   const sk = getSidekick(s.sidekick);
   const [tip, setTip] = useState(true);
-  const done = (t) => (t.key === "dream" && s.dreamBrands.length > 0) || (t.key === "formats" && s.formats.length > 0);
-  const left = TODO.filter((t) => !done(t));
-  const pct = 44; // Figma: profile % (backend se aayega)
+  const items = (c.req?.items || []).map((it) => ({ key: it.key || it.label, label: it.label, href: HREF[it.section] || "/creater/profile", done: !!it.done }));
+  const left = items.filter((t) => !t.done);
+  const pct = c.req ? c.req.pct : 0;
 
   return (
     <BountyShell>
@@ -60,8 +63,8 @@ export default function FinishProfile() {
             ) : (
               <span className="fp-box is-ok">✓ Instagram connected (media kit)</span>
             )}
-            <span className="fp-box is-ok">✓ WhatsApp connected</span>
-            <span className="fp-box fp-box--opt">○ Profile complete (optional)</span>
+            <span className={`fp-box ${waOk ? "is-ok" : "fp-box--todo"}`}>{waOk ? "✓ WhatsApp connected" : "○ WhatsApp — connect"}</span>
+            <span className={`fp-box ${c.req?.complete ? "is-ok" : "fp-box--opt"}`}>{c.req?.complete ? "✓ Profile complete" : "○ Profile complete (optional)"}</span>
           </div>
           <p className="fp-note">
             {locked
@@ -72,10 +75,10 @@ export default function FinishProfile() {
 
         <h2 className="fp-sub">{left.length} things left to finish</h2>
         <ul className="fp-list">
-          {TODO.map((t) => (
-            <li key={t.label}>
-              <Link href={t.href} className={done(t) ? "is-done" : ""}>
-                {done(t) ? "✓" : "○"} {t.label} ›
+          {items.map((t) => (
+            <li key={t.key}>
+              <Link href={t.href} className={t.done ? "is-done" : ""}>
+                {t.done ? "✓" : "○"} {t.label} ›
               </Link>
             </li>
           ))}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
+import { sendOtp, invitePreview } from "@/services/creator";
 
 /** /creater/login — WhatsApp number (step 1). Code bhejne par → /creater/verify */
 export default function CreaterLogin() {
@@ -11,6 +12,8 @@ export default function CreaterLogin() {
   const [phone, setPhone] = useState("");
   const [alerts, setAlerts] = useState(false);
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [invite, setInvite] = useState(null); // campaign invite (?cinv=) — kis brand ne bulaya
 
   // Verify se "Change number" par wapas aaye to number bhara rahe
   useEffect(() => {
@@ -21,26 +24,32 @@ export default function CreaterLogin() {
     } catch {
       /* ignore */
     }
+    invitePreview().then((d) => d && setInvite(d)).catch(() => {});
   }, []);
 
-  const sendCode = (e) => {
+  // WhatsApp par OTP bhejo (wa-otp-start) → code wala step
+  const sendCode = async (e) => {
     e.preventDefault();
+    if (busy) return;
     if (!/^[6-9]\d{9}$/.test(phone)) {
       setErr("Enter a valid 10-digit WhatsApp number.");
       return;
     }
+    setBusy(true);
     try {
-      window.sessionStorage.setItem("bounty_login", JSON.stringify({ phone, alerts }));
-    } catch {
-      /* ignore */
+      await sendOtp(phone);
+      window.sessionStorage.setItem("bounty_login", JSON.stringify({ phone, alerts, at: Date.now() }));
+      router.push("/creater/verify");
+    } catch (ex) {
+      setErr("Couldn't send the code: " + (ex.message || ex));
+      setBusy(false);
     }
-    router.push("/creater/verify");
   };
 
   return (
     <>
       <title>Sign in — Bounty</title>
-      <OnboardShell tone="dark" step={1}>
+      <OnboardShell tone="dark" step={1} gate="guest">
         <form className="si" onSubmit={sendCode}>
           <h2 className="si-h">
             Hey, creator. 👋
@@ -48,6 +57,17 @@ export default function CreaterLogin() {
             Let&apos;s get you in.
           </h2>
           <p className="si-sub">Enter your WhatsApp number to discover collaborations made for you.</p>
+          {invite && (
+            <p className="si-note si-invite">
+              <span aria-hidden="true">🎯</span>
+              <span>
+                {invite.first_name ? `Hi ${invite.first_name} — ` : ""}
+                <b>{invite.brand || "A brand"}</b> invited you to <b>{invite.campaign || "a campaign"}</b>
+                {invite.product ? ` (you get: ${invite.product})` : ""}. Continue with WhatsApp
+                {invite.phone_hint ? ` using your number ending ${String(invite.phone_hint).replace(/•/g, "")}` : ""} — it opens right after sign-up.
+              </span>
+            </p>
+          )}
           <label className="si-label" htmlFor="si-phone">
             WhatsApp number
           </label>
@@ -72,8 +92,8 @@ export default function CreaterLogin() {
             <span aria-hidden="true">🔒</span>
           <span>Only for sign-in and important campaign updates. No spam.</span>
           </p>
-          <button type="submit" className="bx-btn bx-btn--cream bx-btn--lg bx-btn--block si-cta">
-            Send verification code →
+          <button type="submit" className="bx-btn bx-btn--cream bx-btn--lg bx-btn--block si-cta" disabled={busy}>
+            {busy ? "Sending code…" : "Send verification code →"}
           </button>
           <Link href="/creater/explore" className="si-link si-link--c">
             I&apos;ll explore first
@@ -107,6 +127,7 @@ export default function CreaterLogin() {
         .si-check input:checked { background: #e8b04a; border-color: #e8b04a; }
         .si-check input:checked::after { content: "✓"; color: #14231a; font-size: 14px; font-weight: 800; line-height: 1; }
         /* OTP */
+        .si-invite { margin: 0 0 14px; }
         .si-h--one { margin-top: 0; }
         .si-num { display: flex; align-items: center; justify-content: center; gap: 11px; flex-wrap: wrap; margin: 20px 0 0; font-size: 15px; font-weight: 500; line-height: 19px; color: rgba(251,243,226,.95); }
         .si-num a, .si-num button { border: 0; background: none; padding: 0; color: #f6d98b; font-weight: 700; }

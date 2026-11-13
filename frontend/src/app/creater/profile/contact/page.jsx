@@ -3,13 +3,167 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
-import { CREATOR } from "@/components/creater/data";
+import { useSession, errText, reloadProfile, loadCreator, getNotifyPrefs, startWaLink, verifyWaLink, startEmailOtp, verifyEmailOtp } from "@/services/creator";
 import { Check } from "@/components/ui/Icons";
 
-/** /creater/profile/contact — WhatsApp (verified) + backup email (6-digit code se verify) */
+/** 6 dabbe wala code input (WhatsApp + email dono mein) */
+function CodeBoxes({ code, setCode, boxes, label = "Digit" }) {
+  const typeDigit = (i, v) => {
+    const raw = v.replace(/\D/g, "");
+    const next = [...code];
+    if (raw.length > 1) {
+      // paste kiya — saare dabbe bhar do
+      raw.slice(0, 6).split("").forEach((d, k) => (next[k] = d));
+      setCode(next);
+      boxes.current[Math.min(raw.length, 6) - 1]?.focus();
+      return;
+    }
+    next[i] = raw;
+    setCode(next);
+    if (raw && i < 5) boxes.current[i + 1]?.focus();
+  };
+  return (
+    <div className="ct-boxes">
+      {code.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => (boxes.current[i] = el)}
+          inputMode="numeric"
+          maxLength={6}
+          value={d}
+          aria-label={`${label} ${i + 1}`}
+          onChange={(e) => typeDigit(i, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Backspace" && !d && i > 0) boxes.current[i - 1]?.focus();
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const EMPTY6 = ["", "", "", "", "", ""];
+
+/**
+ * WhatsApp link (purane whatsapp.js ka "link" mode): wa-otp-start → 6 digit code → wa-otp-verify { link: true }
+ * Server number ko ISI account se jodta hai (naya login nahi banta). Linked hai ya nahi → my_notify_prefs.whatsapp_linked
+ */
+function WhatsAppLink({ phone }) {
+  const [linked, setLinked] = useState(null); // null = pata kar rahe
+  const [num, setNum] = useState("");
+  const [step, setStep] = useState("view"); // view | enter | code
+  const [code, setCode] = useState(EMPTY6);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const boxes = useRef([]);
+  const sentTo = useRef("");
+
+  const check = async () => {
+    const r = await getNotifyPrefs();
+    setLinked(!!(r.data && r.data.whatsapp_linked));
+  };
+  useEffect(() => {
+    check();
+  }, []);
+
+  const digits = num.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+  const start = async () => {
+    if (!/^[6-9]\d{9}$/.test(digits)) return setErr("Enter your 10-digit WhatsApp number.");
+    setErr("");
+    setBusy(true);
+    sentTo.current = "+91" + digits;
+    const r = await startWaLink(sentTo.current);
+    setBusy(false);
+    if (r.error) return setErr("Couldn't send: " + errText(r.error));
+    setCode(EMPTY6);
+    setStep("code");
+    setTimeout(() => boxes.current[0]?.focus(), 30);
+  };
+  const verify = async () => {
+    const c = code.join("");
+    if (c.length < 6) return setErr("Enter the 6-digit code.");
+    setErr("");
+    setBusy(true);
+    const r = await verifyWaLink(sentTo.current, c);
+    setBusy(false);
+    if (r.error) return setErr("Couldn't verify: " + errText(r.error));
+    await loadCreator({ force: true }); // lock (join needs) bhi khul jaye
+    await check();
+    setStep("view");
+  };
+
+  const shown = phone || (sentTo.current && linked ? sentTo.current : "");
+  return (
+    <div>
+      <label className="pf-label" htmlFor="ct-wa">
+        WhatsApp number <small>Private</small>
+      </label>
+      {step === "view" ? (
+        <>
+          <div className="ct-row">
+            <input id="ct-wa" className="pf-input" value={shown} placeholder={linked === false ? "Not linked yet" : ""} readOnly aria-readonly="true" />
+            {linked ? (
+              <span className="bx-tag bx-tag--green ct-ver">✓ Verified</span>
+            ) : linked === false ? (
+              <button type="button" className="pf-btn" onClick={() => { setNum((phone || "").replace(/\D/g, "").slice(-10)); setStep("enter"); }}>
+                Link WhatsApp
+              </button>
+            ) : null}
+          </div>
+          <p className="pf-hint">{linked ? "Campaign alerts come to this WhatsApp." : linked === false ? "Link WhatsApp to get campaign alerts and unlock applying." : "Checking…"}</p>
+          {linked && (
+            <button type="button" className="ct-change" onClick={() => { setNum(""); setStep("enter"); }}>
+              Change number
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="ct-row">
+            <input
+              id="ct-wa"
+              className="pf-input"
+              inputMode="tel"
+              placeholder="98123 45678"
+              value={num}
+              disabled={step === "code"}
+              onChange={(e) => setNum(e.target.value)}
+            />
+            <button type="button" className="pf-btn" onClick={start} disabled={step === "code" || busy}>
+              {busy && step !== "code" ? "Sending…" : "Send code"}
+            </button>
+          </div>
+          <p className="pf-hint">We'll send a 6-digit code to your WhatsApp.</p>
+          {step === "code" && (
+            <div className="ct-code">
+              <p>
+                Code sent to <b>{sentTo.current}</b> on WhatsApp
+              </p>
+              <CodeBoxes code={code} setCode={setCode} boxes={boxes} />
+              <div className="ct-code__btns">
+                <button type="button" className="pf-btn" onClick={verify} disabled={busy}>
+                  {busy ? "Checking…" : "Verify & link"}
+                </button>
+                <button type="button" className="ct-change" onClick={start} disabled={busy}>
+                  Resend
+                </button>
+                <button type="button" className="ct-change" onClick={() => { setStep("view"); setErr(""); }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {err && <p className="bx-err">{err}</p>}
+    </div>
+  );
+}
+
+/** /creater/profile/contact — WhatsApp (link / verified) + backup email (6-digit code se verify) */
 export default function Contact() {
-  const [s, update] = useSession();
+  const [s] = useSession();
+  const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [step, setStep] = useState("enter"); // enter | code | done
   const [code, setCode] = useState(["", "", "", "", "", ""]);
@@ -25,32 +179,37 @@ export default function Contact() {
 
   const okEmail = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email.trim());
 
-  const sendCode = () => {
+  // email-otp edge function (purane profile.js jaisa): start → code → verify (server tabhi save karta hai)
+  const sendCode = async () => {
     if (!okEmail) {
       setErr("Enter a valid email, like you@gmail.com");
       return;
     }
+    if (s.backupEmail && email.trim().toLowerCase() === s.backupEmail.toLowerCase()) {
+      setErr("This email is already verified.");
+      return;
+    }
     setErr("");
+    setBusy(true);
+    const r = await startEmailOtp(email.trim().toLowerCase());
+    setBusy(false);
+    if (r.error) return setErr(r.error.message);
     setCode(["", "", "", "", "", ""]);
     setStep("code");
     setTimeout(() => boxes.current[0]?.focus(), 30);
   };
 
-  const typeDigit = (i, v) => {
-    const d = v.replace(/\D/g, "").slice(-1);
-    const next = [...code];
-    next[i] = d;
-    setCode(next);
-    if (d && i < 5) boxes.current[i + 1]?.focus();
-  };
-
-  const verify = () => {
+  const verify = async () => {
     if (code.join("").length < 6) {
       setErr("Enter all 6 digits.");
       return;
     }
     setErr("");
-    update({ backupEmail: email.trim() });
+    setBusy(true);
+    const r = await verifyEmailOtp(code.join(""));
+    setBusy(false);
+    if (r.error) return setErr(r.error.message);
+    await reloadProfile();
     setStep("done");
   };
 
@@ -64,16 +223,7 @@ export default function Contact() {
       <section className="pf-card ct">
         <h1 className="pf-h">Contact</h1>
         <div className="ct-grid">
-          <div>
-            <label className="pf-label">
-              WhatsApp number <small>Private</small>
-            </label>
-            <div className="ct-row">
-              <input className="pf-input" value={CREATOR.phone.replace(/\s/g, "")} readOnly aria-readonly="true" />
-              <span className="bx-tag bx-tag--green ct-ver">✓ Verified</span>
-            </div>
-            <p className="pf-hint">Verified with your WhatsApp login OTP.</p>
-          </div>
+          <WhatsAppLink phone={s.phone} />
 
           <div>
             <label className="pf-label" htmlFor="ct-mail">
@@ -101,8 +251,8 @@ export default function Contact() {
                     disabled={step === "code"}
                     onChange={(e) => setEmail(e.target.value)}
                   />
-                  <button type="button" className="pf-btn" onClick={sendCode} disabled={step === "code"}>
-                    Verify
+                  <button type="button" className="pf-btn" onClick={sendCode} disabled={step === "code" || busy}>
+                    {busy && step !== "code" ? "Sending…" : "Verify"}
                   </button>
                 </div>
                 <p className="pf-hint">We'll email you a 6-digit code to confirm.</p>
@@ -114,25 +264,10 @@ export default function Contact() {
                 <p>
                   Code sent to <b>{email}</b>
                 </p>
-                <div className="ct-boxes">
-                  {code.map((d, i) => (
-                    <input
-                      key={i}
-                      ref={(el) => (boxes.current[i] = el)}
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={d}
-                      aria-label={`Digit ${i + 1}`}
-                      onChange={(e) => typeDigit(i, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Backspace" && !d && i > 0) boxes.current[i - 1]?.focus();
-                      }}
-                    />
-                  ))}
-                </div>
+                <CodeBoxes code={code} setCode={setCode} boxes={boxes} />
                 <div className="ct-code__btns">
-                  <button type="button" className="pf-btn" onClick={verify}>
-                    Confirm code
+                  <button type="button" className="pf-btn" onClick={verify} disabled={busy}>
+                    {busy ? "Checking…" : "Confirm code"}
                   </button>
                   <button type="button" className="ct-change" onClick={() => setStep("enter")}>
                     Change email

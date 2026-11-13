@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import Logo from "@/components/creater/Logo";
 import GuestNav from "@/components/creater/GuestNav";
 import CampaignCard from "@/components/creater/CampaignCard";
 import { VideoModal, RumiTip } from "@/components/creater/OnboardShell";
-import { CAMPAIGNS } from "@/components/creater/data";
+import { useOpenCampaigns, useCovers, campaignCard, kindOf } from "@/services/creator";
 import { ChevronDown } from "@/components/ui/Icons";
 
 const FILTERS = [
@@ -17,14 +17,20 @@ const FILTERS = [
 ];
 const FIRST = 6;
 
-/** /creater/explore — bina login ke campaigns dekho (guest) */
+/** /creater/explore — bina login ke campaigns dekho (guest) — public.explore_campaigns (purana explore.html) */
 export default function GuestExplore() {
   const [filter, setFilter] = useState("all");
   const [shown, setShown] = useState(FIRST);
   const [video, setVideo] = useState(false);
   const [tip, setTip] = useState(true);
 
-  const list = CAMPAIGNS.filter((c) => filter === "all" || c.type === filter);
+  const covers = useCovers();
+  const { loading, list: rows, error, reload } = useOpenCampaigns({ publicList: true });
+  // guest filter: exact type (purane bounty-welcome jaisa) — hybrid = barter_paid
+  const list = useMemo(
+    () => rows.filter((x) => filter === "all" || kindOf(x) === (filter === "hybrid" ? "barter_paid" : filter)).map((x) => campaignCard(x, covers)),
+    [rows, filter, covers]
+  );
 
   return (
     <div className="gx">
@@ -69,8 +75,17 @@ export default function GuestExplore() {
           ))}
         </div>
 
-        {list.length === 0 ? (
-          <p className="gx-empty">No campaigns in this filter right now — check back soon.</p>
+        {loading ? (
+          <p className="gx-empty">Loading campaigns…</p>
+        ) : error ? (
+          <p className="gx-empty">
+            Couldn&apos;t load campaigns right now —{" "}
+            <button type="button" className="gx-retry" onClick={() => reload()}>
+              try again
+            </button>
+          </p>
+        ) : list.length === 0 ? (
+          <p className="gx-empty">{rows.length ? "Nothing here right now — try another filter." : "No campaigns are open right now. New ones are added often — check back soon."}</p>
         ) : (
           <div className="gx-grid">
             {list.slice(0, shown).map((c) => (
@@ -116,6 +131,7 @@ export default function GuestExplore() {
         .gx-filters::-webkit-scrollbar { display: none; }
         .gx-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
         .gx-empty { text-align: center; padding: 30px; font-size: 14px; color: var(--bx-text); }
+        .gx-retry { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; color: inherit; cursor: pointer; }
         .gx-more { display: flex; justify-content: center; margin-top: 20px; }
         .gx-rumi { justify-content: center; margin-top: 24px; }
 

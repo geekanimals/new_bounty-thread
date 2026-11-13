@@ -9,19 +9,20 @@ import { TargetFields, MessagePreview, UploadBar, UploadedCreators, cuLoad, cuSa
 /* Creator upload — step 1: brand / campaign chuno, message dekho, sheet do (Figma 071) */
 export default function CreatorUpload() {
   const router = useRouter();
-  const [brand, setBrand] = useState("Olio Pizza");
-  const [camp, setCamp] = useState("Mysore Pizzeria Launch");
+  const [brand, setBrand] = useState("");
+  const [camp, setCamp] = useState("");
 
   useEffect(() => {
     const s = cuLoad();
-    if (s?.brand) {
-      setBrand(s.brand);
-      setCamp(s.camp);
+    if (s) {
+      setBrand(s.brand || "");
+      setCamp(s.camp || "");
     }
   }, []);
 
-  const load = (file) => {
-    cuSave({ brand, camp, file });
+  // sheet padh li → step 2 (columns milao)
+  const load = (sheet) => {
+    cuSave({ brand, camp, sheet, send: true });
     router.push("/admin/creator-upload/match");
   };
 
@@ -39,7 +40,7 @@ export default function CreatorUpload() {
         <MessagePreview brand={brand} camp={camp} />
         <UploadBar onLoad={load} />
       </section>
-      <UploadedCreators />
+      <UploadedCreators brand={brand} />
       <style>{`
         .cu1-card { padding: 25px 22px 21px; }
         .cu1-intro { margin-top: 20px; font-size: 12px; line-height: 1.55; color: var(--ad-muted); }

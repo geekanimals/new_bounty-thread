@@ -4,27 +4,76 @@ import { useState } from "react";
 import Link from "next/link";
 import BrandShell from "@/components/brands/BrandShell";
 import DiscoveryTabs from "@/components/brands/DiscoveryTabs";
-import { MATCHES, getCreator } from "@/components/brands/data";
+import { BrAvatar, useToast } from "@/components/brands/BrandStates";
+import { useBrand, brandView, canAct, getDiscoverBrief, briefToFilters, searchAll, pickCreator, short as fmt, igUrl } from "@/services/brand";
 import { Sparkle, Check, Star, Plus, ChevronDown, Refresh } from "@/components/ui/Icons";
 
-const SAVED_REQUEST =
-  "Wedding-guest makeup looks for women 25–34 in metros. 1 Reel + 2 Stories. Budget around ₹6L for 30 creators. Warm, natural style — no heavy filters.";
+// purane CS_CATS / CS_CITIES ka chhota hissa — text mein se filters pakadne ke liye
+const CATS = ["Lifestyle", "Fashion", "Beauty", "Food", "Travel", "Fitness", "Health", "Tech", "Comedy", "Parenting", "Gaming", "Finance", "Education", "Music", "Dance", "Art", "Photography", "Sports", "Pets", "Home decor", "Auto"];
+const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Bangalore", "Hyderabad", "Pune", "Ahmedabad", "Jaipur", "Chennai", "Kolkata", "Lucknow", "Chandigarh", "Indore", "Surat", "Goa"];
+const kNum = (v, u) => Number(v) * (/m/i.test(u || "") ? 1e6 : /l/i.test(u || "") ? 1e5 : /k/i.test(u || "") ? 1e3 : 1);
 
-// Text se chhote tags nikaalna (dummy "AI" parsing)
-const parseTags = (t) => {
-  const s = t.toLowerCase();
+// Text se filters + tags (purane dxBrief form + csSmartApply ka chhota roop — koi AI nahi)
+const parseText = (t) => {
+  const s = String(t || "").toLowerCase();
+  const f = {};
   const tags = [];
   const age = t.match(/(\d{2})\s*[–-]\s*(\d{2})/);
-  if (/women/.test(s)) tags.push(age ? `Women ${age[1]}–${age[2]}` : "Women");
-  else if (/\bmen\b/.test(s)) tags.push(age ? `Men ${age[1]}–${age[2]}` : "Men");
-  if (/metro/.test(s)) tags.push("Metros");
-  else if (/tier\s*2/.test(s)) tags.push("Tier 2");
-  const niche = ["makeup", "bridal", "skincare", "fashion", "grooming"].filter((n) => s.includes(n) || (n === "bridal" && s.includes("wedding")));
-  if (niche.length) tags.push(niche.map((n) => n[0].toUpperCase() + n.slice(1)).join(" · "));
-  const budget = t.match(/₹\s?(\d+(?:\.\d+)?)\s?L/i);
-  const count = t.match(/(\d+)\s+creators/i);
-  if (budget && count) tags.push(`~₹${Math.round((parseFloat(budget[1]) * 100) / parseInt(count[1], 10))}K / creator`);
-  return tags;
+  if (/women|female|girls|moms?\b/.test(s)) {
+    f.gender = "female";
+    f.gender_soft = "yes";
+    tags.push(age ? `Women ${age[1]}–${age[2]}` : "Women");
+  } else if (/\bmen\b|male|boys|dads?\b/.test(s)) {
+    f.gender = "male";
+    f.gender_soft = "yes";
+    tags.push(age ? `Men ${age[1]}–${age[2]}` : "Men");
+  }
+  if (age) {
+    f.min_age = age[1];
+    f.max_age = age[2];
+  }
+  const city = CITIES.find((c) => s.includes(c.toLowerCase()));
+  if (city) {
+    f.location = city === "Bangalore" ? "Bengaluru" : city;
+    tags.push(f.location);
+  }
+  const cats = CATS.filter((c) => s.includes(c.toLowerCase()) || (c === "Beauty" && /makeup|skincare|bridal/.test(s)) || (c === "Pets" && /\bdogs?\b|\bcats?\b|\bpets?\b/.test(s)));
+  if (cats.length) {
+    f.categories = cats.slice(0, 3);
+    tags.push(f.categories.join(" · "));
+  }
+  const fr = t.match(/(\d+(?:\.\d+)?)\s*([kml])?\s*[–-]\s*(\d+(?:\.\d+)?)\s*([kml])\s*followers/i);
+  if (fr) {
+    f.min_followers = kNum(fr[1], fr[2] || fr[4]);
+    f.max_followers = kNum(fr[3], fr[4]);
+    tags.push(`${fmt(f.min_followers)}–${fmt(f.max_followers)} followers`);
+  }
+  const er = t.match(/(\d(?:\.\d)?)\s*%\s*(?:\+|plus)?\s*eng/i);
+  if (er) {
+    f.min_engagement = er[1];
+    tags.push(`${er[1]}%+ engagement`);
+  }
+  return { f, tags };
+};
+
+// creator kitna fit hai — jitni maangi cheezein match hui (score ring + reasons)
+const fit = (c, f) => {
+  const checks = [];
+  if (f.location) checks.push([String(c.city || "").toLowerCase().includes(String(f.location).toLowerCase()), `Based in ${c.city || f.location}`]);
+  if ((f.categories || []).length) {
+    const hit = (c.categories || []).find((x) => f.categories.some((k) => String(x).toLowerCase() === String(k).toLowerCase()));
+    checks.push([!!hit, hit ? `${hit} creator` : "Category"]);
+  }
+  if (f.min_followers || f.max_followers)
+    checks.push([(!f.min_followers || c.followers >= f.min_followers) && (!f.max_followers || c.followers <= f.max_followers), `${fmt(c.followers)} followers`]);
+  if (f.min_engagement) checks.push([Number(c.engagement) >= Number(f.min_engagement), `${Math.round(Number(c.engagement) * 10) / 10}% engagement`]);
+  const ok = checks.filter((x) => x[0]);
+  const eng = Math.min(1, (Number(c.engagement) || 0) / 6);
+  const score = Math.round(checks.length ? 55 + 35 * (ok.length / checks.length) + 10 * eng : 50 + 45 * eng);
+  const reasons = ok.map((x) => x[1]);
+  if (!reasons.length && c.engagement != null) reasons.push(`${Math.round(Number(c.engagement) * 10) / 10}% engagement`);
+  if (c.kind === "platform") reasons.push("On Geek OS");
+  return { score: Math.min(99, score), reasons: reasons.slice(0, 3) };
 };
 
 /* Score ka gol ring */
@@ -54,22 +103,96 @@ function Ring({ score }) {
   );
 }
 
-/** /brands/discovery/campaign — campaign likho, Geek best-fit creators rank karta hai */
+/**
+ * /brands/discovery/campaign — purana "🎯 Creators for a campaign" (dxBrief):
+ *  "Use a saved request" → aapke campaigns ka api.brand_discover_brief (ideal creator) text + filters mein;
+ *  Find matches → api.creator_search (wahi filters), fit score; Shortlist → api.brand_discover_pick (campaign ke saath).
+ */
 export default function DiscoveryForCampaign() {
-  const [text, setText] = useState(SAVED_REQUEST);
-  const [state, setState] = useState("done"); // idle | loading | done
-  const [stars, setStars] = useState(["aisha-khan"]);
+  const b = useBrand();
+  const v = brandView(b);
+  const act = canAct(b);
+  const [toast, say] = useToast();
+  const camps = v.campaigns.filter((c) => !/completed|cancel/i.test(c.status || ""));
+  const [text, setText] = useState("");
+  const [camp, setCamp] = useState(null); // { id, name, product, filters }
+  const [ci, setCi] = useState(0);
+  const [state, setState] = useState("idle"); // idle | loading | done
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [err, setErr] = useState("");
+  const [stars, setStars] = useState([]);
   const [short, setShort] = useState([]);
+  const [busy, setBusy] = useState("");
   const [shown, setShown] = useState(5);
-  const tags = parseTags(text);
+  const parsed = parseText(text);
+  const tags = [...(camp ? [camp.name] : []), ...parsed.tags];
 
-  const find = () => {
-    if (!text.trim()) return;
-    setState("loading");
-    setShown(5);
-    setTimeout(() => setState("done"), 900);
+  // "Use a saved request" — agla campaign ka brief (purana f.camp.onchange → fill)
+  const useSaved = async () => {
+    if (!camps.length) return say("No active campaign yet — describe your idea instead.");
+    const c = camps[ci % camps.length];
+    setCi(ci + 1);
+    const r = await getDiscoverBrief(c.campaign_id);
+    if (r.error) return say(r.error.message);
+    const d = r.data || {};
+    const f = briefToFilters(d);
+    const ip = d.ideal || {};
+    setCamp({ id: c.campaign_id, name: c.name, product: d.product || c.product || "", filters: f });
+    setText(
+      [
+        d.product ? `Promoting ${d.product}.` : "",
+        f.categories.length ? `${f.categories.join(", ")} creators` : "",
+        f.location ? `in ${f.location}` : "",
+        f.gender ? `(${f.gender === "female" ? "women" : "men"}${f.min_age ? ` ${f.min_age}–${f.max_age || ""}` : ""})` : "",
+        f.min_followers || f.max_followers ? `${fmt(f.min_followers || 0)}–${f.max_followers ? fmt(f.max_followers) : "any"} followers` : "",
+        f.min_engagement ? `${f.min_engagement}% engagement` : "",
+        ip.pet === "yes" ? `Must have a ${ip.pet_type || "pet"}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    say(`Loaded the brief for ${c.name}`);
   };
-  const toggle = (arr, id) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
+
+  const filters = () => ({ ...(camp ? camp.filters : {}), ...parsed.f, sort: "engagement_desc" });
+  const find = async () => {
+    if (!text.trim() && !camp) return;
+    setState("loading");
+    setErr("");
+    setShown(5);
+    const f = filters();
+    const r = await searchAll(f, 1);
+    if (r.error) {
+      setErr(r.error.message || String(r.error));
+      return setState("idle");
+    }
+    const ranked = r.data.rows.map((c) => ({ ...c, ...fit(c, f) })).sort((a, c) => c.score - a.score);
+    setRows(ranked);
+    setTotal(r.data.total);
+    setState("done");
+  };
+  // Shortlist (purana brandPick → brand_discover_pick, campaign ke saath)
+  const pick = async (c, quiet = false) => {
+    if (!act) return say("View-only login — ask your team's admin to shortlist creators.");
+    if (short.includes(c.handle)) return true;
+    setBusy(c.handle);
+    const r = await pickCreator(c, { campaignId: camp ? camp.id : null, note: camp && camp.product ? "For: " + camp.product : "" });
+    setBusy("");
+    if (r.error) {
+      say(r.error.message);
+      return false;
+    }
+    setShort((s) => [...s, c.handle]);
+    setStars((s) => [...s, c.handle]);
+    if (!quiet) say(`@${c.handle} shortlisted — the Geek team will take it from here`);
+    return true;
+  };
+  const pickTop = async () => {
+    let n = 0;
+    for (const c of rows.slice(0, 10)) if (await pick(c, true)) n++;
+    say(`${n} creator${n === 1 ? "" : "s"} shortlisted`);
+  };
 
   return (
     <BrandShell>
@@ -103,10 +226,10 @@ export default function DiscoveryForCampaign() {
             {!tags.length && <span className="dc-hint">Mention audience, city, niche and budget for better matches</span>}
           </div>
           <div className="dc-brief__btns">
-            <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={() => setText(SAVED_REQUEST)}>
+            <button type="button" className="br-btn br-btn--ghost br-btn--sm" onClick={useSaved}>
               Use a saved request
             </button>
-            <button type="button" className="br-btn br-btn--primary br-btn--sm" onClick={find} disabled={!text.trim() || state === "loading"}>
+            <button type="button" className="br-btn br-btn--primary br-btn--sm" onClick={find} disabled={(!text.trim() && !camp) || state === "loading"}>
               {state === "loading" ? <Refresh size={13} /> : <Sparkle size={13} />}
               {state === "loading" ? "Finding…" : "Find matches"}
             </button>
@@ -122,39 +245,45 @@ export default function DiscoveryForCampaign() {
         </div>
       )}
 
+      {err && <p className="dc-err">{err}</p>}
+
       {state === "done" && (
         <>
           <div className="dc-reshead">
-            <h2>38 strong matches</h2>
-            <button
-              type="button"
-              className="br-btn br-btn--soft br-btn--sm"
-              onClick={() => setShort(Array.from(new Set([...short, ...MATCHES.slice(0, 10).map((m) => m.id)])))}
-            >
-              {MATCHES.every((m) => short.includes(m.id)) ? "Top 10 shortlisted" : "Shortlist top 10"}
-            </button>
+            <h2>
+              {fmt(total)} match{total === 1 ? "" : "es"}
+              {camp ? ` for ${camp.name}` : ""}
+            </h2>
+            {act && rows.length > 0 && (
+              <button type="button" className="br-btn br-btn--soft br-btn--sm" onClick={pickTop} disabled={!!busy}>
+                {rows.slice(0, 10).every((m) => short.includes(m.handle)) ? "Top 10 shortlisted" : "Shortlist top 10"}
+              </button>
+            )}
           </div>
+          {!rows.length && <p className="dc-err">No creators match yet — try fewer details (e.g. just a city and a category).</p>}
 
           <ul className="dc-list">
-            {MATCHES.slice(0, shown).map((m) => {
-              const c = getCreator(m.id);
-              const sl = short.includes(m.id);
-              const st = stars.includes(m.id);
+            {rows.slice(0, shown).map((c) => {
+              const sl = short.includes(c.handle);
+              const st = stars.includes(c.handle);
+              const name = c.name || c.display_name || c.handle;
               return (
-                <li key={m.id} className="br-card dc-row">
-                  <Ring score={m.score} />
-                  <span className="br-av br-av--lg" style={{ background: c.av }}>
-                    {c.initials}
-                  </span>
+                <li key={(c.kind || "") + c.handle} className="br-card dc-row">
+                  <Ring score={c.score} />
+                  <BrAvatar name={name} src={c.profile_picture_url} cls="br-av--lg" />
                   <div className="dc-row__body">
                     <p className="dc-row__name">
-                      <Link href={`/brands/creators/${c.id}`}>{c.name}</Link>
+                      <a href={igUrl(c.handle)} target="_blank" rel="noreferrer">
+                        {name}
+                      </a>
                       <small>
-                        {c.handle} · {c.followers} · {c.city}
+                        @{c.handle}
+                        {c.followers != null ? ` · ${fmt(c.followers)}` : ""}
+                        {c.city ? ` · ${c.city}` : ""}
                       </small>
                     </p>
                     <p className="dc-row__why">
-                      {m.reasons.map((r) => (
+                      {c.reasons.map((r) => (
                         <span key={r}>
                           <Check size={12} /> {r}
                         </span>
@@ -162,14 +291,16 @@ export default function DiscoveryForCampaign() {
                     </p>
                   </div>
                   <div className="dc-row__end">
-                    <strong>{c.fee}</strong>
-                    <button type="button" className={`dc-star ${st ? "is-on" : ""}`} aria-label="Save creator" onClick={() => setStars(toggle(stars, m.id))}>
+                    <strong>{c.engagement != null ? `${Math.round(Number(c.engagement) * 10) / 10}%` : "—"}</strong>
+                    <button type="button" className={`dc-star ${st ? "is-on" : ""}`} aria-label="Save creator" title="Shortlisted creators also go to Saved creators" onClick={() => pick(c)} disabled={busy === c.handle}>
                       <Star size={14} />
                     </button>
-                    <button type="button" className={`br-btn br-btn--sm ${sl ? "br-btn--dark" : "br-btn--primary"} dc-sl`} onClick={() => setShort(toggle(short, m.id))}>
-                      {sl ? <Check size={13} /> : <Plus size={13} />}
-                      {sl ? "Shortlisted" : "Shortlist"}
-                    </button>
+                    {act && (
+                      <button type="button" className={`br-btn br-btn--sm ${sl ? "br-btn--dark" : "br-btn--primary"} dc-sl`} onClick={() => pick(c)} disabled={busy === c.handle}>
+                        {sl ? <Check size={13} /> : <Plus size={13} />}
+                        {sl ? "Shortlisted" : "Shortlist"}
+                      </button>
+                    )}
                   </div>
                 </li>
               );
@@ -177,7 +308,7 @@ export default function DiscoveryForCampaign() {
           </ul>
 
           <div className="br-more">
-            {shown < MATCHES.length ? (
+            {shown < rows.length ? (
               <button type="button" className="br-btn br-btn--ghost" onClick={() => setShown(shown + 5)}>
                 Load more <ChevronDown size={14} />
               </button>
@@ -190,7 +321,10 @@ export default function DiscoveryForCampaign() {
         </>
       )}
 
+      {toast}
+
       <style>{`
+        .dc-err { margin: 14px 0 0; font-size: 13px; color: var(--br-muted); }
         .dc-brief { padding: 20px; background: linear-gradient(180deg, #fff 0%, #faf8ff 100%); }
         .dc-brief__head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
         .dc-brief__ic { width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; background: linear-gradient(135deg,#7c5cff,#c084fc); color: #fff; display: grid; place-items: center; }

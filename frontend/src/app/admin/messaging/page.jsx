@@ -1,38 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { Stats } from "@/components/admin/ui";
 import MsgHead from "@/components/admin/msg/MsgHead";
 import PTable from "@/components/admin/brand/PTable";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { fmtWhen, fmtDateTime, useToast } from "@/components/admin/brand/util";
 
-const ROWS = [
-  { to: "Nisha Rao", ch: "WhatsApp", msg: "Campaign update · approved", st: "Delivered", when: "4:47 pm" },
-  { to: "Kabir Mehta", ch: "Email", msg: "Contract ready to sign", st: "Sent", when: "4:30 pm" },
-  { to: "Ananya Iyer", ch: "WhatsApp", msg: "Product shipped · tracking", st: "Held", when: "3:12 pm" },
-  { to: "Rohan Das", ch: "WhatsApp", msg: "Login code", st: "Delivered", when: "2:55 pm" },
-  { to: "Ritika Sen", ch: "Email", msg: "Reminder · submit draft", st: "Failed", when: "1:20 pm" },
-];
-const TONE = { Delivered: "green", Sent: "green", Held: "orange", Failed: "red", Retrying: "violet" };
+/* outbox status → Figma badge (purane app ke "waiting" rule ke saath) */
+const isWait = (r) => r.status === "skipped" && /^(Waiting for WhatsApp template approval|WhatsApp 24h window closed)/i.test(r.error || "");
+const badge = (r) => {
+  if (isWait(r)) return ["Waiting", "orange"];
+  if (/^paused:/i.test(r.error || "") && r.status === "skipped") return ["Held", "orange"];
+  return { sent: ["Sent", "green"], queued: ["Queued", "violet"], sending: ["Sending", "violet"], failed: ["Failed", "red"], skipped: ["Skipped", ""] }[r.status] || [r.status || "—", ""];
+};
 
-/** /admin/messaging — Delivery (Figma 074) */
+/**
+ * /admin/messaging — Delivery (Figma 074). Purane app jaisa:
+ *  public.admin_delivery (har 20 sec) · switches: admin_messaging_switches + api.ops_auto_messages
+ *  "Retry failed" → public.admin_delivery_retry({ p_channel: null })
+ */
 export default function MessagingDelivery() {
-  const [rows, setRows] = useState(ROWS);
-  const [toast, setToast] = useState("");
+  const { data, error, loading, reload } = useRpc("admin", "admin_delivery", {}, { refreshMs: 20000 });
+  const sw = useRpc("admin", "admin_messaging_switches");
+  const au = useRpc("admin", "api.ops_auto_messages");
+  const [toast, say] = useToast();
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const d = data || {};
+  const st = d.stats || {};
+  const n = (k) => Number(st[k] || 0);
+  const recent = d.recent || [];
+  const waOff = sw.data && sw.data.wa_on === false;
+  const autoOff = au.data && au.data.auto_on === false;
+  const held = Number(sw.data?.held_wa) || 0;
 
-  const retry = () => {
-    const n = rows.filter((r) => r.st === "Failed").length;
-    if (!n) return setToast("No failed messages in the last 3 days");
-    setRows(rows.map((r) => (r.st === "Failed" ? { ...r, st: "Retrying" } : r)));
-    setToast(`Retrying ${n} failed message${n > 1 ? "s" : ""}`);
-    setTimeout(() => setRows((rs) => rs.map((r) => (r.st === "Retrying" ? { ...r, st: "Sent" } : r))), 1500);
+  const retry = async () => {
+    const r = await rpc("admin", "admin_delivery_retry", { p_channel: null });
+    if (r.error) return say(errText(r.error));
+    say(`${Number(r.data) || 0} message(s) re-queued`);
+    setTimeout(() => reload(true), 3000);
   };
 
   return (
@@ -40,19 +47,22 @@ export default function MessagingDelivery() {
       <MsgHead />
       <Stats
         items={[
-          { value: 80, label: "All messages", note: "Latest 80" },
-          { value: 42, label: "WhatsApp sent", note: "Last 7 days" },
-          { value: 124, label: "Emails sent", note: "Last 7 days" },
-          { value: 110, label: "Not sent", note: "Skipped / failed · 7 days", href: "/admin/messaging/doctor" },
-          { value: 0, label: "In queue", note: "Sending now" },
+          { value: loading ? "—" : recent.length, label: "All messages", note: `Latest ${recent.length}` },
+          { value: loading ? "—" : n("whatsapp:sent"), label: "WhatsApp sent", note: "Last 7 days" },
+          { value: loading ? "—" : n("email:sent"), label: "Emails sent", note: "Last 7 days" },
+          { value: loading ? "—" : n("whatsapp:skipped") + n("whatsapp:failed") + n("email:skipped") + n("email:failed"), label: "Not sent", note: "Skipped / failed · 7 days", href: "/admin/messaging/doctor" },
+          { value: loading ? "—" : n("whatsapp:queued") + n("email:queued") + n("whatsapp:sending") + n("email:sending"), label: "In queue", note: "Sending now" },
         ]}
       />
-      <p className="md-warn">
-        <span>⚠️</span>
-        <span>
-          <b>Automatic WhatsApp updates are off.</b>80 updates are held — turn on in <Link href="/admin/settings/auto-messages">Settings › Auto messages</Link> to send them.
-        </span>
-      </p>
+      {(waOff || autoOff) && (
+        <p className="md-warn">
+          <span>⚠️</span>
+          <span>
+            <b>Automatic {waOff ? "WhatsApp updates" : "messages"} are off.</b>
+            {held ? `${held} update${held === 1 ? " was" : "s were"} held in the last 7 days` : "Updates are held"} — turn on in <Link href="/admin/settings/auto-messages">Settings › Auto messages</Link> to send them.
+          </span>
+        </p>
+      )}
       <section className="ad-card md-card">
         <div className="md-head">
           <h2 className="ad-h2">All messages</h2>
@@ -60,6 +70,14 @@ export default function MessagingDelivery() {
             ↻ Retry failed (3 days)
           </button>
         </div>
+        {error ? (
+          <p className="md-state">
+            Couldn’t load: {errText(error)}{" "}
+            <button type="button" onClick={() => reload()}>
+              Retry
+            </button>
+          </p>
+        ) : (
         <PTable
           minW={720}
           cols={[
@@ -69,16 +87,28 @@ export default function MessagingDelivery() {
             { label: "Status", w: "17.3%" },
             { label: "When", w: "12.7%" },
           ]}
-          rows={rows.map((r) => [
-            r.to,
-            r.ch,
-            r.msg,
-            <span key="s" className={`ad-badge ad-badge--${TONE[r.st]}`}>
-              {r.st}
-            </span>,
-            r.when,
-          ])}
+          rows={recent.map((r) => {
+            const [label, tone] = badge(r);
+            return [
+              <span key="t" title={r.to}>
+                {r.who || r.to || "—"}
+              </span>,
+              r.channel === "whatsapp" ? "WhatsApp" : "Email",
+              <span key="m" title={r.error || r.title || r.template}>
+                {r.title || r.template || "—"}
+              </span>,
+              <span key="s" className={`ad-badge ad-badge--${tone}`} title={r.error || ""}>
+                {label}
+                {r.attempts > 1 ? ` ×${r.attempts}` : ""}
+              </span>,
+              <span key="w" title={fmtDateTime(r.created_at)}>
+                {fmtWhen(r.created_at)}
+              </span>,
+            ];
+          })}
+          empty={loading ? "Loading…" : "No messages yet."}
         />
+        )}
       </section>
       {toast && <div className="ad-toast">↻ {toast}</div>}
       <style>{`
@@ -86,6 +116,8 @@ export default function MessagingDelivery() {
         .md-warn b { font-weight: 700; }
         .md-warn a:hover { text-decoration: underline; text-underline-offset: 2px; }
         .md-card { padding: 22px 22px 18px; }
+        .md-state { padding: 14px 11px; font-size: 13px; color: var(--ad-red); }
+        .md-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
         .md-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 30px; }
         .md-head .ad-h2 { margin-top: 6px; }
         .md-retry { border: 0; background: none; padding: 0; font-size: 14px; font-weight: 800; color: #6657e9; }

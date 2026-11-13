@@ -4,27 +4,90 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { campaignById } from "@/components/admin/data";
+import { rpc, useRpc, errText } from "@/lib/supabase";
+import { useToast } from "@/components/admin/campaign/live";
 
 const RULES = ["Collab rights — creator adds the brand as an Instagram collaborator", "Non-delivery = blacklist from the platform", "Re-ship the product at their cost to another creator we name"];
+const RULE_KEYS = ["collab_rights", "blacklist_clause", "reship_clause"];
+const ln = (v) => String(v ?? "");
 
-/* Figma: Campaign workspace — Contract & video brief */
+/* Figma: Campaign workspace — Contract & video brief (purana bpTermsHtml + save_playbook) */
 export default function WorkspaceContract() {
   const { id } = useParams();
-  const c = campaignById(id);
-  const [k, setK] = useState({ product: "Beardo Detan Express Kit", value: "1,099", due: "2", rights: "1", deliver: "1 Reel · 1 Story" });
+  const c = { id };
+  // playbook barter_tracker ke andar aata hai (purane app jaisa)
+  const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !id || id === "sample" });
+  const [k, setK] = useState({ product: "", value: "", due: "7", rights: "1", deliver: "", extra: "" });
   const [rules, setRules] = useState([true, true, true]);
-  const [b, setB] = useState({ shoot: "Morning routine using the Detan kit", keys: "Removes tan in 15 min · use code {code}", tags: "#BeardoDetan @beardo.official", dos: "Natural light · show before / after", donts: "No competitor products" });
-  const [toast, setToast] = useState("");
+  const [b, setB] = useState({ shoot: "", keys: "", tags: "", dos: "", donts: "", caption: "", refs: "", note: "" });
+  const [busy, setBusy] = useState("");
+  const [toast, setToast] = useToast();
 
+  // server ka playbook aate hi form bharo
   useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
+    const pb = bt.data?.playbook;
+    if (!pb) return;
+    const kk = pb.contract || {};
+    const bb = pb.brief || {};
+    setK({ product: ln(kk.product), value: ln(kk.product_value), due: ln(kk.content_days ?? 7), rights: ln(kk.ad_rights_months ?? 1), deliver: ln(kk.deliverables), extra: ln(kk.extra_terms) });
+    setRules(RULE_KEYS.map((x) => kk[x] !== false));
+    setB({ shoot: ln(bb.what_to_shoot), keys: ln(bb.key_messages), tags: [bb.hashtags, bb.mentions].filter(Boolean).join(" "), dos: ln(bb.dos), donts: ln(bb.donts), caption: ln(bb.caption), refs: ln(bb.reference_links), note: ln(bb.posting_note) });
+  }, [bt.data]);
 
-  const F = ({ label, v, set, field, full }) => (
-    <div className={`wc-f ${full ? "" : ""}`}>
+  /* dono card ek hi RPC se save hote hain — save_playbook(contract, brief) */
+  const save = async (which) => {
+    if (!k.deliver.trim()) return setToast("Add the deliverables (e.g. 1 Reel + 2 Stories) — a contract without them can’t be signed.");
+    const toks = b.tags.split(/[\s,]+/).filter(Boolean);
+    const contract = {
+      product: k.product.trim() || null,
+      product_value: k.value.trim() ? Number(String(k.value).replace(/[^\d.]/g, "")) : null,
+      deliverables: k.deliver.trim(),
+      content_days: Math.min(60, Math.max(1, parseInt(k.due) || 7)),
+      ad_rights_months: Math.min(24, Math.max(0, parseInt(k.rights) || 0)),
+      collab_rights: rules[0],
+      blacklist_clause: rules[1],
+      reship_clause: rules[2],
+      extra_terms: k.extra.trim() || null,
+    };
+    const brief = {
+      what_to_shoot: b.shoot.trim() || null,
+      key_messages: b.keys.trim() || null,
+      dos: b.dos.trim() || null,
+      donts: b.donts.trim() || null,
+      caption: b.caption.trim() || null,
+      reference_links: b.refs.trim() || null,
+      hashtags: toks.filter((x) => x[0] !== "@").join(" ") || null,
+      mentions: toks.filter((x) => x[0] === "@").join(" ") || null,
+      posting_note: b.note.trim() || null,
+    };
+    setBusy(which);
+    const { error } = await rpc("admin", "api.save_playbook", { p_campaign: id, p_contract: contract, p_brief: brief });
+    setBusy("");
+    if (error) return setToast(errText(error));
+    setToast("Saved ✓ — every new contract and brief uses this.");
+    bt.reload(true);
+  };
+
+  /* Resend contract — jinko contract gaya par sign nahi kiya (contract_sent), unko bp_send_contract */
+  const resend = async () => {
+    const list = (bt.data?.creators || []).filter((x) => x.stage === "contract_sent");
+    if (!list.length) return setToast("Nobody is waiting to sign — every sent contract is signed.");
+    if (!window.confirm(`Resend the contract to ${list.length} creator${list.length > 1 ? "s" : ""} who haven’t signed yet?`)) return;
+    setBusy("resend");
+    let ok = 0;
+    let last = null;
+    for (const x of list) {
+      const { error } = await rpc("admin", "api.bp_send_contract", { p_participation: x.participation_id });
+      if (error) last = error;
+      else ok++;
+    }
+    setBusy("");
+    setToast(last ? `${ok} sent · ${errText(last)}` : `✓ Contract re-sent to ${ok} creator${ok > 1 ? "s" : ""}`);
+    bt.reload(true);
+  };
+
+  const F = ({ label, v, set, field }) => (
+    <div className="wc-f">
       <label className="wc-l" htmlFor={`wc-${field}`}>
         {label}
       </label>
@@ -34,7 +97,15 @@ export default function WorkspaceContract() {
 
   return (
     <AdminShell>
-      <WorkspaceHead id={c.id} />
+      <WorkspaceHead id={id} />
+      {bt.error && (
+        <p className="wc-err">
+          {errText(bt.error)}{" "}
+          <button type="button" onClick={() => bt.reload()}>
+            Retry
+          </button>
+        </p>
+      )}
 
       <div className="wc-grid">
         <section className="ad-card wc-card">
@@ -43,8 +114,8 @@ export default function WorkspaceContract() {
               <h2 className="ad-h2">📜 Contract</h2>
               <p className="wc-sub">Goes out automatically when a creator is approved. Changes apply to contracts sent from now on.</p>
             </div>
-            <button type="button" className="wc-resend" onClick={() => setToast("✓ Contract re-sent to 31 approved creators")}>
-              Resend contract
+            <button type="button" className="wc-resend" disabled={busy === "resend" || bt.loading} onClick={resend}>
+              {busy === "resend" ? "Sending…" : "Resend contract"}
             </button>
           </div>
           <div className="wc-two">
@@ -61,8 +132,8 @@ export default function WorkspaceContract() {
               {r}
             </label>
           ))}
-          <button type="button" className="ad-btn ad-btn--primary wc-save" onClick={() => setToast("✓ Contract saved")}>
-            Save contract
+          <button type="button" className="ad-btn ad-btn--primary wc-save" disabled={!!busy || bt.loading} onClick={() => save("k")}>
+            {busy === "k" ? "Saving…" : "Save contract"}
           </button>
         </section>
 
@@ -76,14 +147,16 @@ export default function WorkspaceContract() {
             {F({ label: "Do’s", v: b, set: setB, field: "dos" })}
             {F({ label: "Don’ts", v: b, set: setB, field: "donts" })}
           </div>
-          <button type="button" className="ad-btn ad-btn--primary wc-save wc-save--b" onClick={() => setToast("✓ Video brief saved")}>
-            Save brief
+          <button type="button" className="ad-btn ad-btn--primary wc-save wc-save--b" disabled={!!busy || bt.loading} onClick={() => save("b")}>
+            {busy === "b" ? "Saving…" : "Save brief"}
           </button>
         </section>
       </div>
       {toast && <div className="ad-toast">{toast}</div>}
 
       <style>{`
+        .wc-err { margin: -10px 0 16px; font-size: 13px; color: var(--ad-red); font-weight: 700; }
+        .wc-err button { border: 0; background: none; color: var(--ad-primary); font-weight: 800; }
         .wc-grid { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }
         .wc-card { padding: 22px 22px 22px; min-width: 0; }
         .wc-head { display: flex; justify-content: space-between; gap: 24px; }

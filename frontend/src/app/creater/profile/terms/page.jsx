@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creater/BountyShell";
-import { useSession } from "@/components/creater/session";
+import { useCreator, saveSection, reloadProfile, ackTerms, termsOf, termsPatch, ratesOf, saveRate } from "@/services/creator";
+
+const RATE_TYPE = { reel: "IG Reel", story: "IG Story", post: "IG Static Post" };
 import { COLLAB_TYPES } from "@/components/creater/data";
 import { Check } from "@/components/ui/Icons";
 
@@ -12,29 +14,55 @@ const NOTES = { barter: "Products or experiences for content", paid: "A cash fee
 
 /** /creater/profile/terms — kis tarah ke collab + rate card */
 export default function Terms() {
-  const [s, update] = useSession();
+  const c = useCreator();
+  const loaded = useRef(false);
+  const [busy, setBusy] = useState(false);
   const [collab, setCollab] = useState([]);
   const [rates, setRates] = useState({ reel: "", story: "", post: "", product: "" });
   const [tick, setTick] = useState(false);
   const [toast, setToast] = useState("");
   const [err, setErr] = useState("");
 
+  // Saved terms (commercial_preference) + rate card
   useEffect(() => {
-    setCollab(s.collab || []);
-    setRates({ reel: "", story: "", post: "", product: "", ...(s.rates || {}) });
-  }, [s.collab, s.rates]);
+    if (loaded.current || !c.ready || !c.profile) return;
+    loaded.current = true;
+    const cp = c.profile.commercial_preference || {};
+    const r = ratesOf(c.profile);
+    setCollab(termsOf(cp));
+    setRates({ reel: r["IG Reel"] ? String(r["IG Reel"]) : "", story: r["IG Story"] ? String(r["IG Story"]) : "", post: r["IG Static Post"] ? String(r["IG Static Post"]) : "", product: cp.min_product_value != null ? String(Math.round(cp.min_product_value)) : "" });
+    if (c.meta?.bx_terms_ack) setTick(true);
+  }, [c]);
 
   const flip = (id) => setCollab(collab.includes(id) ? collab.filter((x) => x !== id) : [...collab, id]);
   const num = (k) => (e) => setRates({ ...rates, [k]: e.target.value.replace(/\D/g, "").slice(0, 7) });
 
-  const save = (e) => {
+  // commercial_preference + rate card items (sirf badle hue) — purane onbStep(3) / profile.js jaisa
+  const save = async (e) => {
     e.preventDefault();
     if (!collab.length) return setErr("Pick at least one.");
     if (!tick) return setErr("Tick the box above to save.");
     setErr("");
-    update({ collab, rates });
-    setToast("Terms & rate card saved");
-    setTimeout(() => setToast(""), 2200);
+    setBusy(true);
+    try {
+      await ackTerms();
+      const patch = { ...termsPatch(collab) };
+      const min = String(rates.product || "").replace(/[^\d.]/g, "");
+      patch.min_product_value = min === "" ? null : Number(min);
+      await saveSection("commercial_preference", patch);
+      const old = ratesOf(c.profile);
+      for (const k of ["reel", "story", "post"]) {
+        const v = Number(rates[k] || 0);
+        if (v > 0 && v !== old[RATE_TYPE[k]])
+          await saveRate(RATE_TYPE[k], v, { reload: false });
+      }
+      reloadProfile();
+      setToast("Terms & rate card saved");
+      setTimeout(() => setToast(""), 2200);
+    } catch (ex) {
+      setErr("Couldn't save: " + (ex.message || ex));
+    }
+    setBusy(false);
   };
 
   return (
@@ -88,7 +116,7 @@ export default function Terms() {
         <label className="tr-label" htmlFor="tr-prod">
           Product value you prefer (optional)
         </label>
-        <input id="tr-prod" className="pf-input tr-prod" placeholder="Any" value={rates.product} onChange={(e) => setRates({ ...rates, product: e.target.value })} />
+        <input id="tr-prod" className="pf-input tr-prod" placeholder="Any" inputMode="numeric" value={rates.product} onChange={(e) => setRates({ ...rates, product: e.target.value.replace(/[^\d]/g, "").slice(0, 7) })} />
 
         <label className="tr-tick">
           <input type="checkbox" checked={tick} onChange={(e) => setTick(e.target.checked)} />
@@ -96,8 +124,8 @@ export default function Terms() {
           <span>You decide on each offer. Ad rights, exclusivity and deadlines are always shown before you accept.</span>
         </label>
 
-        <button type="submit" className="tr-save">
-          Save
+        <button type="submit" className="tr-save" disabled={busy}>
+          {busy ? "Saving…" : "Save"}
         </button>
         {err && <p className="bx-err tr-center">{err}</p>}
       </form>
