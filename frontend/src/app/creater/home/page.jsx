@@ -36,7 +36,8 @@ export default function CreatorHome() {
   }, []);
 
   const p = prof.data || {};
-  const firstName = String((p.personal || {}).first_name || (p.professional || {}).display_name || "").split(" ")[0];
+  // naam: profile → Instagram ka naam → Instagram username ("creator" sirf tab jab kuch na ho)
+  const firstName = String((p.personal || {}).first_name || (p.professional || {}).display_name || ig.acct?.name || ig.acct?.username || "").split(" ")[0];
   // campaigns sirf us Instagram account ki jo khula hai (purane app jaisa)
   const handle = String(ig.acct?.username || "").toLowerCase();
   const myList = (Array.isArray(mine.data) ? mine.data : []).filter((c) => !c.applied_profile || !handle || String(c.applied_profile).toLowerCase().replace(/^@/, "") === handle);
@@ -236,7 +237,7 @@ export default function CreatorHome() {
         .hm-kit { padding: 18px 16px; border-radius: 16px; background: #fbf1dc; border: 1px solid #e6d5ae; }
         .hm-kit h2 { font-family: var(--bx-serif); font-size: 17px; font-weight: 600; color: #14231a; }
         .hm-kit p { margin: 12px 0 0; font-size: 14px; color: #14231a; }
-        .hm-kit__btn { display: none; }
+        .hm-kit__btn { margin-top: 12px; height: 34px; font-size: 13px; }
         .hm-rumi { display: flex; align-items: center; gap: 10px; }
         .hm-rumi img { width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; }
         .hm-rumi p { margin: 0; padding: 10px 14px; max-width: 240px; border-radius: 16px; background: #fffdf6; border: 1px solid #e2d3b0; font-family: var(--bx-serif); font-style: italic; font-size: 13.5px; line-height: 1.4; color: #14231a; box-shadow: 0 8px 20px -14px rgba(0,0,0,.45); }

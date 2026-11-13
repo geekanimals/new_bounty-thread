@@ -282,6 +282,9 @@ export default function MediaKit() {
       {show.audience && (
         <section className="bx-card mk-sec">
           <h3>Audience</h3>
+          {!audience.length && (
+            <p className="mk-empty">Audience details (city, age, gender) appear once Instagram shares them — usually after you cross 100 followers.</p>
+          )}
           <div className="mk-aud">
             {audience.map((a) => (
               <div key={a.label}>
@@ -514,6 +517,7 @@ export default function MediaKit() {
         .mk-sec h3 small { font-family: var(--bx-sans); font-size: 12px; font-weight: 400; color: #7a6a4a; }
         .mk-right { margin-left: auto; }
         .mk-edit { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border: 0; border-radius: 8px; background: #eee2c6; font-family: var(--bx-sans); font-size: 12px; font-weight: 600; color: #3d4a3a; }
+        .mk-empty { margin: 0; font-size: 13px; color: var(--bx-muted); }
         .mk-aud { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 22px; }
         .mk-aud span { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12.5px; }
         .mk-posts, .mk-show { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; }

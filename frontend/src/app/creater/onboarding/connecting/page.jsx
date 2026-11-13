@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell, { RumiTip } from "@/components/creater/OnboardShell";
-import { finishInstagram, readIgReturn, getCreator, track, afterLoginRoute } from "@/services/creator";
+import { finishInstagram, readIgReturn, getCreator, track } from "@/services/creator";
 import { getSidekick } from "@/components/creater/data";
 
 const STEPS = ["Connecting your Instagram…", "Gathering your creator details…", "Building your media kit…", "Matching campaigns for you…"];
@@ -52,10 +52,9 @@ export default function ConnectingLoader() {
           setDest("/creater/login");
           return;
         }
-        // Onboarding abhi baaki hai → agla onboarding step (content…); andar app se connect kiya → media kit (ban kar).
+        // Figma: connect hote hi media kit ban kar dikhe (onboarding ho ya andar app) — wahan "Continue setup" agle step par le jaata hai.
         // Apply ke beech connect kiya → wapas Discover (apply poora karne).
-        const next = afterLoginRoute(getCreator());
-        setDest(r.after === "discover" ? "/creater/discover" : next.startsWith("/creater/onboarding") ? next : "/creater/media-kit");
+        setDest(r.after === "discover" ? "/creater/discover" : "/creater/media-kit");
         setOk(true);
       })
       .catch((e) => setErr("Instagram sign-in failed: " + (e.message || e)));
