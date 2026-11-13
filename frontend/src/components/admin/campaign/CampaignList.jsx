@@ -14,6 +14,7 @@ const TABS = [
   { k: "draft", label: "Draft", href: "/admin/campaigns/draft", test: (c) => c.status === "Draft" },
   { k: "barter", label: "Barter", href: "/admin/campaigns/barter", test: (c) => campInBucket(c.raw, "barter") },
   { k: "paid", label: "Paid", href: "/admin/campaigns/paid", test: (c) => campInBucket(c.raw, "paid") },
+  { k: "barter_paid", label: "Barter + Paid", href: "/admin/campaigns/barter-paid", test: (c) => campInBucket(c.raw, "barter_paid") },
   { k: "completed", label: "Completed", href: "/admin/campaigns/completed", test: (c) => c.status === "Completed" },
 ];
 

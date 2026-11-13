@@ -18,11 +18,11 @@ const FILTERS = [
 ];
 const FIRST = 6;
 
-// Purane app ka matchFilter: Paid = paid + barter_paid, Barter = barter + barter_paid (story nahi), Paid + Barter = barter_paid
+// Har type apne filter mein: Paid = sirf paid, Barter = sirf barter (story nahi), Paid + Barter = sirf barter_paid
 const match = (f, x) => {
   const t = kindOf(x);
-  if (f === "paid") return t === "paid" || t === "barter_paid";
-  if (f === "barter") return (t === "barter" || t === "barter_paid") && !isCeleb(x);
+  if (f === "paid") return t === "paid";
+  if (f === "barter") return t === "barter" && !isCeleb(x);
   if (f === "both") return t === "barter_paid";
   return true;
 };

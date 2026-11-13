@@ -54,7 +54,9 @@ function toRows(pipe = [], legacy = []) {
   }));
   return [...a, ...L];
 }
-const typePass = (r, t) => t === "All" || (t === "Paid" ? ["paid", "barter_paid"].includes(r.ctype) : ["barter", "barter_paid"].includes(r.ctype));
+// Har type apne tab mein — "Barter + Paid" alag tab (Paid / Barter mein dobara nahi aata)
+const TYPE_KEY = { Paid: "paid", Barter: "barter", "Barter + Paid": "barter_paid" };
+const typePass = (r, t) => t === "All" || r.ctype === TYPE_KEY[t];
 
 /**
  * Applications (Figma 006) + creator review drawer (Figma 005) jab openId ho.
@@ -166,6 +168,7 @@ export default function ApplicationsView({ openId }) {
               ["All", "All"],
               ["Paid", `💰 Paid ${typeN("Paid")}`],
               ["Barter", `🎁 Barter ${typeN("Barter")}`],
+              ["Barter + Paid", `🎁💰 Barter + Paid ${typeN("Barter + Paid")}`],
             ].map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={type === k} className={`ga-tab ${type === k ? "is-on" : ""}`} onClick={() => setType(k)}>
                 {label}

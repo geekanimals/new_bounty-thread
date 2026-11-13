@@ -32,7 +32,8 @@ export function useTracker() {
   const base = `/creater/my-campaigns/${m ? m.participation_id : id}`;
   if (!m) return { loading, error, reload, id, m: null, base };
   const ship = !noShip(m);
-  const isPaid = !!(m._flow && m._flow.paid) || m.campaign_type === "paid" || m.comp_type === "cash";
+  // Paid aur Barter + Paid dono mein payment hota hai (hybrid = product bhi + payment bhi)
+  const isPaid = !!(m._flow && m._flow.paid) || ["paid", "barter_paid"].includes(m.campaign_type) || ["cash", "hybrid"].includes(m.comp_type);
   // Paid / product-free campaign mein address + package nahi hota (purane noShip)
   const steps = STEPS.filter((x) => ship || (x.key !== "address" && x.key !== "package")).map((x) =>
     x.key === "paid" && !isPaid ? { ...x, label: "Done" } : x

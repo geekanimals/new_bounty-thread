@@ -36,8 +36,10 @@ export const campStatusPick = (st) => ({ Sourcing: "Live", "In Production": "Liv
 export const campKind = (c) => c.campaign_type || (/hybrid/i.test(c.type || "") ? "barter_paid" : /paid|ugc/i.test(c.type || "") ? "paid" : "barter");
 export const isCelebrityCamp = (c) => c.barter_subtype === "celebrity_story" || (!c.barter_subtype && /celebrity/i.test(c.type || ""));
 export function campInBucket(c, b) {
-  if (b === "paid") return ["paid", "barter_paid"].includes(campKind(c));
-  if (b === "barter") return ["barter", "barter_paid"].includes(campKind(c)) && !isCelebrityCamp(c);
+  // Har type apne filter mein — "Barter + Paid" sirf apne alag filter mein aata hai (Paid / Barter mein nahi)
+  if (b === "paid") return campKind(c) === "paid";
+  if (b === "barter") return campKind(c) === "barter" && !isCelebrityCamp(c);
+  if (b === "barter_paid") return campKind(c) === "barter_paid";
   return true;
 }
 const todayISO = () => new Date().toISOString().slice(0, 10);
