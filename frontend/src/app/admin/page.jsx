@@ -98,7 +98,7 @@ export default function AdminLogin() {
             {busy ? "Signing in…" : "Sign in →"}
           </button>
           <p className="al-note">
-            <i /> Prototype mode · No live data connection
+            <i /> Secure sign-in · Super Admin only
           </p>
         </form>
       </main>
