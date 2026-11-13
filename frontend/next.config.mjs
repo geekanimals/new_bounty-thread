@@ -43,7 +43,11 @@ const nextConfig = {
 
   async rewrites() {
     // /app.html?door=…&go=…&cinv=… → router page (sahi naye panel par bhejta hai)
-    return [{ source: "/app.html", destination: "/legacy" }];
+    return [
+      { source: "/app.html", destination: "/legacy" },
+      // Instagram / Facebook login ki wapsi (Meta redirect URI)
+      { source: "/auth/callback", destination: "/legacy" },
+    ];
   },
 };
 

@@ -8,13 +8,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { sb, call, fn, K, ls } from "./core";
 import { loadCreator, reloadProfile } from "./auth";
+import { authReturnUrl } from "@/lib/authReturn";
 
 /* ---------- Constants (purane app.js) ---------- */
 export const INSTAGRAM_APP_ID = "944216414793314";
 export const IG_SCOPES =
   "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights,instagram_business_manage_comments,instagram_business_manage_messages";
-// Meta mein registered redirect: <site>/app.html — naye app mein /app.html → /legacy router → /creator?code&state
-export const igRedirect = () => window.location.origin + "/app.html";
+// Meta mein registered redirect: <site>/auth/callback → /legacy router → /creator?code&state
+export const igRedirect = authReturnUrl;
 
 /* =====================================================================
  * Connect (OAuth)

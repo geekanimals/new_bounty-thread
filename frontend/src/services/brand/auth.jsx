@@ -13,6 +13,7 @@ import { signOutDoor } from "@/lib/supabase";
 import { clearNotifications } from "./notifications";
 import { resetDashCache } from "./dashboard";
 import { initials, gradFor, isLive } from "./helpers";
+import { authReturnUrl } from "@/lib/authReturn";
 
 /* ---------- Store (har component mein ek hi brand state) ---------- */
 const EMPTY = {
@@ -171,8 +172,8 @@ export async function verifyOtp(phone, code, { name = "", org = "" } = {}) {
 
 /* ---------- Facebook Login for Business (brand-fb-login) ---------- */
 const FB_KEY = "geek_fb_brand";
-// purane app jaisa: redirect hamesha <site>/app.html (Meta mein yahi URL registered) → /legacy router → /brands?code&state
-const fbRedirect = () => window.location.origin + "/app.html";
+// redirect: <site>/auth/callback (Meta mein yahi URL registered) → /legacy router → /brands?code&state
+const fbRedirect = authReturnUrl;
 
 /** "Continue with Facebook" (purana startBrandFacebook) — Facebook ki window par bhejta hai, error par Error throw */
 export async function startFacebookLogin() {

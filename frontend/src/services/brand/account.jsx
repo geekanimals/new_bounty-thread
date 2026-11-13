@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { api, fn, ss } from "./core";
+import { authReturnUrl } from "@/lib/authReturn";
 
 /* ---------- 👥 Team (purana paintTeam) ---------- */
 /** Team list (purana api("brand_team")) */
@@ -54,7 +55,7 @@ const fbLogin = async (body) => {
   if (!r.error && r.data && r.data.error) return { data: null, error: { message: r.data.error } };
   return r;
 };
-const fbRedirect = () => window.location.origin + "/app.html";
+const fbRedirect = authReturnUrl;
 
 /** "Link Facebook business" (purana fbStart("link")) — after = "settings" | "facebook" (wapsi kahan) */
 export async function startFacebookLink(after = "settings") {

@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { call, api, fn, ls } from "./core";
+import { authReturnUrl } from "@/lib/authReturn";
 
 /** Ek source (platform = Geek OS creators, external = Instagram pool) ka search (purana ask(src, page, size)) */
 export const searchCreators = (filters, { source = "platform", page = 1, size = 24 } = {}) =>
@@ -175,7 +176,7 @@ export async function connectFacebookSearch() {
   } catch {
     /* ignore */
   }
-  const r = await fn("fb-connect", { action: "url", redirect_uri: window.location.origin + "/app.html", state });
+  const r = await fn("fb-connect", { action: "url", redirect_uri: authReturnUrl(), state });
   if (r.error || !r.data || !r.data.url) return { data: null, error: r.error || { message: (r.data && r.data.error) || "Couldn't start Facebook connect." } };
   window.location.href = r.data.url;
   return { data: true, error: null };
@@ -194,7 +195,7 @@ export async function finishFacebookSearch() {
   ls.del("geekos_oauth_state");
   if (saved && saved !== st) return { ok: false, message: "That Facebook connect expired — try again." };
   if (!code) return { ok: false, message: q.get("error_description") || "Facebook connect was cancelled." };
-  const r = await fn("fb-connect", { action: "exchange", code, redirect_uri: window.location.origin + "/app.html" });
+  const r = await fn("fb-connect", { action: "exchange", code, redirect_uri: authReturnUrl() });
   const d = r.data || {};
   const msg = r.error ? r.error.message : d.error;
   if (msg) {
