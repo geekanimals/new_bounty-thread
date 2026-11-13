@@ -18,12 +18,16 @@ const OLD_PAGES = [
   ["/superadmin", "/admin"],
 ];
 
+const STRICT = process.env.NEXT_CACHE_COMPONENTS === "1";
+
 const nextConfig = {
   experimental: {
     agentFeedback: true,
   },
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Cache Components (Next 16 ka strict mode) by default BAND hai — isse har [id]/[slug] page par build
+  // "Suspense boundary" error deta tha. Band rehne par sab pages normal chalte hain, code baar baar nahi badalna padta.
+  // Kabhi chalu karna ho to env mein NEXT_CACHE_COMPONENTS=1 daal do.
+  ...(STRICT ? { cacheComponents: true, partialPrefetching: true } : {}),
 
   async redirects() {
     return [
