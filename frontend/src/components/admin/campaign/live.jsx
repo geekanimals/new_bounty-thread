@@ -5,7 +5,7 @@
  * Campaign id = public.campaigns.id (purane app jaisa) — workspace ke saare api.* RPC isi id se chalte hain.
  */
 import { useCallback, useEffect, useState } from "react";
-import { sbFor } from "@/lib/supabase";
+import { sbFor, cacheGet, cacheSet, useBeforePaint } from "@/lib/supabase";
 
 /* ---------- Types / status (app.js: CAMP_TYPES, BARTER_SUBTYPES, CAMP_STATUSES) ---------- */
 export const CAMP_TYPES = [
@@ -195,12 +195,16 @@ export const initials = (n = "") =>
  * api.* RPC dono id lete hain, isliye unhe URL wala id dena theek hai.
  */
 /* campaign row ka memory cache — workspace ke tab badalne par title turant dikhe ("Loading campaign…" flash nahi) */
-const CAMP_CACHE = new Map();
+const campKey = (id) => `admin|campaign_row|${id}`;
 export function useCampaign(id) {
-  const [st, setSt] = useState(() => (CAMP_CACHE.has(id) ? { c: CAMP_CACHE.get(id), loading: false, error: null } : { c: null, loading: true, error: null }));
+  const [st, setSt] = useState({ c: null, loading: true, error: null });
+  useBeforePaint(() => {
+    const c = id && cacheGet(campKey(id));
+    if (c) setSt({ c, loading: false, error: null });
+  }, [id]);
   const load = useCallback(async () => {
     const r = await loadCampaign(id);
-    if (r.c) CAMP_CACHE.set(id, r.c);
+    if (r.c) cacheSet(campKey(id), r.c);
     setSt(r);
   }, [id]);
   useEffect(() => {

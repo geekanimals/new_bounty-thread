@@ -13,7 +13,7 @@
  * Sirf publishable (browser-safe) key yahan aati hai — secret / service_role key KABHI nahi.
  */
 import { createClient } from "@supabase/supabase-js";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://edibibytqfrrxfztukpm.supabase.co";
 export const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY || "sb_publishable_3tB8b43BqyJSO6_5HIVbTw_d5QOZqDf";
@@ -129,10 +129,74 @@ export function errText(e) {
 
 /* useRpc ka memory cache (sirf is browser tab mein, refresh par khali) — door|fn|args → data */
 const RPC_CACHE = new Map();
+/*
+ * Pichla data browser mein bhi yaad (localStorage, 3 din) — page reload / naya tab khulte hi purana data turant dikhe,
+ * backend se naya aate hi badal jaaye. Logout par us door ka sab mit jaata hai.
+ */
+const PKEY = "gkc:";
+const PMAX = 1500000; // ~1.5 MB se bada jawab yaad nahi rakhte
+const PTTL = 3 * 864e5;
+function pGet(ck) {
+  try {
+    const raw = localStorage.getItem(PKEY + ck);
+    if (!raw) return undefined;
+    const o = JSON.parse(raw);
+    if (!o || Date.now() - o.t > PTTL) return void localStorage.removeItem(PKEY + ck);
+    return o.d;
+  } catch {
+    return undefined;
+  }
+}
+function pClear(prefix) {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(PKEY + (prefix || ""))) localStorage.removeItem(k);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+function pSet(ck, d) {
+  let raw;
+  try {
+    raw = JSON.stringify({ t: Date.now(), d });
+  } catch {
+    return;
+  }
+  if (raw.length > PMAX) return;
+  try {
+    localStorage.setItem(PKEY + ck, raw);
+  } catch {
+    // jagah bhar gayi — apna purana cache hata ke ek baar aur
+    pClear();
+    try {
+      localStorage.setItem(PKEY + ck, raw);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+/** cache se padho (memory → browser) */
+export function cacheGet(ck) {
+  if (RPC_CACHE.has(ck)) return RPC_CACHE.get(ck);
+  if (typeof window === "undefined") return undefined;
+  const d = pGet(ck);
+  if (d !== undefined) RPC_CACHE.set(ck, d);
+  return d;
+}
+/** cache mein rakho (memory + browser) — ck "door|naam|…" se shuru ho */
+export function cacheSet(ck, d) {
+  RPC_CACHE.set(ck, d);
+  if (typeof window !== "undefined") pSet(ck, d);
+}
 /** Is door ka cache saaf (logout par — doosre user ko pichla data na dikhe) */
 export function clearRpcCache(door) {
   for (const k of [...RPC_CACHE.keys()]) if (!door || k.startsWith(door + "|")) RPC_CACHE.delete(k);
+  if (typeof window !== "undefined") pClear(door ? door + "|" : "");
 }
+/* paint se pehle chalta hai (browser mein) — server par kuch nahi */
+export const useBeforePaint = typeof window === "undefined" ? () => {} : useLayoutEffect;
 
 /**
  * Screen ke liye data hook:
@@ -145,12 +209,21 @@ export function useRpc(door, fn, args = {}, { skip = false, refreshMs = 0 } = {}
   // Pichli baar ka data turant dikhao (tab / page wapas khulne par "Loading…" flash nahi), phir chupchaap naya laao
   const [st, setSt] = useState(() => (!skip && RPC_CACHE.has(ck) ? { data: RPC_CACHE.get(ck), error: null, loading: false } : { data: null, error: null, loading: !skip }));
   const alive = useRef(true);
+  // reload / naya tab: browser mein rakha pichla data paint se pehle hi (khali screen nahi)
+  useBeforePaint(() => {
+    if (skip) return;
+    const d = cacheGet(ck);
+    if (d !== undefined) setSt((s) => (s.data == null ? { data: d, error: null, loading: false } : s));
+  }, [ck, skip]);
   const load = useCallback(
     async (quiet = false) => {
       if (skip) return;
-      if (!quiet) setSt((s) => (RPC_CACHE.has(ck) ? { data: RPC_CACHE.get(ck), error: null, loading: false } : { ...s, loading: true }));
+      if (!quiet) {
+        const c = cacheGet(ck);
+        setSt((s) => (c !== undefined ? { data: c, error: null, loading: false } : { ...s, loading: true }));
+      }
       const r = await rpc(door, fn, JSON.parse(key));
-      if (!r.error) RPC_CACHE.set(ck, r.data);
+      if (!r.error) cacheSet(ck, r.data);
       if (alive.current) setSt({ data: r.data, error: r.error, loading: false });
       return r;
     },

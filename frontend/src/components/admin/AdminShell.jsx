@@ -5,13 +5,32 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext } from "react";
 import { adminCheck, adminSignOut } from "@/lib/adminAuth";
-import { useRpc } from "@/lib/supabase";
+import { useRpc, storageKeyFor, useBeforePaint } from "@/lib/supabase";
 import { matchQ } from "@/components/admin/creator/live";
 import OwnerAgent from "@/components/admin/OwnerAgent";
 
 /* Login kiye admin ki info — kisi bhi page mein: const me = useAdmin(); me.name */
-/* is browser tab mein admin ka login (naam/email) — page badalne par turant dikhe */
+/* is browser tab mein admin ka login (naam/email) — page badalne / reload par turant dikhe */
 let ME = null;
+const ME_KEY = "geek_admin_me";
+function meSave(m) {
+  ME = m;
+  try {
+    if (m) localStorage.setItem(ME_KEY, JSON.stringify(m));
+    else localStorage.removeItem(ME_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+/* reload par: Supabase ka admin session browser mein hai + pichla naam yaad hai → shell turant (check peeche chalta hai) */
+function meRead() {
+  try {
+    if (!localStorage.getItem(storageKeyFor("admin"))) return null;
+    return JSON.parse(localStorage.getItem(ME_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
 const AdminCtx = createContext({ name: "", email: "" });
 export const useAdmin = () => useContext(AdminCtx);
 
@@ -77,24 +96,34 @@ export default function AdminShell({ children, wide = false }) {
   // (Supabase session + is_platform_admin — purane app jaisa)
   // ME: pichle page ka login check yaad — har page badalne par khali screen flash nahi (check peeche chalta rehta hai)
   const [me, setMe] = useState(() => ME);
+  useBeforePaint(() => {
+    if (!ME) {
+      const m = meRead();
+      if (m) setMe((ME = m));
+    }
+  }, []);
   useEffect(() => {
     let alive = true;
     adminCheck()
       .then((r) => {
         if (!alive) return;
-        if (r.ok) setMe((ME = { name: r.name, email: r.email }));
+        if (r.ok) {
+          const m = { name: r.name, email: r.email };
+          meSave(m);
+          setMe(m);
+        }
         else {
-          ME = null;
+          meSave(null);
           router.replace("/admin");
         }
       })
       .catch(() => {
-        ME = null;
+        meSave(null);
         if (alive) router.replace("/admin");
       });
     const expired = (e) => {
       if (e.detail?.door !== "admin") return;
-      ME = null;
+      meSave(null);
       router.replace("/admin");
     };
     window.addEventListener("geek-session-expired", expired);
@@ -177,7 +206,7 @@ export default function AdminShell({ children, wide = false }) {
 
 
   const signOut = async () => {
-    ME = null;
+    meSave(null);
     await adminSignOut();
     router.replace("/admin");
   };

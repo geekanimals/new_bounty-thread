@@ -8,7 +8,7 @@
  * Koi naya RPC nahi — wahi calls jo purana app karta tha.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { rpc, useRpc } from "@/lib/supabase";
+import { rpc, useRpc, cacheGet, cacheSet, useBeforePaint } from "@/lib/supabase";
 export { errText } from "@/lib/supabase";
 
 /* ---------- chhote format helpers (purane app jaise) ---------- */
@@ -45,15 +45,23 @@ export const csv = (rows, cols, file) => {
 export const CSV_COLS = ["name", "ig_username", "followers", "engagement", "whatsapp", "email", "city", "state", "categories", "gender", "accepts_barter", "reel_rate", "done", "total", "applied", "approved", "completed", "joined_at", "last_seen"];
 
 /* ---------- Creators list ---------- */
+const CL_KEY = "admin|creators_list";
 export function useCreatorsList() {
-  const [st, setSt] = useState({ all: [], loading: true, error: null });
+  const [st, setSt] = useState(() => ({ all: [], loading: true, error: null }));
+  // pichli baar ki list turant (reload par bhi), phir backend se taaza
+  useBeforePaint(() => {
+    const c = cacheGet(CL_KEY);
+    if (Array.isArray(c) && c.length) setSt((s) => (s.all.length ? s : { all: c, loading: false, error: null }));
+  }, []);
   const load = useCallback(async (quiet) => {
     if (!quiet) setSt((s) => ({ ...s, loading: !s.all.length }));
     const [a, ig, fx] = await Promise.all([rpc("admin", "admin_creators"), rpc("admin", "admin_ig_accounts"), rpc("admin", "admin_creator_facts")]);
     if (a.error) return setSt((s) => ({ ...s, loading: false, error: a.error }));
     const IGM = (ig && ig.data) || {};
     const FX = (fx && fx.data) || {};
-    setSt({ all: (a.data || []).map((c) => ({ ...c, ...(FX[c.member_id] || {}), ig_accounts: IGM[c.member_id] || [] })), loading: false, error: null });
+    const all = (a.data || []).map((c) => ({ ...c, ...(FX[c.member_id] || {}), ig_accounts: IGM[c.member_id] || [] }));
+    cacheSet(CL_KEY, all);
+    setSt({ all, loading: false, error: null });
   }, []);
   useEffect(() => {
     load();
