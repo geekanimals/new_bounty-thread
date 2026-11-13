@@ -144,7 +144,7 @@ export function MessagePreview({ brand, camp }) {
   const { data: t, error } = useRpc("admin", "api.creator_upload_preview", { p_brand: brand || null, p_campaign: camp || null });
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
-  const wa = String((t && t.whatsapp_text) || "").replace("{{link}}", `${origin}/creater/explore`);
+  const wa = String((t && t.whatsapp_text) || "").replace("{{link}}", `${origin}/creator/explore`);
   return (
     <div className="cum">
       <p className="cum-h">

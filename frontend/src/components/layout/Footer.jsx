@@ -10,7 +10,7 @@ const COLUMNS = [
       { label: "Watch demo", href: "/#demo" },
       { label: "Mass Barter", href: "/#barter" },
       { label: "Pricing", href: "/#pricing" },
-      { label: "Sign in", href: "/creater" },
+      { label: "Sign in", href: "/creator" },
     ],
   },
   {

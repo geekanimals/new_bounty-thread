@@ -48,7 +48,7 @@ export default function OrgPage() {
           <a href="/" className="og-logo">
             Geek
           </a>
-          <a href="/creater" className="og-cta">
+          <a href="/creator" className="og-cta">
             Join as a creator →
           </a>
         </header>

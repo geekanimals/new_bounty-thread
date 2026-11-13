@@ -6,8 +6,8 @@ import Footer from "@/components/layout/Footer";
 import CookieBanner from "@/components/layout/CookieBanner";
 
 // In pages par website ka header / footer / cookie banner nahi dikhega
-// (unsubscribe screens + poora creator panel /creater + poora brand panel /brands)
-const BARE_ROUTES = ["/unsubscribe", "/creater", "/brands", "/admin", "/kit", "/s", "/go", "/o"];
+// (unsubscribe screens + poora creator panel /creator + poora brand panel /brands)
+const BARE_ROUTES = ["/unsubscribe", "/creator", "/brands", "/admin", "/kit", "/s", "/go", "/o"];
 
 export default function SiteChrome({ children }) {
   const pathname = usePathname() || "/";

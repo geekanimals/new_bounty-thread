@@ -13,7 +13,7 @@ import { loadCreator, reloadProfile } from "./auth";
 export const INSTAGRAM_APP_ID = "944216414793314";
 export const IG_SCOPES =
   "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights,instagram_business_manage_comments,instagram_business_manage_messages";
-// Meta mein registered redirect: <site>/app.html — naye app mein /app.html → /legacy router → /creater?code&state
+// Meta mein registered redirect: <site>/app.html — naye app mein /app.html → /legacy router → /creator?code&state
 export const igRedirect = () => window.location.origin + "/app.html";
 
 /* =====================================================================

@@ -39,7 +39,7 @@ export const smartParse = (()=>{
   const langs = ["hindi","english","marathi","tamil","telugu","bengali","bangla","gujarati","punjabi","kannada","malayalam","odia","urdu","bhojpuri","rajasthani","haryanvi","assamese"];
   const stop = new Set(("a an the and or with who whose have has having had want wants need needs needed looking look find show give get me my us our we i for of in on at from to near around by "
     + "is are be been being that this these those any some all every only also etc like type kind based city cities area region place followers follower following "
-    + "creator creators creater creaters cretor creaters influencer influencers influncer blogger bloggers vlogger vloggers youtuber youtubers profile profiles account accounts people person "
+    + "creator creators creator creators cretor creators influencer influencers influncer blogger bloggers vlogger vloggers youtuber youtubers profile profiles account accounts people person "
     + "mai me mein mei main se ke ki ka ko ho hai hain hon jo jin jinke jinka jinki jiske jiska jiski jis wale wala wali walo log logon koi sab sabhi aur ya bhi pe par tak liye lie chahiye chaiye "
     + "chahie chahiyee chiye chaye chahye chahte chahta chahti speak speaks speaking bolte bolne bolti who mujhe humko hume hamein muje pass paas rakhte rakhta rakhti rakhe hota hoti hote hum aap apna apne apni ek do bhai yaar please pls plz acha ache achha good best "
     + "top great nice campaign campaigns brand brands product products promote promotion collab collaboration content post posts reel reels video videos instagram insta ig lover lovers owner owners "

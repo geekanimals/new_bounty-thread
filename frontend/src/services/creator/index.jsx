@@ -24,7 +24,7 @@
  *   - hooks                    → { data | list | acct, loading, error, reload }
  *   - profile / login writes   → Error throw (page try/catch karke message dikhata hai) aur creator store reload
  *
- * Static UI content (categories, sidekicks, brands ki list, copy) components/creater/data.jsx mein hai — Supabase se nahi.
+ * Static UI content (categories, sidekicks, brands ki list, copy) components/creator/data.jsx mein hai — Supabase se nahi.
  */
 export * from "./core";
 export * from "./auth";

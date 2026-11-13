@@ -318,24 +318,24 @@ export function needsManualDetails(c = state) {
 export function gateRoute(c, mode, pathname = "") {
   if (!c.ready) return null;
   if (mode === "guest") return c.loggedIn ? afterLoginRoute(c) : null;
-  if (!c.loggedIn) return "/creater/login";
+  if (!c.loggedIn) return "/creator/login";
   if (mode === "member") return null;
-  if (!c.hasIg && !c.igLater) return c.kidSeen ? "/creater/onboarding/instagram" : "/creater/onboarding";
-  if (needsOnboarding(c) && !/^\/creater\/media-kit/.test(pathname)) return "/creater/onboarding/content";
+  if (!c.hasIg && !c.igLater) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
+  if (needsOnboarding(c) && !/^\/creator\/media-kit/.test(pathname)) return "/creator/onboarding/content";
   return null;
 }
 /** Login ke turant baad kahan (purana bootOS) */
 export function afterLoginRoute(c = state) {
-  if (!c.hasIg && !c.igLater) return c.kidSeen ? "/creater/onboarding/instagram" : "/creater/onboarding";
-  if (needsOnboarding(c)) return "/creater/onboarding/content";
+  if (!c.hasIg && !c.igLater) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
+  if (needsOnboarding(c)) return "/creator/onboarding/content";
   // campaign invite se aaye: pehle profile (locked ho to), warna My campaigns
-  if (c.inviteGo) return c.locked ? "/creater/profile" : "/creater/my-campaigns";
+  if (c.inviteGo) return c.locked ? "/creator/profile" : "/creator/my-campaigns";
   const apply = ls.get(K.apply);
   if (apply) {
     ls.del(K.apply);
-    return c.locked ? "/creater/media-kit" : `/creater/discover/${apply}`;
+    return c.locked ? "/creator/media-kit" : `/creator/discover/${apply}`;
   }
-  return "/creater/home";
+  return "/creator/home";
 }
 
 /** React hook: guard chalao (redirect). Return: creator state */

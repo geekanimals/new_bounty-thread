@@ -13,7 +13,7 @@ import { useRpc } from "@/lib/supabase";
 import { DOOR, sb, call, api, fn, K, ls } from "./core";
 import { useCreator, getCreator, patchCreator, reloadProfile, fixPrefs, displayName, backupEmailOf, signOut, track } from "./auth";
 import { termsOf, ratesOf, fmtFollowers } from "./helpers";
-import { CATEGORIES, DREAM_BRANDS } from "@/components/creater/data";
+import { CATEGORIES, DREAM_BRANDS } from "@/components/creator/data";
 
 /* =====================================================================
  * Generic save (purane saveProfileSection / apiCall)

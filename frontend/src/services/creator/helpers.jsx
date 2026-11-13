@@ -313,7 +313,7 @@ export const safeLink = (u) => {
 /* =====================================================================
  * Cover photo (purane camPhoto): Super Admin ki cover → purani ph_ photo → brand → category
  * ===================================================================== */
-// Purane app ki apni photos (/assets/bounty/rd/ph_*.jpg) naye app mein /creater/*.jpg hain.
+// Purane app ki apni photos (/assets/bounty/rd/ph_*.jpg) naye app mein /creator/*.jpg hain.
 const OLD_PH = { ph_beauty: "cat-beauty", ph_fashion: "cat-fashion", ph_food: "cat-food", ph_fitness: "cat-fitness", ph_pets: "cat-pets", ph_travel: "cat-travel",
   ph_circle: "brand-circle", ph_vaaree: "cat-home", ph_beardo: "camp-beardo" };
 const PH = [[/beauty|make ?up|skin|cosmetic/i, "cat-beauty"], [/fashion|apparel|cloth|wear|style/i, "cat-fashion"], [/food|cook|restaurant|snack|drink|bever|chai|tea|coffee/i, "cat-food"],
@@ -327,13 +327,13 @@ export function coverOf(c, covers) {
   if (u) {
     if (/^https?:\/\//.test(u)) return u;
     const m = /\/(ph_[a-z]+)\.jpg$/.exec(u);
-    if (m && OLD_PH[m[1]]) return `/creater/${OLD_PH[m[1]]}.jpg`;
+    if (m && OLD_PH[m[1]]) return `/creator/${OLD_PH[m[1]]}.jpg`;
   }
   const b = String(c?.brand || "").toLowerCase().replace(/[^a-z]/g, "");
-  if (BR[b]) return `/creater/${BR[b]}.jpg`;
+  if (BR[b]) return `/creator/${BR[b]}.jpg`;
   const s = [c?.category, c?.product, c?.name, c?.brand].join(" ");
   const hit = PH.find(([rx]) => rx.test(s));
-  return `/creater/${hit ? hit[1] : "cat-lifestyle"}.jpg`;
+  return `/creator/${hit ? hit[1] : "cat-lifestyle"}.jpg`;
 }
 
 /* =====================================================================
@@ -341,17 +341,17 @@ export function coverOf(c, covers) {
  * ===================================================================== */
 // notification ka action_route (purane page naam) → naya route
 export const ROUTE = {
-  mycampaigns: "/creater/my-campaigns", campaigns: "/creater/my-campaigns", approvals: "/creater/my-campaigns", campaignops: "/creater/my-campaigns", growth: "/creater/my-campaigns",
-  opencampaigns: "/creater/discover", marketplace: "/creater/discover", barter: "/creater/discover", mediakit: "/creater/media-kit", profile: "/creater/profile", onboarding: "/creater/profile",
-  alerts: "/creater/messages", messages: "/creater/messages", dashboard: "/creater/home", payments: "/creater/payments", bxpayments: "/creater/payments", instagram: "/creater/analytics", reports: "/creater/analytics",
+  mycampaigns: "/creator/my-campaigns", campaigns: "/creator/my-campaigns", approvals: "/creator/my-campaigns", campaignops: "/creator/my-campaigns", growth: "/creator/my-campaigns",
+  opencampaigns: "/creator/discover", marketplace: "/creator/discover", barter: "/creator/discover", mediakit: "/creator/media-kit", profile: "/creator/profile", onboarding: "/creator/profile",
+  alerts: "/creator/messages", messages: "/creator/messages", dashboard: "/creator/home", payments: "/creator/payments", bxpayments: "/creator/payments", instagram: "/creator/analytics", reports: "/creator/analytics",
 };
 export const hrefOf = (n) => {
   let r = String(n.action_route || "").replace(/^\/?app\.html\?go=/, "").replace(/^#/, "");
   if (!r) return "";
   if (r.startsWith("admin:")) r = "mycampaigns";
   // campaign wali alert seedha us campaign par
-  if (["mycampaigns", "campaigns", "approvals", "campaignops"].includes(r) && n.participation_id) return `/creater/my-campaigns/${n.participation_id}`;
-  return ROUTE[r] || (r.startsWith("/") ? r : "/creater/home");
+  if (["mycampaigns", "campaigns", "approvals", "campaignops"].includes(r) && n.participation_id) return `/creator/my-campaigns/${n.participation_id}`;
+  return ROUTE[r] || (r.startsWith("/") ? r : "/creator/home");
 };
 export const isAct = (n) => n.kind === "action_required" && !n.acted;
 export const isMsg = (n) => n.kind === "message" || /^geek( team)?\b/i.test(n.title || "");

@@ -39,23 +39,23 @@ Har component ka CSS usi `.jsx` file ke andar `<style>` mein hai.
 `app/globals.css` mein sirf basic reset hai.
 Container: max-width 1400px, side padding 32px (mobile ≤640px: 20px).
 
-## Creator panel (/creater) — violet design
-Sab `src/app/creater/` ke andar, har page ka code + CSS uski `page.jsx` mein.
+## Creator panel (/creator) — violet design
+Sab `src/app/creator/` ke andar, har page ka code + CSS uski `page.jsx` mein.
 
 | Route | Page |
 |---|---|
-| `/creater` | Login (WhatsApp → OTP → Instagram) |
-| `/creater/explore`, `/creater/explore/[id]` | Live campaigns (bina login) |
-| `/creater/dashboard` | Dashboard (+ notifications panel) |
-| `/creater/complete-profile`, `/creater/agent` | Profile complete, Creator Agent |
-| `/creater/media-kit`, `/creater/profile` | Media Kit, Creator Profile |
-| `/creater/instagram` (+ `/stories`, `/comments`, `/dms`, `/insights`) | Instagram |
-| `/creater/messages` | Messages |
-| `/creater/campaigns`, `/creater/campaigns/[id]` | Campaigns, detail / not eligible |
-| `/creater/my-campaigns` (+ `/contract`, `/address`, `/video`, `/post`, `/payment`, `/questions`) | My Campaigns + har step |
-| `/creater/reports` | Reports (CSV download) |
+| `/creator` | Login (WhatsApp → OTP → Instagram) |
+| `/creator/explore`, `/creator/explore/[id]` | Live campaigns (bina login) |
+| `/creator/dashboard` | Dashboard (+ notifications panel) |
+| `/creator/complete-profile`, `/creator/agent` | Profile complete, Creator Agent |
+| `/creator/media-kit`, `/creator/profile` | Media Kit, Creator Profile |
+| `/creator/instagram` (+ `/stories`, `/comments`, `/dms`, `/insights`) | Instagram |
+| `/creator/messages` | Messages |
+| `/creator/campaigns`, `/creator/campaigns/[id]` | Campaigns, detail / not eligible |
+| `/creator/my-campaigns` (+ `/contract`, `/address`, `/video`, `/post`, `/payment`, `/questions`) | My Campaigns + har step |
+| `/creator/reports` | Reports (CSV download) |
 
-- `app/creater/layout.jsx` — font (Plus Jakarta Sans) + creator colours + chhote common classes
-- `components/creater/CreaterShell.jsx` — sidebar + top bar (sab logged-in pages)
-- `components/creater/InstagramTabs.jsx` — Instagram ke tabs
-- `components/creater/data.jsx` — DUMMY data (backend aane par yahan API)
+- `app/creator/layout.jsx` — font (Plus Jakarta Sans) + creator colours + chhote common classes
+- `components/creator/creatorShell.jsx` — sidebar + top bar (sab logged-in pages)
+- `components/creator/InstagramTabs.jsx` — Instagram ke tabs
+- `components/creator/data.jsx` — DUMMY data (backend aane par yahan API)

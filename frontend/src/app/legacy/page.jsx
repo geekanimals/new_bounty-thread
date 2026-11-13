@@ -15,9 +15,9 @@ const DOOR = { superadmin: "admin", admin: "admin", agency: "owner", owner: "own
 // ?go=<page> — purane page naam → naye route (door ke hisaab se)
 const GO = {
   creator: {
-    dashboard: "/creater/home", home: "/creater/home", mycampaigns: "/creater/my-campaigns", campaigns: "/creater/my-campaigns", approvals: "/creater/my-campaigns",
-    campaignops: "/creater/my-campaigns", opencampaigns: "/creater/discover", marketplace: "/creater/discover", mediakit: "/creater/media-kit",
-    profile: "/creater/profile", onboarding: "/creater/profile", alerts: "/creater/home", messages: "/creater/messages", payments: "/creater/payments", settings: "/creater/settings",
+    dashboard: "/creator/home", home: "/creator/home", mycampaigns: "/creator/my-campaigns", campaigns: "/creator/my-campaigns", approvals: "/creator/my-campaigns",
+    campaignops: "/creator/my-campaigns", opencampaigns: "/creator/discover", marketplace: "/creator/discover", mediakit: "/creator/media-kit",
+    profile: "/creator/profile", onboarding: "/creator/profile", alerts: "/creator/home", messages: "/creator/messages", payments: "/creator/payments", settings: "/creator/settings",
   },
   brand: {
     dashboard: "/brands/dashboard", approvals: "/brands/approvals", campaigns: "/brands/campaigns", reports: "/brands/reports", billing: "/brands/billing",
@@ -30,7 +30,7 @@ const GO = {
     messaging: "/admin/messaging", reports: "/admin/reports", activity: "/admin/activity", users: "/admin/users", settings: "/admin/settings", links: "/admin/settings/link-shortener",
   },
 };
-const HOME = { creator: "/creater", brand: "/brands", admin: "/admin", owner: "/" };
+const HOME = { creator: "/creator", brand: "/brands", admin: "/admin", owner: "/" };
 
 export default function LegacyRouter() {
   useEffect(() => {
@@ -64,11 +64,11 @@ export default function LegacyRouter() {
       } catch {
         /* ignore */
       }
-      to = "/creater";
+      to = "/creator";
       keep.set("cinv", q.get("cinv"));
     }
     // public explore page se "Apply"
-    if (q.get("apply")) to = `/creater/discover/${encodeURIComponent(q.get("apply"))}`;
+    if (q.get("apply")) to = `/creator/discover/${encodeURIComponent(q.get("apply"))}`;
     // Razorpay billing se wapsi
     if (q.get("rzpbill")) {
       to = "/brands/billing";

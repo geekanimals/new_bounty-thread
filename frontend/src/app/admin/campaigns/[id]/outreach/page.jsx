@@ -39,7 +39,7 @@ export default function CampaignOutreach() {
   const set = (k) => (e) => setF((o) => ({ ...o, [k]: e.target.value }));
 
   // purane bpMessageText jaisa — ek ready message
-  const link = (f.form_link || "").trim() || `${origin}/creater`;
+  const link = (f.form_link || "").trim() || `${origin}/creator`;
   const lines = [
     `🎁 ${data?.brand || "Brand"} × ${data?.campaign || "Barter campaign"}`,
     f.brand_usp?.trim() && `About: ${f.brand_usp.trim()}`,

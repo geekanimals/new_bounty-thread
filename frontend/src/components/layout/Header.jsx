@@ -166,7 +166,7 @@ export default function Header() {
             <button type="button" className="hd-search" aria-label="Search">
               <Search />
             </button>
-            <Link href="/creater" className="hd-signin">
+            <Link href="/creator" className="hd-signin">
               Sign in
             </Link>
             <Link href="/#demo" className="hd-btn hd-btn--ghost">
@@ -223,7 +223,7 @@ export default function Header() {
           <Link href="/#pricing" className="hd-mobile__link" onClick={closeAll}>
             Pricing
           </Link>
-          <Link href="/creater" className="hd-mobile__link" onClick={closeAll}>
+          <Link href="/creator" className="hd-mobile__link" onClick={closeAll}>
             Sign in
           </Link>
 
