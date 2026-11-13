@@ -77,7 +77,7 @@ export default function SetupDetails() {
   );
 
   return (
-    <OnboardShell tone="light" eyebrow="Last step" avatar="C" gate="member">
+    <OnboardShell tone="light" eyebrow="Last step" avatar gate="member">
       <title>Tell us about you — Bounty</title>
       <form className="dt" onSubmit={finish} noValidate>
         <h2 className="dt-h">Tell us about you.</h2>

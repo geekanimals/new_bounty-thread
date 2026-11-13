@@ -204,7 +204,7 @@ export default function OnboardShell({ children, tone = "dark", step, stepText, 
         <div className="os-right__in">
           <div className="os-mtop">
             <Logo size={22} tone={tone === "light" ? "dark" : "light"} />
-            {avatar === "C" ? <span className="os-av os-av--c">C</span> : avatar && <OnbAvatar kid={avatarKid} />}
+            {avatar === "C" ? <span className="os-av os-av--c">C</span> : avatar && <OnbAvatar />}
           </div>
           {eyebrow && <p className="os-eyebrow">{eyebrow}</p>}
           {step && !eyebrow && (
@@ -310,13 +310,12 @@ export default function OnboardShell({ children, tone = "dark", step, stepText, 
   );
 }
 
-/* Upar right ka gola: Instagram connect hai to uski photo, warna creator ka chuna hua sidekick (koi dummy photo nahi) */
-function OnbAvatar({ kid }) {
+/* Upar right ka gola: sirf Instagram connect hone par uski photo — warna kuch nahi */
+function OnbAvatar() {
   const c = useCreator();
   const ig = (c.igAccounts || [])[0];
   const [bad, setBad] = useState(false);
-  const sk = getSidekick(kid || c.prefs?.kid);
-  if (c.hasIg && ig?.profile_picture_url && !bad)
-    return <img src={ig.profile_picture_url} alt="" className="os-av" referrerPolicy="no-referrer" onError={() => setBad(true)} />;
-  return <img src={sk.img} alt="" className="os-av os-av--kid" style={{ background: sk.bg }} />;
+  // Instagram connect nahi → kuch nahi dikhana (koi dummy / sidekick photo nahi)
+  if (!c.hasIg || !ig?.profile_picture_url || bad) return null;
+  return <img src={ig.profile_picture_url} alt="" className="os-av" referrerPolicy="no-referrer" onError={() => setBad(true)} />;
 }

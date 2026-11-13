@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
-import { getCreator, savePrefs, setKidSeen } from "@/services/creator";
+import { getCreator, savePrefs, setKidSeen, useCreator } from "@/services/creator";
 import { SIDEKICKS, getSidekick } from "@/components/creater/data";
 
 // Figma card colours
@@ -14,9 +14,13 @@ export default function PickSidekick() {
   const router = useRouter();
   const [pick, setPick] = useState("rumi");
 
+  // pehle se chuna hua sidekick select dikhe — creator ka data aane ke baad (pehle "pip" default aa jaata tha)
+  const me = useCreator();
+  const touched = useRef(false);
   useEffect(() => {
-    setPick(getCreator().prefs?.kid || "pip");
-  }, []);
+    if (touched.current) return;
+    setPick(me.prefs?.kid || getCreator().prefs?.kid || "pip");
+  }, [me.ready, me.prefs?.kid]);
 
   // Chuna hua sidekick login par save (purana bxKid.save) → Instagram step
   const go = async (save) => {
@@ -26,7 +30,7 @@ export default function PickSidekick() {
   };
 
   return (
-    <OnboardShell tone="light" step={3} avatar avatarKid={pick} gate="member">
+    <OnboardShell tone="light" step={3} avatar gate="member">
       <title>Pick your sidekick — Bounty</title>
       <div className="sk">
         <h2 className="sk-h">Pick your sidekick.</h2>
@@ -44,7 +48,7 @@ export default function PickSidekick() {
               aria-checked={pick === s.id}
               className={`sk-card ${pick === s.id ? "is-on" : ""}`}
               style={{ background: CARD_BG[s.id] }}
-              onClick={() => setPick(s.id)}
+              onClick={() => ((touched.current = true), setPick(s.id))}
             >
               <img src={s.img} alt="" />
               <strong>{s.name}</strong>
