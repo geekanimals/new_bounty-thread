@@ -219,10 +219,10 @@ export default function MediaKit() {
         <section className="mk-ready">
           <span>
             <strong>Your media kit is ready 🎉</strong>
-            <small>Next, tell brands what you create — it takes a minute.</small>
+            <small>Next: 2 quick steps so brands know what you create.</small>
           </span>
-          <Link href="/creator/onboarding/content" className="bx-btn bx-btn--cream bx-btn--sm">
-            Continue setup <ArrowRight size={12} />
+          <Link href="/creator/onboarding/content" className="bx-btn bx-btn--cream mk-ready__next">
+            Next <ArrowRight size={14} />
           </Link>
         </section>
       )}
@@ -478,10 +478,12 @@ export default function MediaKit() {
       )}
 
       <style>{`
-        .mk-ready { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; padding: 14px 18px; border-radius: 16px; background: linear-gradient(120deg, #123524, #1d4a35); color: var(--bx-cream); border: 1px solid rgba(232,176,74,.6); }
+        .mk-ready { position: sticky; top: 10px; z-index: 30; box-shadow: 0 10px 30px rgba(18,53,36,.25); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; padding: 14px 18px; border-radius: 16px; background: linear-gradient(120deg, #123524, #1d4a35); color: var(--bx-cream); border: 1px solid rgba(232,176,74,.6); }
         .mk-ready span { flex: 1; min-width: 200px; }
         .mk-ready strong { display: block; font-family: var(--bx-serif); font-size: 17px; font-weight: 600; }
         .mk-ready small { font-size: 12.5px; color: #d9cdb2; }
+        .mk-ready__next { padding: 12px 22px; font-size: 15px; font-weight: 600; }
+        @media (max-width: 560px) { .mk-ready__next { width: 100%; justify-content: center; } }
         .mk-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 18px 0 14px; }
         .mk-of { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 6px 0 7px; border-radius: 999px; }
         .mk-of img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
