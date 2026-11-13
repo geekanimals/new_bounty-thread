@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { FILTERS } from "@/components/admin/queue/queueData";
 
 /* /admin/action-queue/<filter>/<item> — item ids database se aate hain, isliye sirf sample pehle se banta hai */
@@ -6,5 +7,6 @@ export function generateStaticParams() {
 }
 
 export default function ItemLayout({ children }) {
-  return children;
+  // Suspense: URL param browser mein milta hai — Next 16 build (cacheComponents) ko boundary chahiye
+  return <Suspense fallback={null}>{children}</Suspense>;
 }

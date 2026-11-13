@@ -1,4 +1,5 @@
 import { Cormorant_Garamond, Hanken_Grotesk } from "next/font/google";
+import { Suspense } from "react";
 import SiteChrome from "@/components/layout/SiteChrome";
 import "./globals.css";
 
@@ -29,7 +30,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" data-scroll-behavior="smooth" className={`${serif.variable} ${sans.variable}`}>
       <body>
-        <SiteChrome>{children}</SiteChrome>
+        {/* Suspense: dynamic routes (/kit/x, /admin/.../[id]) ka URL browser mein padha jata hai — build ke liye boundary zaroori */}
+        <Suspense fallback={null}>
+          <SiteChrome>{children}</SiteChrome>
+        </Suspense>
       </body>
     </html>
   );
