@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import CreatorCards from "@/app/admin/creators/cards/page";
+import CreatorCards from "@/app/vault/creators/cards/page";
 import { useCreatorProfile, profileView, useMsgPause, agoTxt, uaShort } from "@/components/admin/creator/live";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import IgImg from "@/lib/igFresh";
