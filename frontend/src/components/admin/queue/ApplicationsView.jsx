@@ -317,7 +317,9 @@ export default function ApplicationsView({ openId }) {
         .apl-table tbody tr { cursor: pointer; transition: background .15s; }
         .apl-table tbody tr:hover { background: var(--ad-soft-2); }
         .apl-table th:nth-child(1) { width: 145px; }
-        .apl-table th:nth-child(2) { width: 240px; }
+        .apl-table th:nth-child(2) { width: auto; }
+        /* campaign ka naam lamba ho to do line mein — Approve button kabhi na kate */
+        .apl-table td:nth-child(2) { white-space: normal; min-width: 160px; line-height: 1.35; }
         .apl-table th:nth-child(3) { width: 102px; }
         .apl-table th:nth-child(4) { width: 124px; }
         .apl-table th:nth-child(5) { width: 109px; }

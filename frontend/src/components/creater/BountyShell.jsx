@@ -85,6 +85,8 @@ const answerFor = (q) => {
 /* ---------- Connect Instagram sheet (Apply se, locked mode) ---------- */
 export function ConnectInstagramSheet({ open, onClose }) {
   const router = useRouter();
+  const [ss] = useSession();
+  const sk = getSidekick(ss.sidekick);
   if (!open) return null;
   return (
     <div className="bx-overlay" onClick={onClose}>
@@ -96,7 +98,7 @@ export function ConnectInstagramSheet({ open, onClose }) {
           </button>
         </div>
         <div className="bx-modal__body">
-          <img src="/creater/rumi.png" alt="" className="cis-img" />
+          <img src={sk.img} alt="" className="cis-img" />
           <p className="cis-txt">Brands check your real reach before selecting. Connect once — we build your media kit while you wait.</p>
           <ul className="cis-list">
             <li>✓ Official Meta connection — no password shared</li>

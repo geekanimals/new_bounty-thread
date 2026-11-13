@@ -26,7 +26,7 @@ export default function PickSidekick() {
   };
 
   return (
-    <OnboardShell tone="light" step={3} avatar gate="member">
+    <OnboardShell tone="light" step={3} avatar avatarKid={pick} gate="member">
       <title>Pick your sidekick — Bounty</title>
       <div className="sk">
         <h2 className="sk-h">Pick your sidekick.</h2>

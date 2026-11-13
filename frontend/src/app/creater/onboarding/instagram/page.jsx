@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creater/OnboardShell";
-import { signOut as creatorSignOut, setIgLater, afterLoginRoute, getCreator, track } from "@/services/creator";
+import { signOut as creatorSignOut, setIgLater, afterLoginRoute, getCreator, track, useCreator } from "@/services/creator";
+import { getSidekick } from "@/components/creater/data";
 
 /** /creater/onboarding/instagram — Instagram connect karo (ya baad mein) */
 export default function ConnectInstagram() {
   const router = useRouter();
+  const sk = getSidekick(useCreator().prefs?.kid);
 
   const signOut = async () => {
     await creatorSignOut();
@@ -34,9 +36,9 @@ export default function ConnectInstagram() {
 
         <div className="ci-visual">
           <p className="ci-bubble">
-            <b>Rumi:</b> Connect once — I&apos;ll build your media kit while you wait.
+            <b>{sk.name}:</b> Connect once — I&apos;ll build your media kit while you wait.
           </p>
-          <img src="/creater/rumi.png" alt="" className="ci-rumi" />
+          <img src={sk.img} alt="" className="ci-rumi" />
           <div className="ci-kit" aria-hidden="true">
             <div className="ci-kit__top">
               <img src="/creater/avatar-woman.jpg" alt="" />

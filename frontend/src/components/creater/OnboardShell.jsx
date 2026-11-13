@@ -5,9 +5,9 @@ import { pushTip, useRumiTip } from "@/components/creater/rumiBus";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import BootLoader from "@/components/creater/BootLoader";
-import { useCreatorGate } from "@/services/creator";
+import { useCreatorGate, useCreator } from "@/services/creator";
 import Logo from "@/components/creater/Logo";
-import { SIDEKICKS } from "@/components/creater/data";
+import { SIDEKICKS, getSidekick } from "@/components/creater/data";
 import { Play, Close } from "@/components/ui/Icons";
 
 // Left panel ke sidekicks ka order (Figma)
@@ -98,7 +98,12 @@ export function VideoModal({ open, onClose, onFind }) {
 }
 
 /* ---------- Rumi (sidekick) ki baat wala bubble ---------- */
-export function RumiTip({ text, name = "Rumi", img = "/creater/rumi.png", onClose, className = "", mobileDark = false, inline = false }) {
+export function RumiTip({ text, name: nameIn, img: imgIn, onClose, className = "", mobileDark = false, inline = false }) {
+  // naam / photo na diya ho to wahi sidekick bole jo creator ne chuna hai (Rumi hardcode nahi)
+  const me = useCreator();
+  const sk = getSidekick(me.prefs?.kid);
+  const name = nameIn || sk.name;
+  const img = imgIn || sk.img;
   // Page ki baat us sidekick tak bhejo jo screen par already hai (footer / sidebar / left panel).
   // inline = page ka apna bada sidekick hai, to bubble wahin (bina doosri image ke).
   useEffect(() => {
@@ -144,7 +149,7 @@ export function RumiTip({ text, name = "Rumi", img = "/creater/rumi.png", onClos
  * tone: "dark" (jungle) | "light" (parchment) — right panel ka background
  * step: 1–6 (progress bar), back: link/handler, footer: neeche chhota text
  */
-export default function OnboardShell({ children, tone = "dark", step, stepText, eyebrow, back, onBack, avatar = false, footer = "by Geek Creative Agency", gate }) {
+export default function OnboardShell({ children, tone = "dark", step, stepText, eyebrow, back, onBack, avatar = false, avatarKid, footer = "by Geek Creative Agency", gate }) {
   const [video, setVideo] = useState(false);
   // Login / flow guard (purane app jaisa): gate="guest" (login ho chuka to aage), "member" (login zaroori)
   const router = useRouter();
@@ -199,7 +204,7 @@ export default function OnboardShell({ children, tone = "dark", step, stepText, 
         <div className="os-right__in">
           <div className="os-mtop">
             <Logo size={22} tone={tone === "light" ? "dark" : "light"} />
-            {avatar === "C" ? <span className="os-av os-av--c">C</span> : avatar && <img src="/creater/avatar.jpg" alt="" className="os-av" />}
+            {avatar === "C" ? <span className="os-av os-av--c">C</span> : avatar && <OnbAvatar kid={avatarKid} />}
           </div>
           {eyebrow && <p className="os-eyebrow">{eyebrow}</p>}
           {step && !eyebrow && (
@@ -296,10 +301,22 @@ export default function OnboardShell({ children, tone = "dark", step, stepText, 
           .os-mtop { position: relative; display: flex; justify-content: center; align-items: center; height: 26px; margin-bottom: 10px; }
           .os-av { position: absolute; right: -6px; top: -20px; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--bx-gold); object-fit: cover; }
           .os-body { padding-top: 29px; }
+          .os-av--kid { object-fit: contain; padding: 3px; }
           .os-av--c { display: grid; place-items: center; background: #e8c46a; border-color: #b88a2a; font-family: var(--bx-serif); font-size: 20px; font-weight: 600; color: #1e2a1e; }
           .os-foot { padding: 18px 0 19px; }
         }
       `}</style>
     </div>
   );
+}
+
+/* Upar right ka gola: Instagram connect hai to uski photo, warna creator ka chuna hua sidekick (koi dummy photo nahi) */
+function OnbAvatar({ kid }) {
+  const c = useCreator();
+  const ig = (c.igAccounts || [])[0];
+  const [bad, setBad] = useState(false);
+  const sk = getSidekick(kid || c.prefs?.kid);
+  if (c.hasIg && ig?.profile_picture_url && !bad)
+    return <img src={ig.profile_picture_url} alt="" className="os-av" referrerPolicy="no-referrer" onError={() => setBad(true)} />;
+  return <img src={sk.img} alt="" className="os-av os-av--kid" style={{ background: sk.bg }} />;
 }

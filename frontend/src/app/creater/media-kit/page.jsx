@@ -209,7 +209,7 @@ export default function MediaKit() {
   ];
   const mentions = Array.isArray(a.mentions) ? a.mentions.slice(0, 6) : [];
   const syncTxt = syncedAt && now ? `Synced with Instagram ${Math.max(0, Math.round((now - syncedAt) / 1000))}s ago · auto-refreshes every 60s` : syncedAt ? "Synced with Instagram just now · auto-refreshes every 60s" : "Syncing with Instagram…";
-  const avatar = a.profile_picture_url || "/creater/avatar.jpg";
+  const avatar = a.profile_picture_url || sk.img;
 
   return (
     <BountyShell>

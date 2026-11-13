@@ -161,7 +161,7 @@ export default function Inbox({ chatId }) {
             const w = whoOf(c, names);
             return (
               <Link key={c.id} href={`/admin/inbox/chat/${c.id}`} className={`ib-row ${openId === c.id ? "is-on" : ""}`}>
-                <span className="ib-av">{String(w.name).replace(/^[@+]/, "").slice(0, 1).toUpperCase() || "+"}</span>
+                <span className="ib-av">{/^[+\d\s]+$/.test(String(w.name || "")) ? "💬" : String(w.name).replace(/^[@+]/, "").slice(0, 1).toUpperCase() || "💬"}</span>
                 <span className="ib-row__main">
                   <span className="ib-row__t">
                     <b>{w.name}</b> {c.last_message_at && <em>· {ago(c.last_message_at)}</em>}

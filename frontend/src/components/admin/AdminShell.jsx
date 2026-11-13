@@ -362,6 +362,7 @@ export default function AdminShell({ children, wide = false }) {
           <div className="as-cmd" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Search">
             <input
               ref={qRef}
+              autoFocus
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);

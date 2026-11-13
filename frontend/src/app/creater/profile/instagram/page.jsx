@@ -121,7 +121,7 @@ export default function InstagramPrivacy() {
         <ul className="ig-list">
           {accounts.map((a) => (
             <li key={a.ig_user_id || a.username}>
-              {a.profile_picture_url ? <img src={a.profile_picture_url} alt="" referrerPolicy="no-referrer" /> : <img src="/creater/avatar.jpg" alt="" />}
+              {a.profile_picture_url ? <img src={a.profile_picture_url} alt="" referrerPolicy="no-referrer" /> : <span aria-hidden="true">📸</span>}
               <span className="ig-list__txt">
                 <strong>
                   @{a.username} {a.active && <em>Active</em>}
