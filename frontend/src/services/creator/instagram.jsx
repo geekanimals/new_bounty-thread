@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { sb, call, fn, K, ls } from "./core";
-import { loadCreator, reloadProfile } from "./auth";
+import { loadCreator, reloadProfile, signOut } from "./auth";
 import { authReturnUrl } from "@/lib/authReturn";
 
 /* ---------- Constants (purane app.js) ---------- */
@@ -71,8 +71,18 @@ export function readIgReturn() {
  *  login nahi → instagram-login (Instagram se hi sign in)
  * Return: { ok, after } | { ok, signIn } ya throw
  */
-export async function finishInstagram(code, st) {
-  if (!code) throw new Error("Instagram connect was cancelled.");
+// Ek hi code do baar exchange na ho (page do baar mount ho jaye to bhi) — dono ko ek hi result
+const finishing = new Map();
+export function finishInstagram(code, st) {
+  if (!code) return Promise.reject(new Error("Instagram connect was cancelled."));
+  if (!finishing.has(code)) finishing.set(code, doFinishInstagram(code, st));
+  return finishing.get(code);
+}
+
+/** Login purana / user delete ho chuka → saaf logout, WhatsApp se dobara login */
+const NOT_AUTH = /not authenticated|jwt|invalid claim|user.*not.*(exist|found)|unauthori[sz]ed/i;
+
+async function doFinishInstagram(code, st) {
   const expected = ls.get(K.oauthState);
   const ticket = (String(st).split(":")[2] || "").trim();
   if (st !== expected && !/^[0-9a-f]{48}$/.test(ticket)) throw new Error("That Instagram link expired — please try again.");
@@ -82,7 +92,16 @@ export async function finishInstagram(code, st) {
     data: { session },
   } = await sb().auth.getSession();
   if (session) {
-    const r = await fn("instagram-auth", { code, redirect_uri });
+    let r = await fn("instagram-auth", { code, redirect_uri });
+    if (r.error && NOT_AUTH.test(r.error.message || "")) {
+      // token purana ho sakta hai → ek baar refresh karke dobara
+      const ref = await sb().auth.refreshSession();
+      if (!ref.error && ref.data?.session) r = await fn("instagram-auth", { code, redirect_uri });
+      if (r.error && NOT_AUTH.test(r.error.message || "")) {
+        await signOut();
+        throw new Error("Your login has expired — please sign in with WhatsApp again, then connect Instagram.");
+      }
+    }
     if (r.error) throw new Error(r.error.message);
     ls.set(K.igConnected, "1");
   } else {

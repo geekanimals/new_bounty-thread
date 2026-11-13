@@ -145,6 +145,16 @@ export function loadCreator({ force = false } = {}) {
       }
       const user = session.user;
       const { data: m } = await sb().from("members").select("*").eq("id", user.id).maybeSingle();
+      // member row nahi mili → admin ne user delete kiya ho sakta hai: server se login check karo.
+      // Login hi nahi bacha (user delete) → is phone ka saara purana data hatao, logout → WhatsApp login se naya shuru
+      if (!m) {
+        const g = await sb().auth.getUser();
+        if (g.error && (g.error.status === 401 || g.error.status === 403 || /not.*exist|not.*found|jwt|session/i.test(g.error.message || ""))) {
+          forgetDevice(user.id);
+          await signOut();
+          return state;
+        }
+      }
       const md = user.user_metadata || {};
       const member = m
         ? { id: user.id, email: m.email || user.email, name: m.name || md.full_name || "", role: m.role || "creator", status: m.status || "active", whatsapp_e164: m.whatsapp_e164 || null, org_id: m.org_id || null }
@@ -233,6 +243,11 @@ async function waOptin() {
 }
 
 /** Logout — sirf is door ka, sirf is browser mein. UI ko bhi khabar ("bounty-session" event) */
+/** Is device par us user ka bacha hua data (onboarding flags, sidekick, Instagram state) hatao */
+export function forgetDevice(id) {
+  [K.igLater(id), K.kidSeen(id), K.onbDone(id), K.obCommercial(id), K.prefs(id), K.prefsLast, K.igConnected, K.afterIg, K.oauthState, K.waAlerts].forEach((k) => ls.del(k));
+}
+
 export async function signOut() {
   // pehle UI ka state turant "logged out" — taaki koi guard purane login par aage na bheje
   state = { ...EMPTY, ready: true };
