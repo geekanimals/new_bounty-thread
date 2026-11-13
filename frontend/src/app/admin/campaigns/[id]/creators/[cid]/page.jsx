@@ -172,12 +172,12 @@ export default function WorkspaceCreator() {
     return (
       <AdminShell>
         <WorkspaceHead id={id} campaign={camp} />
-        <section className="ad-card wcc">
+        <section className="ga-card wcc">
           <div className="wcc-top">
             <Link href={`/admin/campaigns/${id}/creators`} className="wcc-back wcc-back--on" aria-label="Back to all creators">
               ←
             </Link>
-            <h2 className="ad-h2">{loading ? "Loading creator…" : people.error ? errText(people.error) : "This creator isn’t on this campaign any more — the list is up to date."}</h2>
+            <h2 className="ga-h2">{loading ? "Loading creator…" : people.error ? errText(people.error) : "This creator isn’t on this campaign any more — the list is up to date."}</h2>
           </div>
         </section>
         <style>{`.wcc { padding: 22px; } .wcc-top { display: flex; gap: 10px; align-items: center; } .wcc-back--on { font-size: 18px; font-weight: 800; color: var(--ad-primary); }`}</style>
@@ -188,12 +188,12 @@ export default function WorkspaceCreator() {
     <AdminShell>
       <WorkspaceHead id={id} campaign={camp} />
 
-      <section className="ad-card wcc">
+      <section className="ga-card wcc">
         <div className="wcc-top">
           <Link href={`/admin/campaigns/${c.id}/creators`} className="wcc-back" aria-label="Back to all creators">
             ←
           </Link>
-          <h2 className="ad-h2">Creators · {total}</h2>
+          <h2 className="ga-h2">Creators · {total}</h2>
         </div>
         <CreatorRow
           c={x}
@@ -235,8 +235,8 @@ export default function WorkspaceCreator() {
               <span ref={endRef} />
             </div>
             <form className="wcc-send" onSubmit={send}>
-              <input id="wcc-msg" className="ad-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message — goes as a WhatsApp update" aria-label="Message" />
-              <button type="submit" className="ad-btn ad-btn--primary" aria-label="Send" disabled={!text.trim() || sending}>
+              <input id="wcc-msg" className="ga-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message — goes as a WhatsApp update" aria-label="Message" />
+              <button type="submit" className="ga-btn ga-btn--primary" aria-label="Send" disabled={!text.trim() || sending}>
                 ➤
               </button>
             </form>
@@ -245,7 +245,7 @@ export default function WorkspaceCreator() {
 
           <div className="wcc-side">
             <div className="wcc-box">
-              <h3 className="ad-h2">Details</h3>
+              <h3 className="ga-h2">Details</h3>
               <div className="wcc-details">
                 <div>
                   <p>WhatsApp</p>
@@ -275,10 +275,10 @@ export default function WorkspaceCreator() {
             </div>
 
             <div className="wcc-box">
-              <h3 className="ad-h2">Actions</h3>
+              <h3 className="ga-h2">Actions</h3>
               <label className="wcc-move">
                 <span>Move to</span>
-                <select className="ad-input" value={curSt} disabled={busy === "move"} onChange={(e) => move(e.target.value)}>
+                <select className="ga-input" value={curSt} disabled={busy === "move"} onChange={(e) => move(e.target.value)}>
                   {INVITE_STEPS.filter(([k]) => camp?.campaign_type !== "paid" || !["address_confirmed", "courier_sent", "courier_delivered"].includes(k)).map(([k, l], i) => (
                     <option key={k} value={k}>
                       {i + 1}. {l}
@@ -317,15 +317,15 @@ export default function WorkspaceCreator() {
       </section>
 
       {ask && (
-        <div className="ad-overlay" onClick={() => setAsk(false)}>
-          <div className="ad-modal wcc-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Remove creator">
-            <h2 className="ad-h2">Delete {x.name} from this campaign?</h2>
+        <div className="ga-overlay" onClick={() => setAsk(false)}>
+          <div className="ga-modal wcc-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Remove creator">
+            <h2 className="ga-h2">Delete {x.name} from this campaign?</h2>
             <p>Their contract, courier, video, posts and every message about this campaign go too. This can’t be undone.</p>
             <div className="wcc-modal__act">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAsk(false)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setAsk(false)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" disabled={busy === "del"} onClick={remove}>
+              <button type="button" className="ga-btn ga-btn--danger" disabled={busy === "del"} onClick={remove}>
                 {busy === "del" ? "Deleting…" : "🗑 Yes, delete"}
               </button>
             </div>
@@ -333,11 +333,11 @@ export default function WorkspaceCreator() {
         </div>
       )}
       {askEl}
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         /* Figma: select par arrow nahi */
-        select.ad-input { appearance: none; -webkit-appearance: none; }
+        select.ga-input { appearance: none; -webkit-appearance: none; }
         .wcc { padding: 22px 22px 40px; }
         .wcc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
         .wcc-back { display: none; }
@@ -354,9 +354,9 @@ export default function WorkspaceCreator() {
         .wcc-msg.is-me { align-self: flex-end; width: auto; max-width: 88%; background: #d9fdd3; }
         .wcc-msg.is-me small { margin-top: 0; }
         .wcc-send { display: flex; gap: 8px; padding: 11px 14px 0; }
-        .wcc-send .ad-input { width: 173px; height: 42px; flex: 0 1 173px; }
-        .wcc-send .ad-input::placeholder { color: #757575; }
-        .wcc-send .ad-btn { width: 43px; height: 42px; padding: 0; font-size: 14px; }
+        .wcc-send .ga-input { width: 173px; height: 42px; flex: 0 1 173px; }
+        .wcc-send .ga-input::placeholder { color: #757575; }
+        .wcc-send .ga-btn { width: 43px; height: 42px; padding: 0; font-size: 14px; }
         .wcc-note { padding: 10px 14px 12px; font-size: 12px; color: var(--ad-muted); }
 
         .wcc-side { display: flex; flex-direction: column; gap: 18px; }
@@ -379,7 +379,7 @@ export default function WorkspaceCreator() {
         .wcc-modal p { margin-top: 10px; font-size: 13px; color: var(--ad-muted); }
         .wcc-modal__act { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 
-        @media (max-width: 1180px) { .wcc-grid { grid-template-columns: 1fr; } .wcc-send .ad-input { flex: 1; width: auto; } }
+        @media (max-width: 1180px) { .wcc-grid { grid-template-columns: 1fr; } .wcc-send .ga-input { flex: 1; width: auto; } }
         @media (max-width: 640px) {
           .wcc { padding: 16px 14px 24px; }
           .wcc-back { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--ad-soft); font-weight: 800; }

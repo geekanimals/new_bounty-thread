@@ -63,10 +63,10 @@ export default function CreatorUploadMatch() {
   return (
     <AdminShell>
       <PageHead title="Creator upload" sub="Add creators who aren’t on Geek OS yet and invite them to the live campaigns." />
-      <section className="ad-card cu2-card">
+      <section className="ga-card cu2-card">
         <div className="cu2-top">
-          <h2 className="ad-h2">📥 Creator upload</h2>
-          {notSel && <span className="ad-badge ad-badge--violet">Not selected for campaign</span>}
+          <h2 className="ga-h2">📥 Creator upload</h2>
+          {notSel && <span className="ga-badge ga-badge--violet">Not selected for campaign</span>}
         </div>
         <div className="cu2-fields">
           <TargetFields brand={brand} camp={camp} onBrand={setBrand} onCamp={setCamp} />
@@ -78,7 +78,7 @@ export default function CreatorUploadMatch() {
             <b>{sheet.rows.length} rows</b>from {sheet.src} · <b>{ok}</b>with WhatsApp / email / Instagram
             {sheet.rows.length - ok ? " ·" : ""}
           </span>
-          {sheet.rows.length - ok > 0 && <span className="ad-badge ad-badge--orange">{sheet.rows.length - ok} without contact — skipped</span>}
+          {sheet.rows.length - ok > 0 && <span className="ga-badge ga-badge--orange">{sheet.rows.length - ok} without contact — skipped</span>}
         </p>
 
         <p className="cu2-h">
@@ -101,7 +101,7 @@ export default function CreatorUploadMatch() {
         </div>
 
         <div className="cu2-table">
-          <table className="ad-table">
+          <table className="ga-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -128,7 +128,7 @@ export default function CreatorUploadMatch() {
             <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} />
             Send the {notSel ? "“not selected — explore more campaigns”" : "“explore live campaigns”"} invite now (WhatsApp + email)
           </label>
-          <button type="button" className="ad-btn ad-btn--primary cu2-add" onClick={add} disabled={busy || !ok}>
+          <button type="button" className="ga-btn ga-btn--primary cu2-add" onClick={add} disabled={busy || !ok}>
             {busy ? "Adding…" : `Add ${ok} creator${ok === 1 ? "" : "s"}`}
           </button>
           <button type="button" className="cu2-clear" onClick={clear}>
@@ -158,8 +158,8 @@ export default function CreatorUploadMatch() {
         .cu2-m--stack select { min-width: 86px; }
         .cu2-m select:focus { border-color: var(--ad-primary); }
         .cu2-table { margin-top: 24px; overflow-x: auto; }
-        .cu2-table .ad-table th { background: transparent; padding: 12px 11px; }
-        .cu2-table .ad-table td { height: 48px; padding: 10px 11px; }
+        .cu2-table .ga-table th { background: transparent; padding: 12px 11px; }
+        .cu2-table .ga-table td { height: 48px; padding: 10px 11px; }
         .cu2-table tr.is-skip td { color: #9aa1b3; }
         .cu2-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; margin-top: 0; }
         .cu2-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ad-ink); cursor: pointer; }

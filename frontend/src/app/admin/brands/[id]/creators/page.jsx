@@ -48,8 +48,8 @@ function BrandCreators() {
   return (
     <>
       <div className="bcr-f">
-        <input className="ad-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator…" aria-label="Search creator" />
-        <select className="ad-input" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
+        <input className="ga-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator…" aria-label="Search creator" />
+        <select className="ga-input" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
           <option value="all">All campaigns</option>
           {options.map((o) => (
             <option key={o}>{o}</option>
@@ -77,7 +77,7 @@ function BrandCreators() {
           <span key="c" title={r.campaign}>
             {r.campaign}
           </span>,
-          <span key="s" className={`ad-badge ad-badge--${tone(r.stage)}`}>
+          <span key="s" className={`ga-badge ga-badge--${tone(r.stage)}`}>
             {label(r.stage)}
           </span>,
           <span key="p" className="bcr-p">
@@ -88,13 +88,13 @@ function BrandCreators() {
       />
       <style>{`
         .bcr-f { display: flex; gap: 9px; margin: 0 0 24px; }
-        .bcr-f .ad-input:first-child { width: 270px; height: 43px; }
-        .bcr-f select.ad-input { width: 170px; height: 44px; padding: 0 12px; }
+        .bcr-f .ga-input:first-child { width: 270px; height: 43px; }
+        .bcr-f select.ga-input { width: 170px; height: 44px; padding: 0 12px; }
         .bcr-n:hover { color: var(--ad-primary); }
         .bcr-p { font-size: 15px; }
         @media (max-width: 640px) {
           .bcr-f { flex-direction: column; margin-top: 0; }
-          .bcr-f .ad-input:first-child, .bcr-f select.ad-input { width: 100%; }
+          .bcr-f .ga-input:first-child, .bcr-f select.ga-input { width: 100%; }
         }
       `}</style>
     </>

@@ -23,7 +23,7 @@ export default function SettingsWorkspaces() {
         title={`Workspaces · ${ws.loading ? "…" : fmtNum(all.length)}`}
         sub="Every agency, brand and creator workspace."
         className="sw-panel"
-        action={<input className="ad-input sw-q" placeholder="Search workspace…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search workspace" />}
+        action={<input className="ga-input sw-q" placeholder="Search workspace…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search workspace" />}
       >
         <Table
           rowH={48}
@@ -45,7 +45,7 @@ export default function SettingsWorkspaces() {
             w.creators ?? 0,
             w.campaigns ?? 0,
             w.pending ? (
-              <span key="p" className="ad-badge ad-badge--orange">
+              <span key="p" className="ga-badge ga-badge--orange">
                 {w.pending}
               </span>
             ) : (

@@ -12,7 +12,7 @@ export default function CreatorCampaignsTab() {
       {(p) => (
         <div className="cpc">
           <div className="cpc-wrap">
-            <table className="ad-table">
+            <table className="ga-table">
               <thead>
                 <tr>
                   <th>Campaign</th>
@@ -30,7 +30,7 @@ export default function CreatorCampaignsTab() {
                     <td>{c.applied}</td>
                     <td>{c.step}</td>
                     <td>
-                      <span className={`ad-badge ad-badge--${c.tone}`}>{c.result}</span>
+                      <span className={`ga-badge ga-badge--${c.tone}`}>{c.result}</span>
                     </td>
                   </tr>
                 ))}
@@ -47,12 +47,12 @@ export default function CreatorCampaignsTab() {
           <style>{`
             .cpc { margin-top: 0; }
             .cpc-wrap { overflow-x: auto; }
-            .cpc .ad-table th { background: transparent; padding: 12px 11px; }
-            .cpc .ad-table td { height: 57px; padding: 12px 11px; }
-            .cpc .ad-table th:nth-child(1) { width: 41%; }
-            .cpc .ad-table th:nth-child(2) { width: 18%; }
-            .cpc .ad-table th:nth-child(3) { width: 21%; }
-            .cpc .ad-table a:hover { color: var(--ad-primary); }
+            .cpc .ga-table th { background: transparent; padding: 12px 11px; }
+            .cpc .ga-table td { height: 57px; padding: 12px 11px; }
+            .cpc .ga-table th:nth-child(1) { width: 41%; }
+            .cpc .ga-table th:nth-child(2) { width: 18%; }
+            .cpc .ga-table th:nth-child(3) { width: 21%; }
+            .cpc .ga-table a:hover { color: var(--ad-primary); }
             .cpc + .cdw-priv { margin-top: 30px; }
             .cpc-none { color: var(--ad-muted); }
           `}</style>

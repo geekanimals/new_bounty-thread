@@ -10,20 +10,20 @@ import Link from "next/link";
  */
 export function PageHead({ title, sub, eyebrow = "Geek OS / Super Admin", children }) {
   return (
-    <div className="ad-head ap-head">
+    <div className="ga-head ap-head">
       <div className="ap-head__txt">
-        <p className="ad-eyebrow">{eyebrow}</p>
-        <h1 className="ad-h1">{title}</h1>
-        {sub && <p className="ad-sub">{sub}</p>}
+        <p className="ga-eyebrow">{eyebrow}</p>
+        <h1 className="ga-h1">{title}</h1>
+        {sub && <p className="ga-sub">{sub}</p>}
       </div>
       {children && <div className="ap-head__act">{children}</div>}
       <style>{`
         .ap-head { margin-bottom: 24px; }
-        .ap-head .ad-eyebrow { margin-bottom: 10px; }
-        .ap-head .ad-sub { margin-top: 7px; }
+        .ap-head .ga-eyebrow { margin-bottom: 10px; }
+        .ap-head .ga-sub { margin-top: 7px; }
         .ap-head__txt { min-width: 0; flex: 1 1 420px; }
         .ap-head__act { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 0; }
-        .ap-head__act .ad-btn { height: 42px; padding: 0 17px; }
+        .ap-head__act .ga-btn { height: 42px; padding: 0 17px; }
         @media (max-width: 640px) {
           .ap-head__act { width: 100%; padding-top: 0; }
           .ap-head__act > * { flex: 1; }

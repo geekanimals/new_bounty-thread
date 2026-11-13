@@ -70,17 +70,17 @@ export default function WorkspaceFulfilment() {
         ]}
       />
 
-      <section className="ad-card wf">
+      <section className="ga-card wf">
         <div className="wf-head">
-          <h2 className="ad-h2">Shipment tracker</h2>
+          <h2 className="ga-h2">Shipment tracker</h2>
           {/* courier + tracking ek saath — Bulk sheet se (purane app jaisa: sheet mein Courier / Tracking columns) */}
-          <button type="button" className="ad-btn ad-btn--ghost wf-imp" onClick={() => router.push(`/admin/campaigns/${id}/upload`)}>
+          <button type="button" className="ga-btn ga-btn--ghost wf-imp" onClick={() => router.push(`/admin/campaigns/${id}/upload`)}>
             ⇧ Import tracking
           </button>
         </div>
         <div className="wf-bar">
-          <input className="ad-input wf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator, kit, courier…" aria-label="Search shipments" />
-          <select className="ad-input wf-sel" value={st} onChange={(e) => setSt(e.target.value)} aria-label="Status">
+          <input className="ga-input wf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator, kit, courier…" aria-label="Search shipments" />
+          <select className="ga-input wf-sel" value={st} onChange={(e) => setSt(e.target.value)} aria-label="Status">
             {STATUSES.map((s) => (
               <option key={s}>{s}</option>
             ))}
@@ -88,7 +88,7 @@ export default function WorkspaceFulfilment() {
         </div>
 
         <div className="wf-wrap">
-          <table className="ad-table wf-table">
+          <table className="ga-table wf-table">
             <thead>
               <tr>
                 <th>Creator</th>
@@ -107,7 +107,7 @@ export default function WorkspaceFulfilment() {
                   <td>{s.camp}</td>
                   <td>{s.product}</td>
                   <td>
-                    <span className={`ad-badge ad-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
+                    <span className={`ga-badge ga-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
                   </td>
                   <td>{s.courier}</td>
                   <td>{s.at}</td>
@@ -126,7 +126,7 @@ export default function WorkspaceFulfilment() {
             <Link key={s.id} href={s.href} className="wf-card">
               <div className="wf-card__top">
                 <b>{s.who}</b>
-                <span className={`ad-badge ad-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
+                <span className={`ga-badge ga-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
               </div>
               <span>
                 {s.camp} · {s.product}
@@ -140,7 +140,7 @@ export default function WorkspaceFulfilment() {
         </div>
         {!rows.length && <p className="wf-empty">{bt.error ? errText(bt.error) : loading ? "Loading shipments…" : all.length ? "No shipments match." : "Nothing to ship yet — creators show here once they sign the contract."}</p>}
       </section>
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .wf { padding: 22px 22px 20px; }

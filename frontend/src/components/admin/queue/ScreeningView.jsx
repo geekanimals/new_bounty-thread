@@ -91,10 +91,10 @@ export default function ScreeningView({ openId }) {
         ]}
       />
 
-      <section className="ad-card sq">
-        <div className="ad-tabs sq-tabs" role="tablist" data-scroll>
+      <section className="ga-card sq">
+        <div className="ga-tabs sq-tabs" role="tablist" data-scroll>
           {TABS.map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`ad-tab ${tab === t ? "is-on" : ""}`} onClick={() => setTab(t)}>
+            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`ga-tab ${tab === t ? "is-on" : ""}`} onClick={() => setTab(t)}>
               {t}
             </button>
           ))}
@@ -107,16 +107,16 @@ export default function ScreeningView({ openId }) {
               <span className="sq-ic">{q.icon}</span>
               <div className="sq-main">
                 <p className="sq-title">
-                  <Link href={`${BASE}/${q.id}`}>{q.title}</Link> <span className="ad-count">{q.count}</span>
+                  <Link href={`${BASE}/${q.id}`}>{q.title}</Link> <span className="ga-count">{q.count}</span>
                 </p>
                 <p className="sq-sub">
                   {q.campaign} · {q.reason}
                 </p>
               </div>
               <div className="sq-side">
-                <span className={`ad-badge ad-badge--${q.tone}`}>{q.pri}</span>
+                <span className={`ga-badge ga-badge--${q.tone}`}>{q.pri}</span>
                 <span className="sq-when">{q.when}</span>
-                <Link href={`${BASE}/${q.id}`} className="ad-btn ad-btn--ghost sq-review">
+                <Link href={`${BASE}/${q.id}`} className="ga-btn ga-btn--ghost sq-review">
                   Review →
                 </Link>
               </div>
@@ -145,11 +145,11 @@ export default function ScreeningView({ openId }) {
             why={`${open.reason}. Review campaign brief and evidence before making a decision.`}
             actions={
               <>
-                <Link href="/admin/applications" className="ad-btn ad-btn--primary">
+                <Link href="/admin/applications" className="ga-btn ga-btn--primary">
                   Open applications
                 </Link>
                 {open.cid && (
-                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
+                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
                     Open campaign
                   </Link>
                 )}
@@ -171,8 +171,8 @@ export default function ScreeningView({ openId }) {
 
       <style>{`
         .sq { padding: 22px 22px 30px; }
-        .sq-tabs .ad-tab { height: 37px; }
-        .sq-tabs .ad-tab:not(.is-on) { color: #67718a; }
+        .sq-tabs .ga-tab { height: 37px; }
+        .sq-tabs .ga-tab:not(.is-on) { color: #67718a; }
         .sq-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
         .sq-row { display: flex; align-items: center; gap: 14px; min-height: 74px; padding: 12px 14px 12px 13px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; transition: border-color .15s; }
         .sq-row:hover { border-color: #cfd2ee; }
@@ -180,7 +180,7 @@ export default function ScreeningView({ openId }) {
         .sq-main { flex: 1; min-width: 0; }
         .sq-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 700; color: var(--ad-ink); }
         .sq-title a:hover { color: var(--ad-primary); }
-        .sq-title .ad-count { min-width: 26px; height: 24px; border-radius: 12px; }
+        .sq-title .ga-count { min-width: 26px; height: 24px; border-radius: 12px; }
         .sq-sub { margin-top: 8px; font-size: 12px; line-height: 1.33; color: #8791a7; }
         .sq-side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .sq-when { font-size: 12px; color: var(--ad-muted); }

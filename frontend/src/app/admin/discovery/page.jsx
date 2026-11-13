@@ -55,27 +55,27 @@ export default function DiscoverySearch() {
   return (
     <AdminShell>
       <DiscoveryHead />
-      <section className="ad-card ds-card">
-        <h2 className="ad-h2">Creator search</h2>
+      <section className="ga-card ds-card">
+        <h2 className="ga-h2">Creator search</h2>
         <p className="ds-sub">Filter every creator on Geek OS and our Instagram list.</p>
         <form className="ds-row" onSubmit={run}>
-          <input className="ad-input ds-q" placeholder="Name, @handle or city…" value={form.q} onChange={set("q")} aria-label="Name, handle or city" />
-          <select className="ad-input ds-sel" value={form.fol} onChange={set("fol")} aria-label="Followers">
+          <input className="ga-input ds-q" placeholder="Name, @handle or city…" value={form.q} onChange={set("q")} aria-label="Name, handle or city" />
+          <select className="ga-input ds-sel" value={form.fol} onChange={set("fol")} aria-label="Followers">
             {FOL.map(([l]) => (
               <option key={l}>{l}</option>
             ))}
           </select>
-          <select className="ad-input ds-sel" value={form.city} onChange={set("city")} aria-label="City">
+          <select className="ga-input ds-sel" value={form.city} onChange={set("city")} aria-label="City">
             {["Any city", ...CITIES].map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
-          <select className="ad-input ds-sel" value={form.lang} onChange={set("lang")} aria-label="Language">
+          <select className="ga-input ds-sel" value={form.lang} onChange={set("lang")} aria-label="Language">
             {langs.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
-          <button type="submit" className="ad-btn ad-btn--primary ds-go">
+          <button type="submit" className="ga-btn ga-btn--primary ds-go">
             Search
           </button>
         </form>
@@ -88,7 +88,7 @@ export default function DiscoverySearch() {
         </div>
 
         <div className="ds-table">
-          <table className="ad-table">
+          <table className="ga-table">
             <thead>
               <tr>
                 <th>Creator</th>
@@ -160,8 +160,8 @@ export default function DiscoverySearch() {
         .ds-chip { height: 26px; padding: 0 10px; border: 0; border-radius: 13.3px; background: var(--ad-soft); color: #7a8398; font-size: 11px; font-weight: 700; }
         .ds-chip.is-on { background: var(--ad-lilac); color: #6857ec; }
         .ds-table { margin-top: 20px; overflow-x: auto; }
-        .ds-table .ad-table th { background: transparent; padding: 12px 11px; }
-        .ds-table .ad-table td { height: 67.5px; padding: 14px 11px; }
+        .ds-table .ga-table th { background: transparent; padding: 12px 11px; }
+        .ds-table .ga-table td { height: 67.5px; padding: 14px 11px; }
         .ds-name { display: block; font-weight: 800; }
         .ds-name:hover { color: var(--ad-primary); }
         .ds-handle { display: block; margin-top: 4px; font-size: 11px; font-weight: 500; color: #9aa1b3; }
@@ -172,7 +172,7 @@ export default function DiscoverySearch() {
           .ds-q { width: 100%; }
           .ds-sel { flex: 1 1 40%; min-width: 0; }
           .ds-go { flex: 1 1 40%; }
-          .ds-table .ad-table th:nth-child(3), .ds-table .ad-table td:nth-child(3), .ds-table .ad-table th:nth-child(4), .ds-table .ad-table td:nth-child(4) { display: none; }
+          .ds-table .ga-table th:nth-child(3), .ds-table .ga-table td:nth-child(3), .ds-table .ga-table th:nth-child(4), .ds-table .ga-table td:nth-child(4) { display: none; }
         }
       `}</style>
     </AdminShell>

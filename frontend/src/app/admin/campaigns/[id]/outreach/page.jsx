@@ -86,17 +86,17 @@ export default function CampaignOutreach() {
               {FIELDS.map(([k, l, ph]) => (
                 <label key={k} className="or-field">
                   <span>{l}</span>
-                  <input className="ad-input" value={f[k] || ""} onChange={set(k)} placeholder={ph} />
+                  <input className="ga-input" value={f[k] || ""} onChange={set(k)} placeholder={ph} />
                 </label>
               ))}
               <div className="or-act">
-                <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+                <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
                   {busy ? "Saving…" : "Save message"}
                 </button>
-                <button type="button" className="ad-btn ad-btn--ghost" onClick={copy}>
+                <button type="button" className="ga-btn ga-btn--ghost" onClick={copy}>
                   📋 Copy for story / groups
                 </button>
-                <button type="button" className="ad-btn ad-btn--ghost" onClick={() => router.push(`/admin/campaigns/${id}/find`)}>
+                <button type="button" className="ga-btn ga-btn--ghost" onClick={() => router.push(`/admin/campaigns/${id}/find`)}>
                   📣 Send to matching creators
                 </button>
               </div>
@@ -118,10 +118,10 @@ export default function CampaignOutreach() {
         .or-grid { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }
         .or-form { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 16px; margin-top: -2px; }
         .or-field span { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 800; color: #60708c; }
-        .or-field .ad-input { height: 42px; font-size: 12px; font-weight: 800; }
-        .or-field .ad-input::placeholder { color: #757575; }
+        .or-field .ga-input { height: 42px; font-size: 12px; font-weight: 800; }
+        .or-field .ga-input::placeholder { color: #757575; }
         .or-act { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
-        .or-act .ad-btn { height: 41px; }
+        .or-act .ga-btn { height: 41px; }
         .or-prev .c2-panel__head { margin-bottom: 18px; }
         .or-prev { padding-bottom: 22px; }
         .or-bubble { padding: 13px 14px; border-radius: 12px; background: #d9fdd3; font-size: 13px; line-height: 1.5; color: var(--ad-ink); overflow-wrap: anywhere; }
@@ -130,7 +130,7 @@ export default function CampaignOutreach() {
         @media (max-width: 1023px) { .or-grid { grid-template-columns: 1fr; } .or-prev { order: -1; } }
         @media (max-width: 640px) {
           .or-form { grid-template-columns: 1fr; }
-          .or-act .ad-btn { flex: 1 1 100%; }
+          .or-act .ga-btn { flex: 1 1 100%; }
         }
       `}</style>
     </AdminShell>

@@ -155,17 +155,17 @@ export default function WorkspaceCreators() {
     <AdminShell>
       <WorkspaceHead id={id} campaign={camp} />
 
-      <section className="ad-card wcr-card">
+      <section className="ga-card wcr-card">
         <div className="wcr-head">
           <div>
-            <h2 className="ad-h2">Creator journey</h2>
+            <h2 className="ga-h2">Creator journey</h2>
             <p className="wcr-sub">Every creator by the step they are on — tap a box to filter.</p>
           </div>
           <div className="wcr-head__act">
             <Link href={`/admin/campaigns/${c.id}/upload`} className="wcr-link">
               📄 Bulk sheet
             </Link>
-            <Link href={`/admin/campaigns/${c.id}/find`} className="ad-btn ad-btn--primary wcr-find">
+            <Link href={`/admin/campaigns/${c.id}/find`} className="ga-btn ga-btn--primary wcr-find">
               🎯 Find matching creators
             </Link>
           </div>
@@ -181,19 +181,19 @@ export default function WorkspaceCreators() {
         </div>
       </section>
 
-      <section className="ad-card wcr-card wcr-list">
-        <h2 className="ad-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${BOXES[box].l.toLowerCase()}`}</h2>
+      <section className="ga-card wcr-card wcr-list">
+        <h2 className="ga-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${BOXES[box].l.toLowerCase()}`}</h2>
         <p className="wcr-sub">Tap a creator to open every step, chat and action.</p>
 
         <div className="wcr-filters">
-          <input className="ad-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
+          <input className="ga-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
           {[
             [sort, setSort, ["Sort: furthest step", "Sort: name", "Sort: followers"], "Sort"],
             [who, setWho, ["Everyone", "Creator’s turn", "Our turn"], "Whose turn"],
             [size, setSize, ["Any size", "Under 10k", "10k – 50k"], "Follower size"],
             [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
           ].map(([v, set, opts, label]) => (
-            <select key={label} className="ad-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
+            <select key={label} className="ga-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
               {opts.map((o) => (
                 <option key={o}>{o}</option>
               ))}
@@ -207,7 +207,7 @@ export default function WorkspaceCreators() {
             <span className="wcr-allbox" aria-hidden="true" />
             Select all ({rows.length})
           </label>
-          <button type="button" className="ad-btn ad-btn--ghost wcr-wa" disabled={!sel.length || busy === "wa"} onClick={waSelected}>
+          <button type="button" className="ga-btn ga-btn--ghost wcr-wa" disabled={!sel.length || busy === "wa"} onClick={waSelected}>
             {busy === "wa" ? "Sending…" : `💬 WhatsApp to selected (${sel.length})`}
           </button>
           <button type="button" className="wcr-txt" disabled={!declinable.length || busy === "decl"} onClick={declineSel}>
@@ -255,11 +255,11 @@ export default function WorkspaceCreators() {
         </div>
       </section>
       {askEl}
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         /* Figma: select par arrow nahi */
-        select.ad-input { appearance: none; -webkit-appearance: none; }
+        select.ga-input { appearance: none; -webkit-appearance: none; }
         .wcr-card { padding: 22px 22px 22px; }
         .wcr-list { margin-top: 20px; padding-bottom: 30px; }
         .wcr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }

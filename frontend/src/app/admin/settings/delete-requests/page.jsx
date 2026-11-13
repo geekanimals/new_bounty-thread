@@ -72,7 +72,7 @@ export default function SettingsDeleteRequests() {
               </button>
               <button
                 type="button"
-                className="ad-btn ad-btn--primary sx-del"
+                className="ga-btn ga-btn--primary sx-del"
                 onClick={() => {
                   setTyped("");
                   setNote("");
@@ -87,26 +87,26 @@ export default function SettingsDeleteRequests() {
       </Panel>
 
       {confirm && (
-        <div className="ad-overlay" onClick={() => setConfirm(null)}>
-          <div className="ad-modal sx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete campaign">
-            <h2 className="ad-h2">Delete “{nameOf(confirm)}”?</h2>
+        <div className="ga-overlay" onClick={() => setConfirm(null)}>
+          <div className="ga-modal sx-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete campaign">
+            <h2 className="ga-h2">Delete “{nameOf(confirm)}”?</h2>
             <p className="sx-modal__p">
               Asked by <b>{confirm.requester || "—"}</b>
               {confirm.reason ? ` · “${confirm.reason}”` : ""}. The campaign, its {Number(confirm.creators || 0)} creators’ applications and messages are removed for everyone. This can’t be undone.
             </p>
-            <label className="ad-label sx-l" htmlFor="sx-type">
+            <label className="ga-label sx-l" htmlFor="sx-type">
               Type “{nameOf(confirm)}” to confirm
             </label>
-            <input id="sx-type" className="ad-input" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
-            <label className="ad-label sx-l" htmlFor="sx-note">
+            <input id="sx-type" className="ga-input" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+            <label className="ga-label sx-l" htmlFor="sx-note">
               Note (optional)
             </label>
-            <input id="sx-note" className="ad-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why it was approved" />
+            <input id="sx-note" className="ga-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why it was approved" />
             <div className="sx-modal__btns">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setConfirm(null)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setConfirm(null)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" onClick={del} disabled={busy || typed.trim().toLowerCase() !== nameOf(confirm).trim().toLowerCase()}>
+              <button type="button" className="ga-btn ga-btn--danger" onClick={del} disabled={busy || typed.trim().toLowerCase() !== nameOf(confirm).trim().toLowerCase()}>
                 Delete campaign
               </button>
             </div>

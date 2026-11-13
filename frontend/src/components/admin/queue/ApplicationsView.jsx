@@ -145,9 +145,9 @@ export default function ApplicationsView({ openId }) {
         ]}
       />
 
-      <section className="ad-card apl">
+      <section className="ga-card apl">
         <div className="apl-head">
-          <h2 className="ad-h2">
+          <h2 className="ga-h2">
             {STATUS_LABEL[status]} · {rows.length}
             {status !== "pending" && (
               <a href="#pending" className="apl-back">
@@ -161,24 +161,24 @@ export default function ApplicationsView({ openId }) {
         </div>
 
         <div className="apl-filters">
-          <div className="ad-tabs apl-tabs" role="tablist">
+          <div className="ga-tabs apl-tabs" role="tablist">
             {[
               ["All", "All"],
               ["Paid", `💰 Paid ${typeN("Paid")}`],
               ["Barter", `🎁 Barter ${typeN("Barter")}`],
             ].map(([k, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={type === k} className={`ad-tab ${type === k ? "is-on" : ""}`} onClick={() => setType(k)}>
+              <button key={k} type="button" role="tab" aria-selected={type === k} className={`ga-tab ${type === k ? "is-on" : ""}`} onClick={() => setType(k)}>
                 {label}
               </button>
             ))}
           </div>
-          <select className="ad-input apl-select" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
+          <select className="ga-input apl-select" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
             <option value="">All campaigns</option>
             {campaigns.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
-          <input className="ad-input apl-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator…" aria-label="Search creator" />
+          <input className="ga-input apl-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator…" aria-label="Search creator" />
         </div>
 
         <div className="apl-wrap" data-scroll>
@@ -206,11 +206,11 @@ export default function ApplicationsView({ openId }) {
                       <span className="apl-handle">{a.handle}</span>
                     </td>
                     <td>{a.campaign}</td>
-                    <td>{a.type !== "—" ? <span className={`ad-badge ad-badge--${a.ctype === "barter" ? "orange" : "violet"}`}>{a.type}</span> : "—"}</td>
+                    <td>{a.type !== "—" ? <span className={`ga-badge ga-badge--${a.ctype === "barter" ? "orange" : "violet"}`}>{a.type}</span> : "—"}</td>
                     <td>{a.followers}</td>
                     <td>{dayAgo(a.appliedAt)}</td>
                     <td>
-                      <span className={`ad-badge ad-badge--${a.fit === "Good fit" ? "green" : "orange"}`}>{a.fit}</span>
+                      <span className={`ga-badge ga-badge--${a.fit === "Good fit" ? "green" : "orange"}`}>{a.fit}</span>
                     </td>
                     <td className="apl-act" onClick={(e) => e.stopPropagation()}>
                       {a.g === "pending" ? (
@@ -218,12 +218,12 @@ export default function ApplicationsView({ openId }) {
                           <button type="button" className="apl-decline" disabled={busy === a.key} onClick={() => decline(a)}>
                             Decline
                           </button>
-                          <button type="button" className="ad-btn ad-btn--primary apl-approve" disabled={busy === a.key} onClick={() => approve(a)}>
+                          <button type="button" className="ga-btn ga-btn--primary apl-approve" disabled={busy === a.key} onClick={() => approve(a)}>
                             {busy === a.key ? "…" : "Approve"}
                           </button>
                         </>
                       ) : (
-                        <span className={`ad-badge ad-badge--${a.g === "approved" ? "green" : "red"}`}>{STAGE_LABEL[a.stage] || a.stage}</span>
+                        <span className={`ga-badge ga-badge--${a.g === "approved" ? "green" : "red"}`}>{STAGE_LABEL[a.stage] || a.stage}</span>
                       )}
                     </td>
                   </tr>
@@ -251,28 +251,28 @@ export default function ApplicationsView({ openId }) {
             actions={
               open.g !== "pending" ? (
                 <>
-                  <span className={`ad-badge ad-badge--${open.g === "approved" ? "green" : "red"} apl-state`}>{open.g === "approved" ? "✓ Approved" : "Declined"}</span>
+                  <span className={`ga-badge ga-badge--${open.g === "approved" ? "green" : "red"} apl-state`}>{open.g === "approved" ? "✓ Approved" : "Declined"}</span>
                   {open.cid && (
-                    <Link href={`/admin/campaigns/${open.cid}/creators`} className="ad-btn ad-btn--ghost">
+                    <Link href={`/admin/campaigns/${open.cid}/creators`} className="ga-btn ga-btn--ghost">
                       Open campaign
                     </Link>
                   )}
                 </>
               ) : (
                 <>
-                  <button type="button" className="ad-btn ad-btn--primary" disabled={busy === open.key} onClick={() => approve(open, () => router.push("/admin/applications"))}>
+                  <button type="button" className="ga-btn ga-btn--primary" disabled={busy === open.key} onClick={() => approve(open, () => router.push("/admin/applications"))}>
                     {busy === open.key ? "…" : "Approve"}
                   </button>
-                  <button type="button" className="ad-btn ad-btn--ghost" disabled={busy === open.key} onClick={() => decline(open, () => router.push("/admin/applications"))}>
+                  <button type="button" className="ga-btn ga-btn--ghost" disabled={busy === open.key} onClick={() => decline(open, () => router.push("/admin/applications"))}>
                     Decline
                   </button>
                   {open.memberId && (
-                    <Link href={`/admin/creators/${open.memberId}/profile`} className="ad-btn ad-btn--ghost">
+                    <Link href={`/admin/creators/${open.memberId}/profile`} className="ga-btn ga-btn--ghost">
                       View 360°
                     </Link>
                   )}
                   {open.cid && (
-                    <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
+                    <Link href={`/admin/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
                       Open campaign
                     </Link>
                   )}
@@ -300,8 +300,8 @@ export default function ApplicationsView({ openId }) {
         .apl-back { margin-left: 10px; font-family: var(--ad-sans); font-size: 12.5px; font-weight: 800; color: #6657e9; letter-spacing: 0; }
         .apl-decline:disabled, .apl-approve:disabled { opacity: .5; }
         .apl-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
-        .apl-tabs .ad-tab { height: 37px; }
-        .apl-tabs .ad-tab:not(.is-on) { color: #67718a; }
+        .apl-tabs .ga-tab { height: 37px; }
+        .apl-tabs .ga-tab:not(.is-on) { color: #67718a; }
         .apl-select { width: 233px; height: 44px; margin-left: 4px; padding-right: 30px; appearance: none; color: var(--ad-text); background: #fff; }
         .apl-search { width: 270px; height: 44px; }
         .apl-search::placeholder { color: #757575; }

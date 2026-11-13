@@ -38,8 +38,8 @@ export default function OptedOut() {
           { value: loading ? "—" : held, label: "Messages held back", note: "Login codes still go" },
         ]}
       />
-      <section className="ad-card mo-card">
-        <h2 className="ad-h2">Opted out · {loading ? "…" : all.length}</h2>
+      <section className="ga-card mo-card">
+        <h2 className="ga-h2">Opted out · {loading ? "…" : all.length}</h2>
         <p className="mo-sub">They get no more campaign updates on that channel. Login codes still go.</p>
         {ask && (
           <div className="mo-ask">
@@ -47,7 +47,7 @@ export default function OptedOut() {
               Turn {ask.channel === "whatsapp" ? "WhatsApp" : "email"} updates back on for {who(ask)}? Only do this if they asked for it.
             </p>
             <div className="mo-ask__b">
-              <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" onClick={() => resume(ask)}>
+              <button type="button" className="ga-btn ga-btn--primary ga-btn--sm" onClick={() => resume(ask)}>
                 Yes, resume
               </button>
               <button type="button" className="pt-link" onClick={() => setAsk(null)}>
@@ -91,7 +91,7 @@ export default function OptedOut() {
         />
         )}
       </section>
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
       <style>{`
         .mo-card { padding: 24px 22px 14px; }
         .mo-sub { margin: 9px 0 26px; font-size: 12px; color: var(--ad-muted); }

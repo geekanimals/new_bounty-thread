@@ -95,7 +95,7 @@ export function TargetFields({ brand, camp, onBrand, onCamp }) {
         <p className="cut-l">
           <b>For brand</b> optional — the message names the brand, and they show on its Brand CRM page
         </p>
-        <select className="ad-input cut-sel" value={brand || ""} onChange={(e) => onBrand(e.target.value)} aria-label="For brand">
+        <select className="ga-input cut-sel" value={brand || ""} onChange={(e) => onBrand(e.target.value)} aria-label="For brand">
           <option value="">— No brand —</option>
           {(brands || []).map((b) => (
             <option key={b.brand_id} value={b.brand_id}>
@@ -108,7 +108,7 @@ export function TargetFields({ brand, camp, onBrand, onCamp }) {
         <p className="cut-l">
           <b>Not selected for campaign</b> optional — tells them they weren’t selected for this campaign and invites them to explore the others
         </p>
-        <select className="ad-input cut-sel" value={camp || ""} onChange={(e) => onCamp(e.target.value)} aria-label="Not selected for campaign">
+        <select className="ga-input cut-sel" value={camp || ""} onChange={(e) => onCamp(e.target.value)} aria-label="Not selected for campaign">
           <option value="">— None (just an invite) —</option>
           {(camps || []).map((c) => (
             <option key={c.id} value={c.id}>
@@ -154,7 +154,7 @@ export function MessagePreview({ brand, camp }) {
       <div className="cum-grid">
         <div className="cum-card">
           <p className="cum-t">
-            💬 WhatsApp · template {(t && (t.wa_template || t.template)) || "…"} · Utility <span className="ad-badge ad-badge--green">Approved</span>
+            💬 WhatsApp · template {(t && (t.wa_template || t.template)) || "…"} · Utility <span className="ga-badge ga-badge--green">Approved</span>
           </p>
           <div className="cum-msg">{t ? <Fmt text={wa} /> : <p>Loading…</p>}</div>
           <p className="cum-stop">Reply STOP to stop WhatsApp updates</p>
@@ -167,7 +167,7 @@ export function MessagePreview({ brand, camp }) {
         <div className="cum-card">
           <p className="cum-t">✉️ Email · {(t && t.subject) || "…"}</p>
           <div className="cum-msg">{t ? <Fmt text={t.email_text} /> : <p>Loading…</p>}</div>
-          <span className="ad-btn ad-btn--primary cum-btn">Explore campaigns</span>
+          <span className="ga-btn ga-btn--primary cum-btn">Explore campaigns</span>
         </div>
       </div>
       <style>{`
@@ -177,7 +177,7 @@ export function MessagePreview({ brand, camp }) {
         .cum-grid { display: grid; grid-template-columns: 626fr 432fr; gap: 18px; margin-top: 12px; align-items: start; }
         .cum-card { padding: 20px 19px 20px; border-radius: 16px; border: 1px solid var(--ad-line); min-width: 0; }
         .cum-t { font-size: 12px; font-weight: 700; line-height: 1.35; color: var(--ad-ink); overflow-wrap: anywhere; }
-        .cum-t .ad-badge { height: 26px; margin-left: 2px; }
+        .cum-t .ga-badge { height: 26px; margin-left: 2px; }
         .cum-msg { margin-top: 3px; padding: 12px 12px; border-radius: 12px; background: var(--ad-soft-2); }
         .cum-msg p { font-size: 13px; line-height: 20px; color: var(--ad-ink); min-height: 20px; overflow-wrap: anywhere; }
         .cum-msg b { font-weight: 700; }
@@ -207,7 +207,7 @@ export function UploadBar({ onLoad }) {
   return (
     <div className="cub">
       <div className="cub-row">
-        <label className="ad-btn ad-btn--primary cub-file">
+        <label className="ga-btn ga-btn--primary cub-file">
           {busy ? "Reading…" : "📄 Choose Excel / CSV"}
           <input
             type="file"
@@ -220,8 +220,8 @@ export function UploadBar({ onLoad }) {
             hidden
           />
         </label>
-        <input className="ad-input cub-link" placeholder="…or paste a Google Sheet link" value={link} onChange={(e) => setLink(e.target.value)} aria-label="Google Sheet link" />
-        <button type="button" className="ad-btn ad-btn--ghost cub-load" disabled={!link.trim() || busy} onClick={() => take(() => readSheetLink(link.trim()), "Google Sheet")}>
+        <input className="ga-input cub-link" placeholder="…or paste a Google Sheet link" value={link} onChange={(e) => setLink(e.target.value)} aria-label="Google Sheet link" />
+        <button type="button" className="ga-btn ga-btn--ghost cub-load" disabled={!link.trim() || busy} onClick={() => take(() => readSheetLink(link.trim()), "Google Sheet")}>
           Load sheet
         </button>
       </div>
@@ -279,17 +279,17 @@ export function UploadedCreators({ brand = "" }) {
   };
 
   return (
-    <section className="ad-card cuu">
+    <section className="ga-card cuu">
       <div className="cuu-top">
         <div>
-          <h2 className="ad-h2">Uploaded creators</h2>
+          <h2 className="ga-h2">Uploaded creators</h2>
           <p className="cuu-sub">
             {(d.total || 0).toLocaleString("en-IN")} uploaded · {(d.joined || 0).toLocaleString("en-IN")} joined Geek OS
           </p>
         </div>
         <div className="cuu-f">
-          <input className="ad-input" placeholder="🔎 Name, @handle, phone, city…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search uploaded creators" />
-          <select className="ad-input" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Status">
+          <input className="ga-input" placeholder="🔎 Name, @handle, phone, city…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search uploaded creators" />
+          <select className="ga-input" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Status">
             <option value="all">Everyone</option>
             <option value="waiting">Not registered</option>
             <option value="joined">Joined Geek OS</option>
@@ -297,7 +297,7 @@ export function UploadedCreators({ brand = "" }) {
         </div>
       </div>
       <div className="cuu-wrap">
-        <table className="ad-table">
+        <table className="ga-table">
           <thead>
             <tr>
               <th>Creator</th>
@@ -318,17 +318,17 @@ export function UploadedCreators({ brand = "" }) {
                       @{r.handle}
                     </a>
                   )}
-                  {r.brand && <span className="ad-badge cuu-b">🏢 {r.brand}</span>}
+                  {r.brand && <span className="ga-badge cuu-b">🏢 {r.brand}</span>}
                 </td>
                 <td>{r.phone || "—"}</td>
                 <td>{[r.city, r.state].filter(Boolean).join(", ") || "—"}</td>
                 <td>{fnum(r.followers)}</td>
                 <td>
                   {r.joined ? (
-                    <span className="ad-badge ad-badge--green">✓ Joined {fdate(r.joined_at)}</span>
+                    <span className="ga-badge ga-badge--green">✓ Joined {fdate(r.joined_at)}</span>
                   ) : (
                     <>
-                      <span className="ad-badge ad-badge--orange">Not registered</span>
+                      <span className="ga-badge ga-badge--orange">Not registered</span>
                       <span className="cuu-note">
                         {r.invites_sent ? `invited ${r.invites_sent}× · last ${fdate(r.last_invited_at)}` : "not messaged yet"}
                         {r.last_wa && r.last_wa.status ? ` · WhatsApp ${r.last_wa.status}` : ""}
@@ -363,22 +363,22 @@ export function UploadedCreators({ brand = "" }) {
         {!error && loading && !rows.length && <p className="cuu-empty">Loading…</p>}
         {!error && !loading && !rows.length && <p className="cuu-empty">{dq || who !== "all" ? "Nobody matches." : "No creators uploaded yet — choose a sheet above."}</p>}
       </div>
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ga-toast">✓ {toast}</div>}
       <style>{`
         .cuu { margin-top: 20px; padding: 22px 22px 18px; }
         .cuu-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        .cuu-top .ad-h2 { margin-top: 8px; }
+        .cuu-top .ga-h2 { margin-top: 8px; }
         .cuu-sub { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .cuu-f { display: flex; gap: 10px; }
-        .cuu-f .ad-input:first-child { width: 270px; height: 44px; }
+        .cuu-f .ga-input:first-child { width: 270px; height: 44px; }
         .cuu-f select { width: 159px; height: 44px; color: var(--ad-text); appearance: none; cursor: pointer; }
         .cuu-wrap { margin-top: 26px; overflow-x: auto; }
-        .cuu .ad-table th { background: transparent; padding: 12px 11px; }
-        .cuu .ad-table th:nth-child(1) { width: 12.5%; }
-        .cuu .ad-table th:nth-child(2) { width: 13.5%; }
-        .cuu .ad-table th:nth-child(3) { width: 11.2%; }
-        .cuu .ad-table th:nth-child(4) { width: 10.7%; }
-        .cuu .ad-table td { padding: 14px 11px; }
+        .cuu .ga-table th { background: transparent; padding: 12px 11px; }
+        .cuu .ga-table th:nth-child(1) { width: 12.5%; }
+        .cuu .ga-table th:nth-child(2) { width: 13.5%; }
+        .cuu .ga-table th:nth-child(3) { width: 11.2%; }
+        .cuu .ga-table th:nth-child(4) { width: 10.7%; }
+        .cuu .ga-table td { padding: 14px 11px; }
         .cuu-n { display: block; font-weight: 700; }
         .cuu-h { display: block; margin-top: 1px; font-size: 12px; }
         .cuu-h:hover { color: var(--ad-primary); }
@@ -395,7 +395,7 @@ export function UploadedCreators({ brand = "" }) {
         @media (max-width: 640px) {
           .cuu { padding: 18px 16px 14px; }
           .cuu-f { width: 100%; }
-          .cuu-f .ad-input:first-child { flex: 1; width: auto; min-width: 0; }
+          .cuu-f .ga-input:first-child { flex: 1; width: auto; min-width: 0; }
           .cuu-f select { width: 130px; }
         }
       `}</style>

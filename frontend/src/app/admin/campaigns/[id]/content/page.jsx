@@ -25,8 +25,8 @@ export default function WorkspaceContent() {
   return (
     <AdminShell>
       <WorkspaceHead id={id} campaign={camp} />
-      <section className="ad-card wct">
-        <h2 className="ad-h2">Content submissions</h2>
+      <section className="ga-card wct">
+        <h2 className="ga-h2">Content submissions</h2>
         <p className="wct-sub">Review against brief, ad disclosure, rights and creator consent.</p>
         <div className="wct-list">
           {ITEMS.map((i) => (
@@ -41,7 +41,7 @@ export default function WorkspaceContent() {
                   ▶ Watch
                 </a>
               )}
-              <Link href={`/admin/campaigns/${id}/creators/${i.k}`} className="ad-btn ad-btn--ghost wct-btn">
+              <Link href={`/admin/campaigns/${id}/creators/${i.k}`} className="ga-btn ga-btn--ghost wct-btn">
                 Review →
               </Link>
             </div>

@@ -56,13 +56,13 @@ export default function BrandPanel({ id, children }) {
           <div className="bp-head__txt">
             <p className="bp-eye">Brand</p>
             <h2>{name}</h2>
-            {d && <span className={`ad-badge ${(b.status || "active") === "active" ? "ad-badge--green" : "ad-badge--orange"}`}>{STATUS[b.status] || "Active client"}</span>}
+            {d && <span className={`ga-badge ${(b.status || "active") === "active" ? "ga-badge--green" : "ga-badge--orange"}`}>{STATUS[b.status] || "Active client"}</span>}
           </div>
           <div className="bp-head__act">
-            <Link href={`/admin/campaigns/new${b.name ? `?brand=${encodeURIComponent(b.name)}` : ""}`} className="ad-btn ad-btn--ghost">
+            <Link href={`/admin/campaigns/new${b.name ? `?brand=${encodeURIComponent(b.name)}` : ""}`} className="ga-btn ga-btn--ghost">
               ➕ Campaign
             </Link>
-            <Link href={`/admin/creator-upload${id ? `?brand=${id}` : ""}`} className="ad-btn ad-btn--ghost">
+            <Link href={`/admin/creator-upload${id ? `?brand=${id}` : ""}`} className="ga-btn ga-btn--ghost">
               📥 Upload creators
             </Link>
           </div>
@@ -84,7 +84,7 @@ export default function BrandPanel({ id, children }) {
 
         <nav className="bp-tabs" aria-label="Brand sections">
           {tabs.map((t) => (
-            <Link key={t.k} href={`${base}/${t.k}`} className={`ad-tab ${!t.portal && seg === t.k ? "is-on" : ""}`}>
+            <Link key={t.k} href={`${base}/${t.k}`} className={`ga-tab ${!t.portal && seg === t.k ? "is-on" : ""}`}>
               {t.label}
             </Link>
           ))}
@@ -112,9 +112,9 @@ export default function BrandPanel({ id, children }) {
         .bp-head__txt { flex: 1; min-width: 0; }
         .bp-eye { font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #8b92aa; }
         .bp-head h2 { margin-top: 5px; font-family: var(--ad-head); font-size: 25px; font-weight: 800; letter-spacing: -0.9px; line-height: 1.3; }
-        .bp-head__txt .ad-badge { margin-top: 4px; height: 26px; }
+        .bp-head__txt .ga-badge { margin-top: 4px; height: 26px; }
         .bp-head__act { display: flex; gap: 8px; margin-top: 21px; flex-wrap: wrap; justify-content: flex-end; }
-        .bp-head__act .ad-btn { height: 41px; padding: 0 15px; border-color: var(--ad-line-2); }
+        .bp-head__act .ga-btn { height: 41px; padding: 0 15px; border-color: var(--ad-line-2); }
 
         .bp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-top: 2px; }
         .bp-stats div { display: flex; flex-direction: column; padding: 18px 16px 16px; border-radius: 13px; background: var(--ad-soft-2); }
@@ -122,8 +122,8 @@ export default function BrandPanel({ id, children }) {
         .bp-stats span { margin-top: 8px; font-size: 12px; color: var(--ad-muted); }
 
         .bp-tabs { display: flex; flex-wrap: wrap; gap: 8px 7px; margin-top: 12px; }
-        .bp-tabs .ad-tab { height: 37px; }
-        .bp-tabs .ad-tab:not(.is-on) { color: #67718a; }
+        .bp-tabs .ga-tab { height: 37px; }
+        .bp-tabs .ga-tab:not(.is-on) { color: #67718a; }
         .bp-body { margin-top: 34px; }
         .bp-state { font-size: 13px; color: var(--ad-muted); }
         .bp-state.is-err { color: var(--ad-red); }
@@ -136,8 +136,8 @@ export default function BrandPanel({ id, children }) {
         .bp-sec__t { font-size: 13px; font-weight: 700; color: var(--ad-ink); }
         .bp-sec__s { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .bp-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 16px; }
-        .bp-btns .ad-btn { height: 41px; padding: 0 15px; }
-        .bp-btns .ad-btn--ghost { border-color: var(--ad-line-2); }
+        .bp-btns .ga-btn { height: 41px; padding: 0 15px; }
+        .bp-btns .ga-btn--ghost { border-color: var(--ad-line-2); }
         .bp-plain { height: 41px; padding: 0 15px; border: 0; background: none; font-size: 14px; font-weight: 800; color: #6657e9; }
         .bp-plain:hover { color: var(--ad-primary-2); }
 
@@ -149,10 +149,10 @@ export default function BrandPanel({ id, children }) {
           .bp-body { margin-top: 24px; }
         }
         @media (max-width: 640px) {
-          .bp-head__act .ad-btn { flex: 1; }
+          .bp-head__act .ga-btn { flex: 1; }
           .bp-tabs { flex-wrap: nowrap; overflow-x: auto; margin: 12px -16px 0; padding: 0 16px; scrollbar-width: none; }
           .bp-tabs::-webkit-scrollbar { display: none; }
-          .bp-tabs .ad-tab { flex-shrink: 0; }
+          .bp-tabs .ga-tab { flex-shrink: 0; }
         }
       `}</style>
     </AdminShell>

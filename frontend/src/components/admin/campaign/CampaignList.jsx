@@ -46,17 +46,17 @@ export default function CampaignList({ filter = "all" }) {
   return (
     <AdminShell>
       <PageHead title="Campaigns" sub="A connected view of briefs, people, deliveries, creative and outcomes.">
-        <Link href="/admin/campaigns/new" className="ad-btn ad-btn--primary">
+        <Link href="/admin/campaigns/new" className="ga-btn ga-btn--primary">
           ＋ New campaign
         </Link>
       </PageHead>
 
-      <section className="ad-card cl">
+      <section className="ga-card cl">
         <div className="cl-bar">
-          <input className="ad-input cl-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search campaigns or brands…" aria-label="Search campaigns or brands" />
-          <nav className="ad-tabs cl-tabs" aria-label="Campaign filter" data-scroll>
+          <input className="ga-input cl-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search campaigns or brands…" aria-label="Search campaigns or brands" />
+          <nav className="ga-tabs cl-tabs" aria-label="Campaign filter" data-scroll>
             {TABS.map((t) => (
-              <Link key={t.k} href={t.href} className={`ad-tab ${t.k === tab.k ? "is-on" : ""}`}>
+              <Link key={t.k} href={t.href} className={`ga-tab ${t.k === tab.k ? "is-on" : ""}`}>
                 {t.label}
               </Link>
             ))}
@@ -64,7 +64,7 @@ export default function CampaignList({ filter = "all" }) {
         </div>
 
         <div className="cl-wrap" data-scroll>
-          <table className="ad-table cl-table">
+          <table className="ga-table cl-table">
             <thead>
               <tr>
                 <th>Campaign / Brand</th>
@@ -88,13 +88,13 @@ export default function CampaignList({ filter = "all" }) {
                   </td>
                   <td>{c.type}</td>
                   <td>
-                    <span className={`ad-badge ad-badge--${c.status === "Completed" ? "green" : statusTone(c.status)}`}>{c.status === "Shortlist completed" ? "Shortlist" : c.status}</span>
+                    <span className={`ga-badge ga-badge--${c.status === "Completed" ? "green" : statusTone(c.status)}`}>{c.status === "Shortlist completed" ? "Shortlist" : c.status}</span>
                   </td>
                   <td>{c.applied}</td>
                   <td>{c.approved}</td>
                   <td>
                     <div className="cl-prog">
-                      <span className="ad-bar">
+                      <span className="ga-bar">
                         <i style={{ width: `${pct(c.done, c.approved)}%` }} />
                       </span>
                       <small>
@@ -135,7 +135,7 @@ export default function CampaignList({ filter = "all" }) {
                     {c.brand} · {c.type}
                   </span>
                 </div>
-                <span className={`ad-badge ad-badge--${c.status === "Completed" ? "green" : statusTone(c.status)}`}>{c.status === "Shortlist completed" ? "Shortlist" : c.status}</span>
+                <span className={`ga-badge ga-badge--${c.status === "Completed" ? "green" : statusTone(c.status)}`}>{c.status === "Shortlist completed" ? "Shortlist" : c.status}</span>
               </div>
               <div className="cl-card__nums">
                 <span>
@@ -149,7 +149,7 @@ export default function CampaignList({ filter = "all" }) {
                 </span>
               </div>
               <div className="cl-prog">
-                <span className="ad-bar">
+                <span className="ga-bar">
                   <i style={{ width: `${pct(c.done, c.approved)}%` }} />
                 </span>
                 <small>
@@ -172,8 +172,8 @@ export default function CampaignList({ filter = "all" }) {
         .cl-search { width: 270px; flex-shrink: 0; height: 43px; }
         .cl-search::placeholder { color: #757575; }
         .cl-tabs { flex-wrap: nowrap; }
-        .cl-tabs .ad-tab { height: 37px; }
-        .cl-tabs .ad-tab:not(.is-on) { color: #67718a; }
+        .cl-tabs .ga-tab { height: 37px; }
+        .cl-tabs .ga-tab:not(.is-on) { color: #67718a; }
         .cl-wrap { overflow-x: auto; }
         .cl-table { font-size: 13px; }
         .cl-table th { background: none; padding: 14px 10px 13px; }
@@ -183,7 +183,7 @@ export default function CampaignList({ filter = "all" }) {
         a.cl-name:hover { color: var(--ad-primary); }
         .cl-brand { display: block; margin-top: 6px; font-size: 11px; font-weight: 500; color: #9aa1b3; }
         .cl-prog { display: flex; flex-direction: column; gap: 3px; width: 116px; }
-        .cl-prog .ad-bar { height: 6px; background: #eceef6; }
+        .cl-prog .ga-bar { height: 6px; background: #eceef6; }
         .cl-prog small { font-size: 12px; color: var(--ad-muted); }
         .cl-open { display: block; font-size: 13px; font-weight: 800; color: #6151ea; }
         .cl-open:hover { color: var(--ad-primary-2); }

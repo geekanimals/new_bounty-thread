@@ -36,16 +36,16 @@ export default function DiscoveryHashtag() {
   return (
     <AdminShell>
       <DiscoveryHead />
-      <section className="dg-card ad-card">
+      <section className="dg-card ga-card">
         <div className="dg-top">
           <div>
-            <h2 className="ad-h2">Hashtag search</h2>
+            <h2 className="ga-h2">Hashtag search</h2>
             <p className="dg-sub">See the top and most recent public posts using a hashtag on Instagram.</p>
           </div>
-          <span className="ad-badge">{igName ? `Searching with @${igName}` : "Searching with the team's Instagram"}</span>
+          <span className="ga-badge">{igName ? `Searching with @${igName}` : "Searching with the team's Instagram"}</span>
         </div>
         <form className="dg-row" onSubmit={search}>
-          <input className="ad-input dg-q" placeholder="#diwalidecor" value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Hashtag" />
+          <input className="ga-input dg-q" placeholder="#diwalidecor" value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Hashtag" />
           <div className="dg-mode" role="tablist">
             {[
               ["top", "Top posts"],
@@ -56,14 +56,14 @@ export default function DiscoveryHashtag() {
                 type="button"
                 role="tab"
                 aria-selected={mode === k}
-                className={`ad-tab ${mode === k ? "is-on" : ""}`}
+                className={`ga-tab ${mode === k ? "is-on" : ""}`}
                 onClick={() => setMode(k)}
               >
                 {l}
               </button>
             ))}
           </div>
-          <button type="submit" className="ad-btn ad-btn--primary dg-go" disabled={st.busy}>
+          <button type="submit" className="ga-btn ga-btn--primary dg-go" disabled={st.busy}>
             {st.busy ? "Searching…" : "🔎 Search"}
           </button>
         </form>
@@ -112,12 +112,12 @@ export default function DiscoveryHashtag() {
       <style>{`
         .dg-card { padding: 25px 22px 44px; }
         .dg-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-        .dg-top .ad-badge { margin-top: 9px; }
+        .dg-top .ga-badge { margin-top: 9px; }
         .dg-sub { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .dg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 17px; }
         .dg-q { width: 270px; height: 44px; margin-top: 10px; }
         .dg-mode { display: flex; gap: 8px; }
-        .dg-mode .ad-tab:not(.is-on) { color: #67718a; }
+        .dg-mode .ga-tab:not(.is-on) { color: #67718a; }
         .dg-go { height: 42px; margin-top: 12px; }
         .dg-note { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding: 12px 15px; border-radius: 12px; background: #fff7e8; border: 1px solid #f5dfb5; font-size: 12px; color: #986016; }
         .dg-note b { font-weight: 700; }

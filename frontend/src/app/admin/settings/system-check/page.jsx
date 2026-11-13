@@ -92,7 +92,7 @@ export default function SettingsSystem() {
         sub={stamp ? `Live-verifies that the database matches the app — every table, key column and function. Last run ${stamp}.` : "Live-verifies that the database matches the app — every table, key column and function."}
         className="sc-panel"
         action={
-          <button type="button" className="ad-btn ad-btn--primary" onClick={run} disabled={running}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={run} disabled={running}>
             {running ? "Checking…" : "Run checks"}
           </button>
         }
@@ -110,19 +110,19 @@ export default function SettingsSystem() {
               {r.detail ? <small className="sc-det"> · {r.detail.slice(0, 80)}</small> : null}
             </span>,
             r.state === "ok" ? (
-              <span key="r" className="ad-badge ad-badge--green">
+              <span key="r" className="ga-badge ga-badge--green">
                 {r.text}
               </span>
             ) : r.state === "fail" ? (
-              <span key="r" className="ad-badge ad-badge--red">
+              <span key="r" className="ga-badge ga-badge--red">
                 {r.text}
               </span>
             ) : r.state === "run" ? (
-              <span key="r" className="ad-badge sc-run">
+              <span key="r" className="ga-badge sc-run">
                 <i /> Checking
               </span>
             ) : (
-              <span key="r" className="ad-badge">
+              <span key="r" className="ga-badge">
                 Waiting
               </span>
             ),

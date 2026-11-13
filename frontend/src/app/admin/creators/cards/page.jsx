@@ -39,10 +39,10 @@ export default function AdminCreatorCards({ snapshot = false }) {
   return (
     <AdminShell>
       <PageHead title="Creators" sub="Every creator on Geek OS — Instagram, profile, campaigns and contact in one place.">
-        <button type="button" className="ad-btn cc2-csv" onClick={() => (csv(list, CSV_COLS, "creators.csv"), flash(`CSV downloaded — ${list.length} creators`))}>
+        <button type="button" className="ga-btn cc2-csv" onClick={() => (csv(list, CSV_COLS, "creators.csv"), flash(`CSV downloaded — ${list.length} creators`))}>
           ⬇️ CSV
         </button>
-        <Link href="/admin/creator-upload" className="ad-btn ad-btn--primary">
+        <Link href="/admin/creator-upload" className="ga-btn ga-btn--primary">
           ⇧ Add / import
         </Link>
       </PageHead>
@@ -70,23 +70,23 @@ export default function AdminCreatorCards({ snapshot = false }) {
         ))}
       </div>
 
-      <section className="ad-card cc2-card">
+      <section className="ga-card cc2-card">
         <div className="cc2-top">
           <div>
-            <h2 className="ad-h2">Creator directory</h2>
+            <h2 className="ga-h2">Creator directory</h2>
             <p className="cc2-sub">{loading && !all.length ? "Loading creators…" : `${list.length} of ${N.total} creators match`}</p>
           </div>
           <div className="cc2-view">
-            <span className="ad-tab is-on">▦ Cards</span>
-            <Link href="/admin/creators" className="ad-tab">
+            <span className="ga-tab is-on">▦ Cards</span>
+            <Link href="/admin/creators" className="ga-tab">
               ☰ List
             </Link>
           </div>
         </div>
 
         <div className="cc2-row">
-          <input className="ad-input cc2-search" placeholder="Name, @handle, phone, city…" value={q} onChange={(e) => (setQ(e.target.value), setPage(0))} aria-label="Search creators" />
-          <select className="ad-input cc2-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
+          <input className="ga-input cc2-search" placeholder="Name, @handle, phone, city…" value={q} onChange={(e) => (setQ(e.target.value), setPage(0))} aria-label="Search creators" />
+          <select className="ga-input cc2-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
             {Object.keys(CARD_SORTS).map((o) => (
               <option key={o}>{o}</option>
             ))}
@@ -110,12 +110,12 @@ export default function AdminCreatorCards({ snapshot = false }) {
           {shown.map((c) => (
             <Link key={c.id} href={`/admin/creators/${c.id}/profile`} className="cc2-c">
               <div className="cc2-c__top">
-                {c.pic ? <img className="ad-av cc2-pic" src={c.pic} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} /> : <span className="ad-av">{c.name[0]}</span>}
+                {c.pic ? <img className="ga-av cc2-pic" src={c.pic} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = "hidden")} /> : <span className="ga-av">{c.name[0]}</span>}
                 <span className="cc2-c__who">
                   <strong>{c.name}</strong>
                   <small>{c.handle}</small>
                 </span>
-                <span className={`ad-badge ${c.complete ? "ad-badge--green" : "ad-badge--orange"}`}>{c.score}</span>
+                <span className={`ga-badge ${c.complete ? "ga-badge--green" : "ga-badge--orange"}`}>{c.score}</span>
               </div>
               <p className="cc2-c__meta">
                 {c.wa ? "🟢 WhatsApp ON" : "⚪ WhatsApp OFF"} · 📸 {c.igCount ? `${c.igCount} Instagram ${c.igCount > 1 ? "accounts" : "account"}` : "No Instagram"}
@@ -148,20 +148,20 @@ export default function AdminCreatorCards({ snapshot = false }) {
         </div>
         {pages > 1 && (
           <div className="cc2-pager">
-            <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" disabled={!pg} onClick={() => setPage(pg - 1)}>
+            <button type="button" className="ga-btn ga-btn--ghost ga-btn--sm" disabled={!pg} onClick={() => setPage(pg - 1)}>
               ← Prev
             </button>
             <span>
               Page {pg + 1} of {pages} · {list.length} creators
             </span>
-            <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>
+            <button type="button" className="ga-btn ga-btn--ghost ga-btn--sm" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>
               Next →
             </button>
           </div>
         )}
       </section>
 
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ga-toast">✓ {toast}</div>}
 
       <style>{`
         .cc2-pic { object-fit: cover; }
@@ -176,7 +176,7 @@ export default function AdminCreatorCards({ snapshot = false }) {
         .cc2-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
         .cc2-sub { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .cc2-view { display: flex; gap: 8px; }
-        .cc2-view .ad-tab:not(.is-on) { color: #67718a; }
+        .cc2-view .ga-tab:not(.is-on) { color: #67718a; }
         .cc2-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
         .cc2-search { width: 270px; height: 44px; }
         .cc2-sort { width: 198px; height: 44px; color: var(--ad-text); appearance: none; cursor: pointer; }
@@ -189,7 +189,7 @@ export default function AdminCreatorCards({ snapshot = false }) {
         .cc2-c { display: flex; flex-direction: column; padding: 20px 19px 20px; border-radius: 16px; border: 1px solid var(--ad-line); background: #fff; transition: border-color .15s, box-shadow .15s; }
         .cc2-c:hover { border-color: #cfd2ee; box-shadow: 0 12px 26px -20px rgba(30,37,73,.5); }
         .cc2-c__top { display: flex; align-items: center; gap: 12px; }
-        .cc2-c__top .ad-av { width: 34px; height: 34px; font-size: 14px; }
+        .cc2-c__top .ga-av { width: 34px; height: 34px; font-size: 14px; }
         .cc2-c__who { flex: 1; min-width: 0; }
         .cc2-c__who strong { display: block; font-size: 14px; font-weight: 700; }
         .cc2-c__who small { display: block; margin-top: 1px; font-size: 12px; color: var(--ad-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

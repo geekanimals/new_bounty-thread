@@ -95,7 +95,7 @@ export default function BulkUploadDone() {
         )}
         <div className="ud-act">
           {skipped.length > 0 && <TextBtn onClick={dlSkipped}>⬇️ Download skipped rows</TextBtn>}
-          <Link href={`/admin/campaigns/${id}/upload`} className="ad-btn ad-btn--ghost">
+          <Link href={`/admin/campaigns/${id}/upload`} className="ga-btn ga-btn--ghost">
             Upload another sheet
           </Link>
         </div>
@@ -126,13 +126,13 @@ export default function BulkUploadDone() {
                     </td>
                     <td>
                       {live ? (
-                        <span className="ad-badge ad-badge--green">{String(x.stage).replace(/_/g, " ")}</span>
+                        <span className="ga-badge ga-badge--green">{String(x.stage).replace(/_/g, " ")}</span>
                       ) : (
-                        <span className={`ad-badge ad-badge--${stRank(st) >= 7 && stRank(st) <= 9 ? "orange" : "violet"}`}>Sheet: {stLabel(st)} · joins after sign-up</span>
+                        <span className={`ga-badge ga-badge--${stRank(st) >= 7 && stRank(st) <= 9 ? "orange" : "violet"}`}>Sheet: {stLabel(st)} · joins after sign-up</span>
                       )}
                     </td>
                     <td>
-                      <span className="ad-badge">via upload · {when(x.created_at)}</span>
+                      <span className="ga-badge">via upload · {when(x.created_at)}</span>
                     </td>
                     <td>{msgOf(x)}</td>
                   </tr>
@@ -150,9 +150,9 @@ export default function BulkUploadDone() {
         .ud-note { margin-top: 14px; }
         .ud-act { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 22px; }
         .ud-act .c2-tbtn { margin-left: 8px; }
-        .ud-act .ad-btn { height: 41px; }
+        .ud-act .ga-btn { height: 41px; }
         .ud-t td { height: 57px; padding-top: 8px; padding-bottom: 8px; }
-        .ud-t .ad-badge { height: 25px; }
+        .ud-t .ga-badge { height: 25px; }
       `}</style>
     </AdminShell>
   );

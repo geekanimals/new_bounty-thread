@@ -105,7 +105,7 @@ export default function BulkUploadMatch() {
             </div>
 
             <div className="um-act">
-              <button type="button" className="ad-btn ad-btn--primary" onClick={go} disabled={!hasContact}>
+              <button type="button" className="ga-btn ga-btn--primary" onClick={go} disabled={!hasContact}>
                 Use these columns →
               </button>
               <Link href={base} className="c2-tbtn">
@@ -130,7 +130,7 @@ export default function BulkUploadMatch() {
         .um-f select.is-set { min-width: 68px; }
         .um-f select:focus { border-color: var(--ad-primary); }
         .um-act { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
-        .um-act .ad-btn { height: 41px; }
+        .um-act .ga-btn { height: 41px; }
         @media (max-width: 1180px) { .um-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (max-width: 640px) {
           .um-grid { grid-template-columns: 1fr 1fr; }

@@ -46,7 +46,7 @@ export default function PTable({ cols, rows, empty, rowH = 57, minW = 640, class
           font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #9aa2b4; white-space: nowrap;
         }
         .pt td { padding: 0 11px; border-bottom: 1px solid var(--ad-line); vertical-align: middle; color: var(--ad-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pt td .ad-badge { height: 24px; }
+        .pt td .ga-badge { height: 24px; }
         .pt tbody tr:last-child td { border-bottom: 0; }
         .pt-empty { text-align: center; color: var(--ad-muted); }
         .pt b { font-weight: 700; }

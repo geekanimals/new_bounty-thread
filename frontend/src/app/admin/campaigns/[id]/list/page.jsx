@@ -56,7 +56,7 @@ export default function CampaignBrandList() {
         title="📋 Final list for the brand"
         sub="Everyone who cleared screening. Download it and send it to the brand to sign off."
         actions={
-          <button type="button" className="ad-btn ad-btn--primary" onClick={download} disabled={!list.length}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={download} disabled={!list.length}>
             ⬇️ Download Excel
           </button>
         }
@@ -94,11 +94,11 @@ export default function CampaignBrandList() {
                     <td>{x.applied_profile ? "@" + x.applied_profile : "—"}</td>
                     <td>
                       {st === "Screened" ? (
-                        <button type="button" className="ad-badge bl-send" onClick={() => send(x)} disabled={busy === x.participation_id} title="Add to the brand’s list">
+                        <button type="button" className="ga-badge bl-send" onClick={() => send(x)} disabled={busy === x.participation_id} title="Add to the brand’s list">
                           {busy === x.participation_id ? "…" : "Screened"}
                         </button>
                       ) : (
-                        <span className={`ad-badge ad-badge--${st === "Brand confirmed" ? "green" : "violet"}`}>{st}</span>
+                        <span className={`ga-badge ga-badge--${st === "Brand confirmed" ? "green" : "violet"}`}>{st}</span>
                       )}
                     </td>
                   </tr>
@@ -113,7 +113,7 @@ export default function CampaignBrandList() {
       <style>{`
         .bl-t { margin-top: -6px; }
         .bl-t td { height: 57px; padding-top: 8px; padding-bottom: 8px; }
-        .bl-t .ad-badge { height: 25px; }
+        .bl-t .ga-badge { height: 25px; }
         .bl-send { border: 0; cursor: pointer; }
         .bl-send:hover { background: var(--ad-lilac); color: #6857ec; }
       `}</style>

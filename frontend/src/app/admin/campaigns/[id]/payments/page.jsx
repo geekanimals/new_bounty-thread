@@ -265,10 +265,10 @@ export default function CampaignPayments() {
         </div>
 
         <div className="py-bar">
-          <input className="ad-input py-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="@handle, name, UPI…" aria-label="Search creators" />
+          <input className="ga-input py-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="@handle, name, UPI…" aria-label="Search creators" />
           <div className="py-filters" data-scroll>
             {FILTERS.map(([k, l]) => (
-              <button key={k} type="button" className={`ad-tab ${filter === k ? "is-on" : ""}`} onClick={() => setFilter(k)}>
+              <button key={k} type="button" className={`ga-tab ${filter === k ? "is-on" : ""}`} onClick={() => setFilter(k)}>
                 {l}
               </button>
             ))}
@@ -316,12 +316,12 @@ export default function CampaignPayments() {
                     <td>{p.amount == null ? "—" : inr(dueSum(r))}</td>
                     <td>{payoutLine(p) ?? "—"}</td>
                     <td>
-                      <span className={`ad-badge ad-badge--${TONE[st]}`} title={st === "On hold" ? p.hold_reason || "" : ""}>
+                      <span className={`ga-badge ga-badge--${TONE[st]}`} title={st === "On hold" ? p.hold_reason || "" : ""}>
                         {st}
                       </span>
                     </td>
                     <td>
-                      <button type="button" className="ad-btn ad-btn--ghost py-act" onClick={() => act(r)}>
+                      <button type="button" className="ga-btn ga-btn--ghost py-act" onClick={() => act(r)}>
                         {ACTION[st]}
                       </button>
                     </td>
@@ -351,7 +351,7 @@ export default function CampaignPayments() {
           <b className="py-sum">
             {selOuts.length} payment{selOuts.length === 1 ? "" : "s"} · {inr(selTotal)}
           </b>
-          <button type="button" className="ad-btn ad-btn--primary py-pay" onClick={paySelected} disabled={busy}>
+          <button type="button" className="ga-btn ga-btn--primary py-pay" onClick={paySelected} disabled={busy}>
             ⚡ Pay selected via Razorpay
           </button>
           <TextBtn onClick={bulkFile}>⬇️ RazorpayX bulk file</TextBtn>
@@ -369,8 +369,8 @@ export default function CampaignPayments() {
         .py-search { width: 270px; flex-shrink: 0; height: 43px; }
         .py-filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
         .py-filters::-webkit-scrollbar { display: none; }
-        .py-filters .ad-tab { flex-shrink: 0; }
-        .py-filters .ad-tab:not(.is-on) { color: #67718a; }
+        .py-filters .ga-tab { flex-shrink: 0; }
+        .py-filters .ga-tab:not(.is-on) { color: #67718a; }
         .py-t { margin-top: 26px; }
         .py-t td { height: 70px; padding-top: 10px; padding-bottom: 10px; }
         .py-ck { width: 40px; }

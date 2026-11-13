@@ -117,7 +117,7 @@ export default function SettingsData() {
               ))}
             </select>
           </label>
-          <input className="ad-input sd-q" placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter rows" />
+          <input className="ga-input sd-q" placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter rows" />
           {!res.loading && <span className="sd-count">{rows.length} row{rows.length === 1 ? "" : "s"}{rows.length >= 200 ? " (showing first 200)" : ""}</span>}
         </div>
         <Table
@@ -163,17 +163,17 @@ export default function SettingsData() {
         />
       )}
       {del && (
-        <div className="ad-overlay" onClick={() => setDel(null)}>
-          <div className="ad-modal sd-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete record">
-            <h2 className="ad-h2">Delete this {label.toLowerCase()} record?</h2>
+        <div className="ga-overlay" onClick={() => setDel(null)}>
+          <div className="ga-modal sd-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete record">
+            <h2 className="ga-h2">Delete this {label.toLowerCase()} record?</h2>
             <p className="sd-modal__p">
               <b>{del.name || del.email || del.product || del.campaign_name || del.id}</b> — this is permanent (logged to the audit trail).
             </p>
             <div className="sd-modal__btns">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setDel(null)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setDel(null)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" onClick={doDelete}>
+              <button type="button" className="ga-btn ga-btn--danger" onClick={doDelete}>
                 Delete
               </button>
             </div>
@@ -226,9 +226,9 @@ function RowModal({ table, row, edit, onClose, onSaved }) {
     onSaved();
   };
   return (
-    <div className="ad-overlay" onClick={onClose}>
-      <form className="ad-modal sd-rm" onClick={(e) => e.stopPropagation()} onSubmit={save} role="dialog" aria-label="Record">
-        <h2 className="ad-h2">
+    <div className="ga-overlay" onClick={onClose}>
+      <form className="ga-modal sd-rm" onClick={(e) => e.stopPropagation()} onSubmit={save} role="dialog" aria-label="Record">
+        <h2 className="ga-h2">
           {edit ? "Edit" : "View"} {table} record
         </h2>
         <div className="sd-rm__f">
@@ -237,14 +237,14 @@ function RowModal({ table, row, edit, onClose, onSaved }) {
             const multi = vals[k].length > 60 || ["brief", "notes", "deliverables"].includes(k);
             return (
               <label key={k}>
-                <span className="ad-label">
+                <span className="ga-label">
                   {k}
                   {LOCKED.has(k) && <em> (locked)</em>}
                 </span>
                 {multi ? (
-                  <textarea className="ad-input" rows={2} readOnly={ro} value={vals[k]} onChange={(e) => setVals({ ...vals, [k]: e.target.value })} />
+                  <textarea className="ga-input" rows={2} readOnly={ro} value={vals[k]} onChange={(e) => setVals({ ...vals, [k]: e.target.value })} />
                 ) : (
-                  <input className="ad-input" readOnly={ro} value={vals[k]} onChange={(e) => setVals({ ...vals, [k]: e.target.value })} />
+                  <input className="ga-input" readOnly={ro} value={vals[k]} onChange={(e) => setVals({ ...vals, [k]: e.target.value })} />
                 )}
               </label>
             );
@@ -252,11 +252,11 @@ function RowModal({ table, row, edit, onClose, onSaved }) {
         </div>
         {err && <p className="sd-rm__err">{err}</p>}
         <div className="sd-modal__btns">
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={onClose}>
+          <button type="button" className="ga-btn ga-btn--ghost" onClick={onClose}>
             {edit ? "Cancel" : "Close"}
           </button>
           {edit && (
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+            <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
               {busy ? "Saving…" : "Save changes"}
             </button>
           )}
@@ -265,7 +265,7 @@ function RowModal({ table, row, edit, onClose, onSaved }) {
           .sd-rm { width: min(640px, 100%); padding: 24px; }
           .sd-rm__f { display: grid; gap: 10px; margin-top: 16px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
           .sd-rm__f em { font-style: normal; font-weight: 500; color: var(--ad-muted); }
-          .sd-rm__f .ad-input[readonly] { background: var(--ad-soft-2); color: var(--ad-muted-2); }
+          .sd-rm__f .ga-input[readonly] { background: var(--ad-soft-2); color: var(--ad-muted-2); }
           .sd-rm__err { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
         `}</style>
       </form>

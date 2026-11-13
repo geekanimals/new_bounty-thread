@@ -342,7 +342,7 @@ const STEPS = ["Upload sheet", "Match columns", "Check & fix", "Done"];
 export function UploadCard({ id, step, children }) {
   const kind = useUploadKind(id);
   return (
-    <Panel className="up-card" title="📄 Bulk upload creators" sub="Upload, download & Google Sheet — everyone you upload lands on the step you write." actions={<span className="ad-badge ad-badge--violet up-type">{KIND_LABEL[kind]}</span>}>
+    <Panel className="up-card" title="📄 Bulk upload creators" sub="Upload, download & Google Sheet — everyone you upload lands on the step you write." actions={<span className="ga-badge ga-badge--violet up-type">{KIND_LABEL[kind]}</span>}>
       <ol className="up-steps">
         {STEPS.map((s, i) => {
           const n = i + 1;

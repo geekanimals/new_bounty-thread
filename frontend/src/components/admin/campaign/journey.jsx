@@ -307,9 +307,9 @@ export function useAsk() {
   };
   const setV = (k, val) => setSt((s) => ({ ...s, v: { ...s.v, [k]: val } }));
   const el = st ? (
-    <div className="ad-overlay" onClick={() => close(null)}>
+    <div className="ga-overlay" onClick={() => close(null)}>
       <form
-        className="ad-modal jk"
+        className="ga-modal jk"
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
@@ -318,15 +318,15 @@ export function useAsk() {
           close(st.v);
         }}
       >
-        <h2 className="ad-h2">{st.title}</h2>
+        <h2 className="ga-h2">{st.title}</h2>
         {st.text && <p className="jk-t">{st.text}</p>}
         {(st.fields || []).map((f) => (
           <div key={f.k} className="jk-f">
-            <label className="ad-label" htmlFor={`jk-${f.k}`}>
+            <label className="ga-label" htmlFor={`jk-${f.k}`}>
               {f.label}
             </label>
             {f.options ? (
-              <select id={`jk-${f.k}`} className="ad-input" value={st.v[f.k]} onChange={(e) => setV(f.k, e.target.value)}>
+              <select id={`jk-${f.k}`} className="ga-input" value={st.v[f.k]} onChange={(e) => setV(f.k, e.target.value)}>
                 <option value="">Pick…</option>
                 {f.options.map((o) => (
                   <option key={o[0]} value={o[0]}>
@@ -335,18 +335,18 @@ export function useAsk() {
                 ))}
               </select>
             ) : f.area ? (
-              <textarea id={`jk-${f.k}`} className="ad-input" rows={3} placeholder={f.placeholder} value={st.v[f.k]} onChange={(e) => setV(f.k, e.target.value)} />
+              <textarea id={`jk-${f.k}`} className="ga-input" rows={3} placeholder={f.placeholder} value={st.v[f.k]} onChange={(e) => setV(f.k, e.target.value)} />
             ) : (
-              <input id={`jk-${f.k}`} className="ad-input" type={f.type || "text"} placeholder={f.placeholder} value={st.v[f.k]} onChange={(e) => setV(f.k, e.target.value)} />
+              <input id={`jk-${f.k}`} className="ga-input" type={f.type || "text"} placeholder={f.placeholder} value={st.v[f.k]} onChange={(e) => setV(f.k, e.target.value)} />
             )}
           </div>
         ))}
         {st.err && <p className="jk-err">{st.err}</p>}
         <div className="jk-act">
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={() => close(null)}>
+          <button type="button" className="ga-btn ga-btn--ghost" onClick={() => close(null)}>
             Cancel
           </button>
-          <button type="submit" className={`ad-btn ${st.danger ? "ad-btn--danger" : "ad-btn--primary"}`}>
+          <button type="submit" className={`ga-btn ${st.danger ? "ga-btn--danger" : "ga-btn--primary"}`}>
             {st.ok || "Save"}
           </button>
         </div>
@@ -493,7 +493,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
           )}
           {c.handle && c.handle !== c.name && <span className="jr-handle">{c.handle}</span>}
           {c.tags.map(([t, tn]) => (
-            <span key={t} className={`ad-badge ad-badge--${tn}`}>
+            <span key={t} className={`ga-badge ga-badge--${tn}`}>
               {t}
             </span>
           ))}
@@ -501,7 +501,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         <p className="jr-meta">
           {c.phone ? (
             <>
-              🟢 WhatsApp {c.phone} <span className="ad-badge ad-badge--green">ON</span> ·{" "}
+              🟢 WhatsApp {c.phone} <span className="ga-badge ga-badge--green">ON</span> ·{" "}
             </>
           ) : (
             "No WhatsApp · "
@@ -509,7 +509,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
           👥 {c.followers} followers · 📍 {c.city}
         </p>
         <div className="jr-step">
-          <span className="ad-bar">
+          <span className="ga-bar">
             <i style={{ width: c.step ? `${pct}%` : 0 }} />
           </span>
           <span>
@@ -520,7 +520,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
       </div>
       <div className="jr-act">
         {c.act && (
-          <button type="button" className="ad-btn ad-btn--primary jr-btn" onClick={onAction} disabled={busy}>
+          <button type="button" className="ga-btn ga-btn--primary jr-btn" onClick={onAction} disabled={busy}>
             {busy ? "…" : c.action}
           </button>
         )}
@@ -547,9 +547,9 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         a.jr-name:hover { color: var(--ad-primary); }
         .jr-handle { margin-right: 2px; font-size: 12px; font-weight: 700; color: var(--ad-muted); }
         .jr-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: #8791a7; }
-        .jr-meta .ad-badge { height: 22px; padding: 0 9px; }
+        .jr-meta .ga-badge { height: 22px; padding: 0 9px; }
         .jr-step { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ad-ink); }
-        .jr-step .ad-bar { width: 160px; height: 6px; flex-shrink: 0; background: #eceef6; }
+        .jr-step .ga-bar { width: 160px; height: 6px; flex-shrink: 0; background: #eceef6; }
         .jr-turn { margin-top: 8px; font-size: 12px; line-height: 1.35; color: #8791a7; }
         .jr-act { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .jr-btn { height: 41px; padding: 0 15px; }

@@ -58,13 +58,13 @@ function AutoMessages() {
   };
 
   const tg = (i, on, label) => (
-    <button type="button" className={`ad-toggle ma-tg ${on ? "is-on" : ""}`} aria-pressed={on} aria-label={`${label} for ${STEPS[i].step}`} onClick={() => flip(i)} />
+    <button type="button" className={`ga-toggle ma-tg ${on ? "is-on" : ""}`} aria-pressed={on} aria-label={`${label} for ${STEPS[i].step}`} onClick={() => flip(i)} />
   );
 
   return (
     <>
-      <section className="ad-card ma-card">
-        <h2 className="ad-h2">Automatic messages</h2>
+      <section className="ga-card ma-card">
+        <h2 className="ga-h2">Automatic messages</h2>
         <p className="ma-sub">The texts creators get at each step. WhatsApp uses the approved template geek_campaign_update.</p>
         {error ? (
           <p className="ma-state">
@@ -97,18 +97,18 @@ function AutoMessages() {
         />
         )}
         <div className="ma-act">
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={test}>
+          <button type="button" className="ga-btn ga-btn--ghost" onClick={test}>
             Send test
           </button>
           <button type="button" className="ma-plain" onClick={copy}>
             Copy body
           </button>
-          <button type="button" className="ad-btn ad-btn--primary" onClick={() => say("Nothing to save yet — per-step switches are coming soon.")}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={() => say("Nothing to save yet — per-step switches are coming soon.")}>
             Save
           </button>
         </div>
       </section>
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
       <style>{`
         .ma-card { padding: 24px 22px 22px; }
         .ma-sub { margin: 9px 0 20px; font-size: 12px; color: var(--ad-muted); }
@@ -124,8 +124,8 @@ function AutoMessages() {
         .ma-tg.is-on { background: var(--ad-primary); }
         .ma-prev { font-size: 12px; color: var(--ad-muted); }
         .ma-act { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 13px; }
-        .ma-act .ad-btn { height: 41px; padding: 0 15px; }
-        .ma-act .ad-btn--ghost { border-color: var(--ad-line-2); }
+        .ma-act .ga-btn { height: 41px; padding: 0 15px; }
+        .ma-act .ga-btn--ghost { border-color: var(--ad-line-2); }
         .ma-plain { height: 41px; padding: 0 10px; border: 0; background: none; font-size: 14px; font-weight: 800; color: #6657e9; }
         @media (max-width: 640px) { .ma-card { padding: 18px 16px; } }
       `}</style>

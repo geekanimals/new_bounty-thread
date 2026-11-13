@@ -167,7 +167,7 @@ export default function Address() {
   const edit = (a) => {
     setF({ ...EMPTY, ...a });
     setEditId(a.id);
-    document.getElementById("ad-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("ga-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -178,21 +178,21 @@ export default function Address() {
       </Link>
 
       <section className="pf-card ad">
-        <div className="ad-head">
+        <div className="ga-head">
           <h1>Delivery addresses *</h1>
           <span>Every field required · checked on the map</span>
         </div>
 
         {list.length > 0 && (
-          <ul className="ad-list">
+          <ul className="ga-list">
             {list.map((a) => (
               <li key={a.id} className={a.isDefault ? "is-default" : ""}>
-                <span className="ad-list__pin">
+                <span className="ga-list__pin">
                   <Pin size={15} />
                 </span>
-                <div className="ad-list__txt">
+                <div className="ga-list__txt">
                   <strong>
-                    {a.label} {a.isDefault && <em className="ad-def">Default</em>}
+                    {a.label} {a.isDefault && <em className="ga-def">Default</em>}
                   </strong>
                   <p>
                     {a.name} · +91 {a.phone}
@@ -200,7 +200,7 @@ export default function Address() {
                     {a.flat}, {a.area}, {a.landmark}, {a.city}, {a.state} — {a.pin}
                   </p>
                 </div>
-                <div className="ad-list__act">
+                <div className="ga-list__act">
                   {!a.isDefault && (
                     <button type="button" onClick={() => makeDef(a)}>
                       Make default
@@ -223,40 +223,40 @@ export default function Address() {
           </ul>
         )}
 
-        <form id="ad-form" className="ad-form" onSubmit={submit} noValidate>
+        <form id="ga-form" className="ga-form" onSubmit={submit} noValidate>
           <h2>{editId ? "Edit address" : "Add a new address"}</h2>
 
-          <div className="ad-search">
-            <label className="ad-label" htmlFor="ad-q">
+          <div className="ga-search">
+            <label className="ga-label" htmlFor="ga-q">
               🔎 Search your address
             </label>
-            <input id="ad-q" className="pf-input ad-in" placeholder="Type your building, society, street or area…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <button type="button" className="ad-loc" onClick={useLocation}>
+            <input id="ga-q" className="pf-input ga-in" placeholder="Type your building, society, street or area…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <button type="button" className="ga-loc" onClick={useLocation}>
               📍 Use my current location
             </button>
           </div>
 
-          <div className="ad-grid">
-            <div className="ad-pinbox">
-              <label className="ad-label" htmlFor="ad-pin">
+          <div className="ga-grid">
+            <div className="ga-pinbox">
+              <label className="ga-label" htmlFor="ga-pin">
                 PIN code <i>*</i>
               </label>
-              <input id="ad-pin" className="pf-input ad-in ad-pin" inputMode="numeric" placeholder="6-digit PIN — fills city & state" value={f.pin} onChange={setPin} />
+              <input id="ga-pin" className="pf-input ga-in ga-pin" inputMode="numeric" placeholder="6-digit PIN — fills city & state" value={f.pin} onChange={setPin} />
               {bad("pin") && <p className="bx-err">Enter a 6-digit PIN.</p>}
             </div>
-            <div className="ad-blank" />
+            <div className="ga-blank" />
             <div>
-              <label className="ad-label" htmlFor="ad-city">
+              <label className="ga-label" htmlFor="ga-city">
                 Town/City <i>*</i>
               </label>
-              <input id="ad-city" className="pf-input ad-in" value={f.city} onChange={set("city")} />
+              <input id="ga-city" className="pf-input ga-in" value={f.city} onChange={set("city")} />
               {bad("city") && <p className="bx-err">Required.</p>}
             </div>
             <div>
-              <label className="ad-label" htmlFor="ad-state">
+              <label className="ga-label" htmlFor="ga-state">
                 State <i>*</i>
               </label>
-              <select id="ad-state" className="pf-input ad-in" value={f.state} onChange={set("state")}>
+              <select id="ga-state" className="pf-input ga-in" value={f.state} onChange={set("state")}>
                 <option value="">Choose a state</option>
                 {INDIA_STATES.map((st) => (
                   <option key={st}>{st}</option>
@@ -264,72 +264,72 @@ export default function Address() {
               </select>
               {bad("state") && <p className="bx-err">Required.</p>}
             </div>
-            <div className="ad-full">
-              <label className="ad-label" htmlFor="ad-flat">
+            <div className="ga-full">
+              <label className="ga-label" htmlFor="ga-flat">
                 Flat, House no., Building, Apartment <i>*</i>
               </label>
-              <input id="ad-flat" className="pf-input ad-in" placeholder="E.g. B-204, Green Park Society" value={f.flat} onChange={set("flat")} />
+              <input id="ga-flat" className="pf-input ga-in" placeholder="E.g. B-204, Green Park Society" value={f.flat} onChange={set("flat")} />
               {bad("flat") && <p className="bx-err">Required.</p>}
             </div>
-            <div className="ad-full">
-              <label className="ad-label" htmlFor="ad-area">
+            <div className="ga-full">
+              <label className="ga-label" htmlFor="ga-area">
                 Area, Street, Sector, Village <i>*</i>
               </label>
-              <input id="ad-area" className="pf-input ad-in" placeholder="Start typing — pick from the list" value={f.area} onChange={set("area")} />
+              <input id="ga-area" className="pf-input ga-in" placeholder="Start typing — pick from the list" value={f.area} onChange={set("area")} />
               {bad("area") && <p className="bx-err">Required.</p>}
             </div>
-            <div className="ad-full">
-              <label className="ad-label" htmlFor="ad-land">
+            <div className="ga-full">
+              <label className="ga-label" htmlFor="ga-land">
                 Landmark <i>*</i>
               </label>
-              <input id="ad-land" className="pf-input ad-in" placeholder="Type a nearby place — e.g. Apollo" value={f.landmark} onChange={set("landmark")} />
+              <input id="ga-land" className="pf-input ga-in" placeholder="Type a nearby place — e.g. Apollo" value={f.landmark} onChange={set("landmark")} />
               {bad("landmark") && <p className="bx-err">Required.</p>}
             </div>
             <div>
-              <label className="ad-label" htmlFor="ad-name">
+              <label className="ga-label" htmlFor="ga-name">
                 Receiver's full name <i>*</i>
               </label>
-              <input id="ad-name" className="pf-input ad-in" value={f.name} onChange={set("name")} />
+              <input id="ga-name" className="pf-input ga-in" value={f.name} onChange={set("name")} />
               {bad("name") && <p className="bx-err">Required.</p>}
             </div>
             <div>
-              <label className="ad-label" htmlFor="ad-phone">
+              <label className="ga-label" htmlFor="ga-phone">
                 Mobile number <i>*</i>
               </label>
-              <div className="ad-phone">
+              <div className="ga-phone">
                 <span>+91</span>
-                <input id="ad-phone" className="pf-input ad-in" inputMode="numeric" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+                <input id="ga-phone" className="pf-input ga-in" inputMode="numeric" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
               </div>
               {bad("phone") && <p className="bx-err">Enter a 10-digit number.</p>}
             </div>
           </div>
 
           {/* Delivery instructions (optional) — Figma: link khulte hi textarea */}
-          <button type="button" className="ad-notes-btn" onClick={() => setNotesOpen(!notesOpen)} aria-expanded={notesOpen}>
+          <button type="button" className="ga-notes-btn" onClick={() => setNotesOpen(!notesOpen)} aria-expanded={notesOpen}>
             Delivery instructions (optional)
           </button>
-          {notesOpen && <textarea className="pf-input ad-notes" rows={2} placeholder="E.g. call before delivery, gate code, best time" value={f.notes} onChange={set("notes")} />}
+          {notesOpen && <textarea className="pf-input ga-notes" rows={2} placeholder="E.g. call before delivery, gate code, best time" value={f.notes} onChange={set("notes")} />}
 
-          <label className="pf-label ad-saveas" htmlFor="ad-label">
+          <label className="pf-label ga-saveas" htmlFor="ga-label">
             Save as
           </label>
-          <select id="ad-label" className="pf-input ad-in ad-labelsel" value={f.label} onChange={set("label")}>
+          <select id="ga-label" className="pf-input ga-in ga-labelsel" value={f.label} onChange={set("label")}>
             <option>Home</option>
             <option>Work</option>
             <option>Other</option>
           </select>
 
-          <label className="ad-default">
+          <label className="ga-default">
             <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} />
             Make this my default address
           </label>
 
           {tried && !valid && <p className="bx-err">Please fill all required fields.</p>}
-          <div className="ad-btns">
+          <div className="ga-btns">
             {editId && (
               <button
                 type="button"
-                className="ad-cancel"
+                className="ga-cancel"
                 onClick={() => {
                   setF(EMPTY);
                   setEditId(null);
@@ -339,11 +339,11 @@ export default function Address() {
                 Cancel
               </button>
             )}
-            <button type="submit" className="pf-btn ad-save" disabled={busy}>
+            <button type="submit" className="pf-btn ga-save" disabled={busy}>
               {busy ? "Saving…" : editId ? "Update address" : "Save address"}
             </button>
           </div>
-          <p className="ad-foot">Your full address is private, used only for campaign logistics you approve — never shown in search or to brands.</p>
+          <p className="ga-foot">Your full address is private, used only for campaign logistics you approve — never shown in search or to brands.</p>
         </form>
       </section>
 
@@ -373,55 +373,55 @@ export default function Address() {
           .pf-back { margin-bottom: 20px; }
           .pf-card { padding: 16px; }
         }
-        .ad-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 0 -20px; padding: 0 20px 12px; border-bottom: 1px solid var(--bx-line); }
-        .ad-head h1 { font-family: var(--bx-sans); font-size: 15px; font-weight: 700; letter-spacing: -0.1px; }
-        .ad-head span { font-size: 12px; color: #6b5a3a; text-align: right; }
-        .ad-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; max-width: 640px; }
-        .ad-list li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; border: 1px solid #d9c9a3; background: #fffdf8; }
-        .ad-list li.is-default { border-color: var(--bx-teal); }
-        .ad-list__pin { width: 30px; height: 30px; flex-shrink: 0; border-radius: 9px; background: #f6e3bd; color: var(--bx-red); display: grid; place-items: center; }
-        .ad-list__txt { flex: 1; min-width: 0; }
-        .ad-list__txt strong { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
-        .ad-def { font-style: normal; padding: 1px 7px; border-radius: 5px; background: #d3eeec; color: #1f6f69; font-size: 10.5px; font-weight: 700; }
-        .ad-list__txt p { margin: 4px 0 0; font-size: 12.5px; color: #6b5a3a; line-height: 1.5; overflow-wrap: anywhere; }
-        .ad-list__act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-        .ad-list__act button { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #d9c9a3; background: #fffdf8; font-size: 12px; font-weight: 700; }
-        .ad-list__act button.is-red { color: var(--bx-red); }
-        .ad-form { margin-top: 18px; scroll-margin-top: 90px; max-width: 640px; }
-        .ad-form h2 { font-family: var(--bx-sans); font-size: 16px; font-weight: 700; margin-bottom: 10px; }
-        .ad-label { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--bx-ink); }
-        .ad-label i { font-style: normal; color: #dc2626; }
-        .ad-in { height: 40px; padding: 0 12px; border-radius: 12px; }
-        .ad-search { padding: 12px 12px 12px; border-radius: 12px; background: #e9e7d6; border: 1px solid #cfd6bf; }
-        .ad-search .ad-label { margin-bottom: 8px; }
-        .ad-search .ad-in { height: 44px; padding: 0 14px; }
-        .ad-loc { display: inline-flex; align-items: center; gap: 4px; height: 40px; margin-top: 8px; padding: 0 14px; border-radius: 12px; border: 1px solid #c9b88f; background: #fffdf8; font-family: var(--bx-jak); font-size: 14px; font-weight: 700; color: var(--bx-ink); }
-        .ad-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; margin-top: 18px; }
-        .ad-pinbox { max-width: 220px; }
-        .ad-full { grid-column: 1 / -1; }
-        .ad-pin::placeholder { letter-spacing: 2px; }
-        .ad-pin { letter-spacing: 2px; }
-        .ad-phone { display: flex; }
-        .ad-phone span { display: grid; place-items: center; padding: 0 10px; border: 1px solid #d9c9a3; border-right: 0; border-radius: 12px 0 0 12px; background: #efebe3; font-size: 14px; font-weight: 600; }
-        .ad-phone .ad-in { border-radius: 0 12px 12px 0; min-width: 0; }
-        .ad-notes-btn { display: block; margin: 14px 12px 0; padding: 0; border: 0; background: none; font-size: 13.5px; font-weight: 700; color: #007185; }
-        .ad-notes { margin-top: 8px; }
-        .ad-saveas { margin: 12px 0 6px; }
-        .ad-labelsel { max-width: 532px; }
-        .ad-default { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; color: var(--bx-ink); cursor: pointer; }
-        .ad-default input { width: 14px; height: 14px; margin: 0; accent-color: var(--bx-green); }
-        .ad-btns { display: flex; gap: 10px; margin: 14px 0 0; }
-        .ad-save { height: 40px; padding: 0 18px; }
-        .ad-cancel { height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #d9c9a3; background: #fffdf8; font-weight: 700; }
-        .ad-foot { margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #6b5a3a; }
+        .ga-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 0 -20px; padding: 0 20px 12px; border-bottom: 1px solid var(--bx-line); }
+        .ga-head h1 { font-family: var(--bx-sans); font-size: 15px; font-weight: 700; letter-spacing: -0.1px; }
+        .ga-head span { font-size: 12px; color: #6b5a3a; text-align: right; }
+        .ga-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; max-width: 640px; }
+        .ga-list li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; border: 1px solid #d9c9a3; background: #fffdf8; }
+        .ga-list li.is-default { border-color: var(--bx-teal); }
+        .ga-list__pin { width: 30px; height: 30px; flex-shrink: 0; border-radius: 9px; background: #f6e3bd; color: var(--bx-red); display: grid; place-items: center; }
+        .ga-list__txt { flex: 1; min-width: 0; }
+        .ga-list__txt strong { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+        .ga-def { font-style: normal; padding: 1px 7px; border-radius: 5px; background: #d3eeec; color: #1f6f69; font-size: 10.5px; font-weight: 700; }
+        .ga-list__txt p { margin: 4px 0 0; font-size: 12.5px; color: #6b5a3a; line-height: 1.5; overflow-wrap: anywhere; }
+        .ga-list__act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .ga-list__act button { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #d9c9a3; background: #fffdf8; font-size: 12px; font-weight: 700; }
+        .ga-list__act button.is-red { color: var(--bx-red); }
+        .ga-form { margin-top: 18px; scroll-margin-top: 90px; max-width: 640px; }
+        .ga-form h2 { font-family: var(--bx-sans); font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+        .ga-label { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--bx-ink); }
+        .ga-label i { font-style: normal; color: #dc2626; }
+        .ga-in { height: 40px; padding: 0 12px; border-radius: 12px; }
+        .ga-search { padding: 12px 12px 12px; border-radius: 12px; background: #e9e7d6; border: 1px solid #cfd6bf; }
+        .ga-search .ga-label { margin-bottom: 8px; }
+        .ga-search .ga-in { height: 44px; padding: 0 14px; }
+        .ga-loc { display: inline-flex; align-items: center; gap: 4px; height: 40px; margin-top: 8px; padding: 0 14px; border-radius: 12px; border: 1px solid #c9b88f; background: #fffdf8; font-family: var(--bx-jak); font-size: 14px; font-weight: 700; color: var(--bx-ink); }
+        .ga-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; margin-top: 18px; }
+        .ga-pinbox { max-width: 220px; }
+        .ga-full { grid-column: 1 / -1; }
+        .ga-pin::placeholder { letter-spacing: 2px; }
+        .ga-pin { letter-spacing: 2px; }
+        .ga-phone { display: flex; }
+        .ga-phone span { display: grid; place-items: center; padding: 0 10px; border: 1px solid #d9c9a3; border-right: 0; border-radius: 12px 0 0 12px; background: #efebe3; font-size: 14px; font-weight: 600; }
+        .ga-phone .ga-in { border-radius: 0 12px 12px 0; min-width: 0; }
+        .ga-notes-btn { display: block; margin: 14px 12px 0; padding: 0; border: 0; background: none; font-size: 13.5px; font-weight: 700; color: #007185; }
+        .ga-notes { margin-top: 8px; }
+        .ga-saveas { margin: 12px 0 6px; }
+        .ga-labelsel { max-width: 532px; }
+        .ga-default { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; color: var(--bx-ink); cursor: pointer; }
+        .ga-default input { width: 14px; height: 14px; margin: 0; accent-color: var(--bx-green); }
+        .ga-btns { display: flex; gap: 10px; margin: 14px 0 0; }
+        .ga-save { height: 40px; padding: 0 18px; }
+        .ga-cancel { height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #d9c9a3; background: #fffdf8; font-weight: 700; }
+        .ga-foot { margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #6b5a3a; }
         @media (max-width: 767px) {
-          .ad-head { margin: 0 -16px; padding: 0 16px 14px; }
-          .ad-head h1 { max-width: 90px; }
-          .ad-grid { grid-template-columns: 1fr; }
-          .ad-blank { display: none; }
-          .ad-pinbox { max-width: none; }
-          .ad-list li { flex-wrap: wrap; }
-          .ad-list__act { width: 100%; justify-content: flex-start; }
+          .ga-head { margin: 0 -16px; padding: 0 16px 14px; }
+          .ga-head h1 { max-width: 90px; }
+          .ga-grid { grid-template-columns: 1fr; }
+          .ga-blank { display: none; }
+          .ga-pinbox { max-width: none; }
+          .ga-list li { flex-wrap: wrap; }
+          .ga-list__act { width: 100%; justify-content: flex-start; }
         }
       `}</style>
     </BountyShell>

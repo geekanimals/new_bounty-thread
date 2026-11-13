@@ -41,8 +41,8 @@ export default function CreatorUploadDone() {
           </span>
         </p>
       )}
-      <section className="ad-card cu3-card">
-        <h2 className="ad-h2">📥 Creator upload</h2>
+      <section className="ga-card cu3-card">
+        <h2 className="ga-h2">📥 Creator upload</h2>
         <div className="cu3-fields">
           <TargetFields brand={brand} camp={camp} onBrand={setBrand} onCamp={setCamp} />
         </div>

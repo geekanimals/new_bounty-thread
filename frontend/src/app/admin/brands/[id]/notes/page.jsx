@@ -52,16 +52,16 @@ function BrandNotes() {
   return (
     <>
       <form className="bn-f" onSubmit={add}>
-        <input className="ad-input" value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} placeholder="Add a note or a task…" aria-label="Add a note or a task" />
-        <select className="ad-input" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Type">
+        <input className="ga-input" value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} placeholder="Add a note or a task…" aria-label="Add a note or a task" />
+        <select className="ga-input" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Type">
           {Object.keys(KINDS).map((k) => (
             <option key={k} value={k}>
               {cap(k)}
             </option>
           ))}
         </select>
-        {kind === "task" && <input className="ad-input bn-due" type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" title="Due date (optional)" />}
-        <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+        {kind === "task" && <input className="ga-input bn-due" type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" title="Due date (optional)" />}
+        <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
           {busy ? "Adding…" : "Add"}
         </button>
       </form>
@@ -106,15 +106,15 @@ function BrandNotes() {
         )}
       </div>
 
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
       <style>{`
         .bn-due { width: 150px; height: 44px; }
         .bn-rm { color: var(--ad-red) !important; }
         .bn-i p { white-space: pre-wrap; }
         .bn-f { display: flex; gap: 9px; margin-top: 0; }
-        .bn-f .ad-input:first-child { width: 270px; height: 43px; }
-        .bn-f select.ad-input { width: 139px; height: 44px; padding: 0 12px; }
-        .bn-f .ad-btn { height: 41px; margin-top: 1px; padding: 0 16px; }
+        .bn-f .ga-input:first-child { width: 270px; height: 43px; }
+        .bn-f select.ga-input { width: 139px; height: 44px; padding: 0 12px; }
+        .bn-f .ga-btn { height: 41px; margin-top: 1px; padding: 0 16px; }
         .bn-list { margin-top: 22px; padding-bottom: 22px; border-bottom: 1px solid var(--ad-line); }
         .bn-empty { padding: 14px 0 0; text-align: center; font-size: 14px; color: #8a8aa0; }
         .bn-i { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--ad-line); }
@@ -129,8 +129,8 @@ function BrandNotes() {
         .bn-i .bp-plain { height: 32px; padding: 0 6px; font-size: 13px; }
         @media (max-width: 640px) {
           .bn-f { flex-wrap: wrap; margin-top: 0; }
-          .bn-f .ad-input:first-child { width: 100%; }
-          .bn-f select.ad-input { flex: 1; width: auto; }
+          .bn-f .ga-input:first-child { width: 100%; }
+          .bn-f select.ga-input { flex: 1; width: auto; }
         }
       `}</style>
     </>

@@ -65,12 +65,12 @@ export default function NewCampaignReview() {
           <div key={c.t} className="nr-check">
             <span className="nr-ic">{c.ok ? "✓" : "!"}</span>
             <b>{c.t}</b>
-            <span className={`ad-badge ad-badge--${c.ok ? "green" : "orange"}`}>{c.ok ? "Ready" : "Needs detail"}</span>
+            <span className={`ga-badge ga-badge--${c.ok ? "green" : "orange"}`}>{c.ok ? "Ready" : "Needs detail"}</span>
           </div>
         ))}
       </div>
       <p className="nr-note">Saving creates the campaign for every admin; creators see it once it is Live.</p>
-      {done && <div className="ad-toast">{done}</div>}
+      {done && <div className="ga-toast">{done}</div>}
 
       <style>{`
         .nr-box { padding: 18px 16px 22px; border-radius: 14px; background: #f5f3ff; border: 1px solid #e3dfff; color: #6257a1; }

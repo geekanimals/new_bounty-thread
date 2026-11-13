@@ -69,7 +69,7 @@ export function useToast() {
     return () => clearTimeout(t);
   }, [toast]);
   const node = toast ? (
-    <div className="ad-toast" role="status">
+    <div className="ga-toast" role="status">
       {toast.bad ? "⚠️" : "✓"} {toast.msg}
     </div>
   ) : null;
@@ -241,9 +241,9 @@ export function useReason() {
     setSt(null);
   };
   const node = st ? (
-    <div className="ad-overlay" onClick={() => done(null)}>
+    <div className="ga-overlay" onClick={() => done(null)}>
       <form
-        className="ad-modal rq"
+        className="ga-modal rq"
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
@@ -262,7 +262,7 @@ export function useReason() {
         </div>
         {st.opt.mode !== "text" && (
           <>
-            <p className="ad-label">Reason</p>
+            <p className="ga-label">Reason</p>
             {[
               ["Doesn't match the brief", st.reasons.filter((r) => BRIEF.test(r.code))],
               ["Other reasons", st.reasons.filter((r) => !BRIEF.test(r.code))],
@@ -276,7 +276,7 @@ export function useReason() {
                       <button
                         key={r.code}
                         type="button"
-                        className={`ad-tab ${st.code === r.code ? "is-on" : ""}`}
+                        className={`ga-tab ${st.code === r.code ? "is-on" : ""}`}
                         onClick={() => setSt({ ...st, code: r.code, err: "", note: !st.note.trim() || st.note === st.auto ? (r.code === "other" ? "" : `${r.label}.`) : st.note, auto: r.code === "other" ? "" : `${r.label}.` })}
                       >
                         {r.label}
@@ -287,13 +287,13 @@ export function useReason() {
               ))}
           </>
         )}
-        <label className="ad-label" htmlFor="rq-note">
+        <label className="ga-label" htmlFor="rq-note">
           {st.opt.label || "Message to the creator — why they weren't selected"}
         </label>
-        <textarea id="rq-note" className="ad-input" rows={3} maxLength={400} value={st.note} placeholder={st.opt.placeholder || "e.g. The brand needs creators based in Jaipur for this campaign."} onChange={(e) => setSt({ ...st, note: e.target.value, err: "" })} />
-        {st.opt.hint !== false && <p className="ad-hint">{st.opt.hint || "📨 Sent on WhatsApp, by email and in the app."}</p>}
+        <textarea id="rq-note" className="ga-input" rows={3} maxLength={400} value={st.note} placeholder={st.opt.placeholder || "e.g. The brand needs creators based in Jaipur for this campaign."} onChange={(e) => setSt({ ...st, note: e.target.value, err: "" })} />
+        {st.opt.hint !== false && <p className="ga-hint">{st.opt.hint || "📨 Sent on WhatsApp, by email and in the app."}</p>}
         {st.err && <p className="rq-err">{st.err}</p>}
-        <button type="submit" className="ad-btn ad-btn--primary rq-go">
+        <button type="submit" className="ga-btn ga-btn--primary rq-go">
           {st.opt.cta || "Decline & send message"}
         </button>
         <style>{`
@@ -304,7 +304,7 @@ export function useReason() {
           .rq-grp { margin-bottom: 12px; }
           .rq-grp small { display: block; margin-bottom: 6px; font-size: 11px; color: var(--ad-muted); }
           .rq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-          .rq-chips .ad-tab { height: 32px; font-size: 12.5px; }
+          .rq-chips .ga-tab { height: 32px; font-size: 12.5px; }
           .rq textarea { margin-top: 2px; }
           .rq-err { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
           .rq-go { width: 100%; margin-top: 14px; }
@@ -349,7 +349,7 @@ export function StateBox({ loading, error, onRetry, empty }) {
       <div className="lv-box lv-box--err">
         <span>⚠️ {errText(error)}</span>
         {onRetry && (
-          <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" onClick={() => onRetry()}>
+          <button type="button" className="ga-btn ga-btn--ghost ga-btn--sm" onClick={() => onRetry()}>
             Retry
           </button>
         )}

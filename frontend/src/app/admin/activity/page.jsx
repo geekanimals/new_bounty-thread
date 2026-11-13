@@ -81,7 +81,7 @@ export default function ActivityPage({ person }) {
         action={
           <div className="ac-sorts" role="tablist">
             {SORTS.map((s) => (
-              <button key={s.k} type="button" role="tab" aria-selected={sort === s.k} className={`ad-tab ${sort === s.k ? "is-on" : ""}`} onClick={() => setSort(s.k)}>
+              <button key={s.k} type="button" role="tab" aria-selected={sort === s.k} className={`ga-tab ${sort === s.k ? "is-on" : ""}`} onClick={() => setSort(s.k)}>
                 {s.label}
               </button>
             ))}
@@ -112,7 +112,7 @@ export default function ActivityPage({ person }) {
               live ? <span key="l" className="ac-live">● Online now</span> : ago(r.last_seen),
               fmtNum(r.sessions || 0),
               r.consent === "all" || Number(r.minutes) > 0 ? actMins(r.minutes) : "—",
-              <span key="c" className={`ad-badge ad-badge--${ct}`}>
+              <span key="c" className={`ga-badge ga-badge--${ct}`}>
                 {cl}
               </span>,
               <Link key="t" href={`/admin/activity/${r.member_id}`} className="sk-link sk-link--blue">
@@ -130,8 +130,8 @@ export default function ActivityPage({ person }) {
         .ac-panel .sk-panel__txt { padding-top: 4px; }
         .ac-panel .sk-tw { margin-top: 14px; }
         .ac-sorts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-        .ac-sorts .ad-tab { height: 37px; }
-        .ac-sorts .ad-tab:not(.is-on) { color: #67718a; }
+        .ac-sorts .ga-tab { height: 37px; }
+        .ac-sorts .ga-tab:not(.is-on) { color: #67718a; }
         .ac-live { font-weight: 700; color: var(--ad-green); }
 
         .ac-wrap { position: fixed; inset: 0; z-index: 90; background: rgba(20,33,59,.45); animation: adFade .15s ease; }
@@ -156,7 +156,7 @@ export default function ActivityPage({ person }) {
         @media (max-width: 640px) {
           .ac-panel .sk-panel__act { width: 100%; min-width: 0; }
           .ac-sorts { flex-wrap: nowrap; overflow-x: auto; width: 100%; min-width: 0; scrollbar-width: none; }
-          .ac-sorts .ad-tab { flex-shrink: 0; }
+          .ac-sorts .ga-tab { flex-shrink: 0; }
           .ac-side { padding: 22px 18px; }
           .ac-x { right: 18px; top: 18px; }
         }

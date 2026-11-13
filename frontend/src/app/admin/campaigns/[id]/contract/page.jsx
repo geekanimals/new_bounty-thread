@@ -91,7 +91,7 @@ export default function WorkspaceContract() {
       <label className="wc-l" htmlFor={`wc-${field}`}>
         {label}
       </label>
-      <input id={`wc-${field}`} className="ad-input wc-in" value={v[field]} onChange={(e) => set((p) => ({ ...p, [field]: e.target.value }))} />
+      <input id={`wc-${field}`} className="ga-input wc-in" value={v[field]} onChange={(e) => set((p) => ({ ...p, [field]: e.target.value }))} />
     </div>
   );
 
@@ -108,10 +108,10 @@ export default function WorkspaceContract() {
       )}
 
       <div className="wc-grid">
-        <section className="ad-card wc-card">
+        <section className="ga-card wc-card">
           <div className="wc-head">
             <div>
-              <h2 className="ad-h2">📜 Contract</h2>
+              <h2 className="ga-h2">📜 Contract</h2>
               <p className="wc-sub">Goes out automatically when a creator is approved. Changes apply to contracts sent from now on.</p>
             </div>
             <button type="button" className="wc-resend" disabled={busy === "resend" || bt.loading} onClick={resend}>
@@ -132,13 +132,13 @@ export default function WorkspaceContract() {
               {r}
             </label>
           ))}
-          <button type="button" className="ad-btn ad-btn--primary wc-save" disabled={!!busy || bt.loading} onClick={() => save("k")}>
+          <button type="button" className="ga-btn ga-btn--primary wc-save" disabled={!!busy || bt.loading} onClick={() => save("k")}>
             {busy === "k" ? "Saving…" : "Save contract"}
           </button>
         </section>
 
-        <section className="ad-card wc-card">
-          <h2 className="ad-h2">🎬 Video brief</h2>
+        <section className="ga-card wc-card">
+          <h2 className="ga-h2">🎬 Video brief</h2>
           <p className="wc-sub">Goes out automatically when the product is delivered.</p>
           <div className="wc-two wc-two--b">
             {F({ label: "What to shoot", v: b, set: setB, field: "shoot" })}
@@ -147,12 +147,12 @@ export default function WorkspaceContract() {
             {F({ label: "Do’s", v: b, set: setB, field: "dos" })}
             {F({ label: "Don’ts", v: b, set: setB, field: "donts" })}
           </div>
-          <button type="button" className="ad-btn ad-btn--primary wc-save wc-save--b" disabled={!!busy || bt.loading} onClick={() => save("b")}>
+          <button type="button" className="ga-btn ga-btn--primary wc-save wc-save--b" disabled={!!busy || bt.loading} onClick={() => save("b")}>
             {busy === "b" ? "Saving…" : "Save brief"}
           </button>
         </section>
       </div>
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .wc-err { margin: -10px 0 16px; font-size: 13px; color: var(--ad-red); font-weight: 700; }

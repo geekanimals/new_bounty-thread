@@ -20,9 +20,9 @@ export default function NewCampaignBasics() {
   return (
     <Wizard step={0} draft={{ d, set }} onNext={next} error={err}>
       <p className="nc-sec">Campaign type</p>
-      <div className="ad-tabs nb-types" role="radiogroup" aria-label="Campaign type">
+      <div className="ga-tabs nb-types" role="radiogroup" aria-label="Campaign type">
         {TYPES.map((t) => (
-          <button key={t} type="button" role="radio" aria-checked={d.type === t} className={`ad-tab ${d.type === t ? "is-on" : ""}`} onClick={() => set("type", t)}>
+          <button key={t} type="button" role="radio" aria-checked={d.type === t} className={`ga-tab ${d.type === t ? "is-on" : ""}`} onClick={() => set("type", t)}>
             {t}
           </button>
         ))}
@@ -36,7 +36,7 @@ export default function NewCampaignBasics() {
           </label>
           <input
             id="nc-brand"
-            className="ad-input nc-input nb-brand"
+            className="ga-input nc-input nb-brand"
             list="nb-brands"
             value={d.brand}
             onChange={(e) => {
@@ -62,8 +62,8 @@ export default function NewCampaignBasics() {
       </p>
       <style>{`
         .nb-types { margin-bottom: 9px; }
-        .nb-types .ad-tab { height: 38px; font-weight: 800; color: #65718a; }
-        .nb-types .ad-tab.is-on { color: #fff; }
+        .nb-types .ga-tab { height: 38px; font-weight: 800; color: #65718a; }
+        .nb-types .ga-tab.is-on { color: #fff; }
         .nb-hint { margin: 0 0 14px; font-size: 12px; color: var(--ad-muted); }
         .nb-brand { height: 43px; }
       `}</style>

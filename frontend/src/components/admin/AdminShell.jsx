@@ -179,7 +179,7 @@ export default function AdminShell({ children, wide = false }) {
             </span>
           </Link>
           <p className="as-proto">
-            <i /> <b>Prototype mode</b>· No live data connection
+            <i /> <b>Live</b>· Connected to Supabase
           </p>
         </div>
       </aside>
@@ -199,7 +199,7 @@ export default function AdminShell({ children, wide = false }) {
             <kbd>⌘K</kbd>
           </button>
           <div className="as-top__right">
-            <span className="as-status">● All systems in design mode</span>
+            <span className="as-status">● All systems live</span>
             <button type="button" className="as-icon as-icon--search" onClick={() => setPanel("search")} aria-label="Search">
               ⌕
             </button>
@@ -277,10 +277,10 @@ export default function AdminShell({ children, wide = false }) {
             </div>
           ))}
           <div className="as-drawer__foot">
-            <button type="button" className="ad-btn ad-btn--soft" onClick={() => setPanel("agent")}>
+            <button type="button" className="ga-btn ga-btn--soft" onClick={() => setPanel("agent")}>
               ✨ Owner Agent
             </button>
-            <button type="button" className="ad-btn ad-btn--ghost" onClick={signOut}>
+            <button type="button" className="ga-btn ga-btn--ghost" onClick={signOut}>
               Sign out
             </button>
           </div>
@@ -289,7 +289,7 @@ export default function AdminShell({ children, wide = false }) {
 
       {/* ---------- ⌘K search ---------- */}
       {panel === "search" && (
-        <div className="ad-overlay as-searchwrap" onClick={() => setPanel(null)}>
+        <div className="ga-overlay as-searchwrap" onClick={() => setPanel(null)}>
           <div className="as-cmd" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Search">
             <input
               ref={qRef}
@@ -421,7 +421,7 @@ export default function AdminShell({ children, wide = false }) {
         .as-content--wide { max-width: none; }
 
         /* ⌘K */
-        .ad-overlay.as-searchwrap { place-items: start center; padding: 117px 20px 20px; background: rgba(20,33,59,.28); }
+        .ga-overlay.as-searchwrap { place-items: start center; padding: 117px 20px 20px; background: rgba(20,33,59,.28); }
         .as-cmd { width: min(600px, 100%); padding: 18px; border-radius: 22px; background: #fff; box-shadow: 0 30px 80px -30px rgba(20,33,59,.5); animation: adPop .15s ease; }
         .as-cmd input { width: 100%; height: 50px; padding: 0 14px; border: 0; border-bottom: 1px solid var(--ad-line); outline: none; font-size: 17px; color: var(--ad-ink); }
         .as-cmd input::placeholder { color: #8b92aa; }
@@ -449,7 +449,7 @@ export default function AdminShell({ children, wide = false }) {
         .as-agent__chips { display: flex; flex-wrap: wrap; gap: 6px; }
         .as-agent__chips button { height: 26px; padding: 0 10px; border: 0; border-radius: 13px; background: var(--ad-soft); color: var(--ad-muted-2); font-size: 11px; font-weight: 700; }
         .as-agent__ask { display: flex; gap: 8px; margin-top: 156px; padding-bottom: 18px; border-bottom: 1px solid var(--ad-line); }
-        .as-agent__ask .ad-input { max-width: 173px; height: 42px; }
+        .as-agent__ask .ga-input { max-width: 173px; height: 42px; }
 
         /* Drawer (mobile) */
         .as-drawer {
@@ -496,11 +496,11 @@ export default function AdminShell({ children, wide = false }) {
           .as-icon { width: 34px; height: 34px; }
           .as-pmenu { position: fixed; left: 12px; right: 12px; top: 66px; width: auto; }
           .as-content { padding: 80px 16px 40px; }
-          .ad-overlay.as-searchwrap { padding: 70px 12px 0; place-items: start stretch; }
+          .ga-overlay.as-searchwrap { padding: 70px 12px 0; place-items: start stretch; }
           .as-agent { padding: 22px 18px 20px; }
           .as-agent__x { right: 18px; top: 18px; }
           .as-agent__ask { margin-top: 24px; }
-          .as-agent__ask .ad-input { max-width: none; flex: 1; }
+          .as-agent__ask .ga-input { max-width: none; flex: 1; }
         }
       `}</style>
     </div>

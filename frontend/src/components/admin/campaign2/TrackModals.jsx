@@ -15,15 +15,15 @@ export default function TrackModal({ kind, campaign, data, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const title = { paste: "📋 Paste codes & brand links", sales: "➕ Add orders / sales", report: "📤 Upload the brand's order report" }[kind];
   return (
-    <div className="ad-overlay" onClick={onClose}>
-      <div className="ad-modal tm" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
-        <h3 className="ad-h2">{title}</h3>
+    <div className="ga-overlay" onClick={onClose}>
+      <div className="ga-modal tm" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+        <h3 className="ga-h2">{title}</h3>
         {kind === "paste" && <Paste campaign={campaign} busy={busy} setBusy={setBusy} setErr={setErr} onDone={onDone} />}
         {kind === "sales" && <Sales campaign={campaign} data={data} busy={busy} setBusy={setBusy} setErr={setErr} onDone={onDone} />}
         {kind === "report" && <Report campaign={campaign} data={data} busy={busy} setBusy={setBusy} setErr={setErr} onDone={onDone} />}
         {err && <p className="tm-err">{err}</p>}
         <div className="tm-x">
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={onClose}>
+          <button type="button" className="ga-btn ga-btn--ghost" onClick={onClose}>
             Close
           </button>
         </div>
@@ -31,11 +31,11 @@ export default function TrackModal({ kind, campaign, data, onClose, onDone }) {
       <style>{`
         .tm { width: min(720px, 100%); padding: 24px; }
         .tm-txt { margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--ad-muted); }
-        .tm textarea.ad-input { margin-top: 12px; min-height: 180px; font-family: ui-monospace, monospace; font-size: 12.5px; }
+        .tm textarea.ga-input { margin-top: 12px; min-height: 180px; font-family: ui-monospace, monospace; font-size: 12.5px; }
         .tm-check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
         .tm-lines { display: grid; gap: 8px; margin-top: 12px; }
         .tm-line { display: grid; grid-template-columns: 1.6fr 1fr .6fr .9fr 1fr; gap: 8px; }
-        .tm-line .ad-input { height: 38px; font-size: 12.5px; padding: 0 10px; }
+        .tm-line .ga-input { height: 38px; font-size: 12.5px; padding: 0 10px; }
         .tm-head { display: grid; grid-template-columns: 1.6fr 1fr .6fr .9fr 1fr; gap: 8px; margin-top: 12px; font-size: 10px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; color: #9aa2b4; }
         .tm-map { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
         .tm-map select { height: 40px; }
@@ -94,12 +94,12 @@ function Paste({ campaign, busy, setBusy, setErr, onDone }) {
       <p className="tm-txt">
         One per line, straight from the brand&apos;s sheet: <b>@handle, CODE</b> · <b>@handle, https://brand-link</b> · <b>@handle, CODE, https://brand-link</b>. A line with only a code goes to the next creator without one.
       </p>
-      <textarea className="ad-input" value={t} onChange={(e) => setT(e.target.value)} placeholder={"@riya.sharma, OLIORIYA15, https://brand.com/p/serum?ref=riya\n@foodie.aman, https://brand.com/p/combo\n@style.neha, OLIONEHA15\nOLIO15A"} />
+      <textarea className="ga-input" value={t} onChange={(e) => setT(e.target.value)} placeholder={"@riya.sharma, OLIORIYA15, https://brand.com/p/serum?ref=riya\n@foodie.aman, https://brand.com/p/combo\n@style.neha, OLIONEHA15\nOLIO15A"} />
       <label className="tm-check">
         <input type="checkbox" checked={ow} onChange={(e) => setOw(e.target.checked)} /> Replace codes / links creators already have
       </label>
       <div className="tm-go">
-        <button type="button" className="ad-btn ad-btn--primary" onClick={save} disabled={busy}>
+        <button type="button" className="ga-btn ga-btn--primary" onClick={save} disabled={busy}>
           {busy ? "Saving…" : "Save"}
         </button>
       </div>
@@ -138,7 +138,7 @@ function Sales({ campaign, data, busy, setBusy, setErr, onDone }) {
       <div className="tm-lines">
         {lines.map((x, i) => (
           <div key={i} className="tm-line">
-            <select className="ad-input" value={x.w} onChange={set(i, "w")} aria-label="Creator">
+            <select className="ga-input" value={x.w} onChange={set(i, "w")} aria-label="Creator">
               <option value="">Pick the creator…</option>
               {L.map((l) => (
                 <option key={l.link_id} value={`h:${l.handle || ""}`}>
@@ -148,18 +148,18 @@ function Sales({ campaign, data, busy, setBusy, setErr, onDone }) {
               ))}
               {cfg.mode === "common" && <option value={`c:${cfg.common_code || ""}`}>Shared code {cfg.common_code} (not split)</option>}
             </select>
-            <input className="ad-input" value={x.o} onChange={set(i, "o")} placeholder="Order no." aria-label="Order number" />
-            <input className="ad-input" type="number" min="1" value={x.n} onChange={set(i, "n")} aria-label="Orders" />
-            <input className="ad-input" inputMode="decimal" value={x.a} onChange={set(i, "a")} placeholder="₹" aria-label="Amount" />
-            <input className="ad-input" type="date" value={x.d} onChange={set(i, "d")} aria-label="Date" />
+            <input className="ga-input" value={x.o} onChange={set(i, "o")} placeholder="Order no." aria-label="Order number" />
+            <input className="ga-input" type="number" min="1" value={x.n} onChange={set(i, "n")} aria-label="Orders" />
+            <input className="ga-input" inputMode="decimal" value={x.a} onChange={set(i, "a")} placeholder="₹" aria-label="Amount" />
+            <input className="ga-input" type="date" value={x.d} onChange={set(i, "d")} aria-label="Date" />
           </div>
         ))}
       </div>
       <div className="tm-go">
-        <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" onClick={() => setLines((ls) => [...ls, blank()])}>
+        <button type="button" className="ga-btn ga-btn--ghost ga-btn--sm" onClick={() => setLines((ls) => [...ls, blank()])}>
           + Another line
         </button>
-        <button type="button" className="ad-btn ad-btn--primary" onClick={save} disabled={busy}>
+        <button type="button" className="ga-btn ga-btn--primary" onClick={save} disabled={busy}>
           {busy ? "Saving…" : "Save"}
         </button>
       </div>
@@ -228,8 +228,8 @@ function Report({ campaign, data, busy, setBusy, setErr, onDone }) {
   };
   const Sel = ({ k, label }) => (
     <label>
-      <span className="ad-label">{label}</span>
-      <select className="ad-input" value={map[k] ?? -1} onChange={(e) => setMap((m) => ({ ...m, [k]: +e.target.value }))}>
+      <span className="ga-label">{label}</span>
+      <select className="ga-input" value={map[k] ?? -1} onChange={(e) => setMap((m) => ({ ...m, [k]: +e.target.value }))}>
         <option value={-1}>{k === "code" ? "— pick —" : "Not in this file"}</option>
         {head.map((h, i) => (
           <option key={i} value={i}>
@@ -242,7 +242,7 @@ function Report({ campaign, data, busy, setBusy, setErr, onDone }) {
   return (
     <>
       <p className="tm-txt">Download the orders / discount-code report from the brand&apos;s store as CSV (Shopify → Orders → Export, WooCommerce, Amazon / Flipkart / Nykaa seller panel). We match each order to its creator by the coupon code.</p>
-      <input type="file" accept=".csv,text/csv,.txt" className="ad-input" style={{ marginTop: 12, paddingTop: 9 }} onChange={onFile} />
+      <input type="file" accept=".csv,text/csv,.txt" className="ga-input" style={{ marginTop: 12, paddingTop: 9 }} onChange={onFile} />
       {R && (
         <>
           <div className="tm-map">
@@ -256,7 +256,7 @@ function Report({ campaign, data, busy, setBusy, setErr, onDone }) {
             {map.order < 0 ? " · ⚠️ No order number column — uploading the same file twice will count orders twice." : ""}
           </p>
           <div className="tm-go">
-            <button type="button" className="ad-btn ad-btn--primary" onClick={go} disabled={busy}>
+            <button type="button" className="ga-btn ga-btn--primary" onClick={go} disabled={busy}>
               {busy ? "Adding…" : "Add these orders"}
             </button>
           </div>

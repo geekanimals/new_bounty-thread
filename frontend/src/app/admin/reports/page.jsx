@@ -165,7 +165,7 @@ export default function ReportsPage() {
               {r.c.name}
               {r.c.brand ? ` · ${r.c.brand}` : ""}
             </span>,
-            <span key="s" className={`ad-badge ad-badge--${toneOf(r.c.lifecycle_status)}`}>
+            <span key="s" className={`ga-badge ga-badge--${toneOf(r.c.lifecycle_status)}`}>
               {statusTxt(r.c.lifecycle_status)}
             </span>,
             r.applied,

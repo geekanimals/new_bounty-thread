@@ -276,15 +276,15 @@ export function Field({ label, k, d, set, placeholder, type = "text", options, a
         {label}
       </label>
       {options ? (
-        <select id={id} className="ad-input nc-input" value={d[k]} onChange={(e) => set(k, e.target.value)}>
+        <select id={id} className="ga-input nc-input" value={d[k]} onChange={(e) => set(k, e.target.value)}>
           {options.map((o) => (
             <option key={o}>{o}</option>
           ))}
         </select>
       ) : area ? (
-        <textarea id={id} className="ad-input nc-input nc-area" value={d[k]} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} />
+        <textarea id={id} className="ga-input nc-input nc-area" value={d[k]} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} />
       ) : (
-        <input id={id} className="ad-input nc-input" type={type} min={type === "number" ? 0 : undefined} value={d[k]} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} />
+        <input id={id} className="ga-input nc-input" type={type} min={type === "number" ? 0 : undefined} value={d[k]} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} />
       )}
     </div>
   );
@@ -332,12 +332,12 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue ‚
   return (
     <AdminShell>
       <PageHead title={draft && draft.d.editId ? "Edit campaign" : "Create a campaign"} sub="A guided, reviewable process that replaces the long scrolling modal.">
-        <Link href="/admin/campaigns" className="ad-btn ad-btn--ghost nc-close">
+        <Link href="/admin/campaigns" className="ga-btn ga-btn--ghost nc-close">
           ‚úï Close
         </Link>
       </PageHead>
 
-      <section className="ad-card nc">
+      <section className="ga-card nc">
         <ol className="nc-steps" data-scroll>
           {STEPS.map((s, i) => (
             <li key={s.k} className={i === step ? "is-on" : i < step ? "is-done" : ""}>
@@ -361,11 +361,11 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue ‚
 
         <div className="nc-foot">
           {prev ? (
-            <Link href={`/admin/campaigns/new/${prev.k}${q}`} className="ad-btn ad-btn--ghost nc-back">
+            <Link href={`/admin/campaigns/new/${prev.k}${q}`} className="ga-btn ga-btn--ghost nc-back">
               ‚Üê Back
             </Link>
           ) : (
-            <Link href="/admin/campaigns" className="ad-btn ad-btn--ghost nc-back">
+            <Link href="/admin/campaigns" className="ga-btn ga-btn--ghost nc-back">
               Cancel
             </Link>
           )}
@@ -373,14 +373,14 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue ‚
             <button type="button" className="nc-save" disabled={saving} onClick={saveDraft}>
               {saving ? "Saving‚Ä¶" : "Save draft"}
             </button>
-            <button type="button" className="ad-btn ad-btn--primary nc-next" onClick={go}>
+            <button type="button" className="ga-btn ga-btn--primary nc-next" onClick={go}>
               {nextLabel}
             </button>
           </div>
         </div>
       </section>
 
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .nc-close { height: 41px !important; padding: 0 14px !important; color: var(--ad-primary-ink); }

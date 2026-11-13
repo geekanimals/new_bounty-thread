@@ -121,7 +121,7 @@ export default function CampaignTraits() {
         title="🧩 Creator traits — what this campaign’s creators have in common"
         sub="Group by any trait to see who posted and completed."
         actions={
-          <select className="ad-input tr-by" value={by} onChange={(e) => setBy(e.target.value)} aria-label="Group by">
+          <select className="ga-input tr-by" value={by} onChange={(e) => setBy(e.target.value)} aria-label="Group by">
             {TRAITS.map(([k, l]) => (
               <option key={k} value={k}>
                 Group by: {l}

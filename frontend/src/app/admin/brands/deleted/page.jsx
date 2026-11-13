@@ -28,13 +28,13 @@ export default function DeletedBrands() {
   return (
     <AdminShell>
       <PageHead title="Deleted brands" sub="Brands removed from the CRM. Campaigns, bills and reports are kept — restore any time.">
-        <Link href="/admin/brands" className="ad-btn ad-btn--ghost db-back">
+        <Link href="/admin/brands" className="ga-btn ga-btn--ghost db-back">
           ← Brand CRM
         </Link>
       </PageHead>
 
-      <section className="ad-card db-card">
-        <h2 className="ad-h2">Deleted · {loading ? "…" : list.length}</h2>
+      <section className="ga-card db-card">
+        <h2 className="ga-h2">Deleted · {loading ? "…" : list.length}</h2>
         {loading || error ? (
           <p className={`db-state ${error ? "is-err" : ""}`}>
             {loading ? "Loading…" : `Couldn’t load: ${errText(error)}`}{" "}
@@ -60,7 +60,7 @@ export default function DeletedBrands() {
             fmtDate(d.deleted_at),
             d.by || "—",
             num(d.campaigns),
-            <button key="r" type="button" className="ad-btn ad-btn--ghost ad-btn--sm db-r" onClick={() => restore(d)} disabled={busy === d.brand_id}>
+            <button key="r" type="button" className="ga-btn ga-btn--ghost ga-btn--sm db-r" onClick={() => restore(d)} disabled={busy === d.brand_id}>
               {busy === d.brand_id ? "Restoring…" : "Restore"}
             </button>,
           ])}
@@ -69,11 +69,11 @@ export default function DeletedBrands() {
         )}
       </section>
 
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .db-card { padding: 22px 22px 26px; }
-        .db-card .ad-h2 { margin-bottom: 22px; }
+        .db-card .ga-h2 { margin-bottom: 22px; }
         .db-card .pt td:last-child { overflow: visible; }
         .db-state { padding: 14px 11px; font-size: 13px; color: var(--ad-muted); }
         .db-state.is-err { color: var(--ad-red); }

@@ -103,13 +103,13 @@ function BrandBilling() {
 
   const status = (i) =>
     i.status === "paid" ? (
-      <button type="button" className="ad-badge ad-badge--green bb-st" title={i.paid_via === "manual" ? "Paid by hand — click to undo" : "Paid on Razorpay"} onClick={() => i.paid_via === "manual" && setAsk({ kind: "unpay", i })}>
+      <button type="button" className="ga-badge ga-badge--green bb-st" title={i.paid_via === "manual" ? "Paid by hand — click to undo" : "Paid on Razorpay"} onClick={() => i.paid_via === "manual" && setAsk({ kind: "unpay", i })}>
         Paid
       </button>
     ) : i.status === "cancelled" ? (
-      <span className="ad-badge">Cancelled</span>
+      <span className="ga-badge">Cancelled</span>
     ) : (
-      <button type="button" className={`ad-badge ad-badge--${i.overdue ? "red" : "orange"} bb-st`} title="Click to mark paid" onClick={() => openPay(i)}>
+      <button type="button" className={`ga-badge ga-badge--${i.overdue ? "red" : "orange"} bb-st`} title="Click to mark paid" onClick={() => openPay(i)}>
         {i.overdue ? "Overdue" : "Due"}
       </button>
     );
@@ -187,12 +187,12 @@ function BrandBilling() {
               Mark <b>{pay.invoice_no}</b> paid — for a bank transfer, UPI or cheque outside Razorpay.
             </p>
             <div className="bb-pay__grid">
-              <input className="ad-input" type="number" min="0" step="0.01" value={pf.amt} onChange={(e) => setPf({ ...pf, amt: e.target.value })} aria-label="Amount received (₹)" placeholder="Amount received (₹)" />
-              <input className="ad-input" type="date" value={pf.on} onChange={(e) => setPf({ ...pf, on: e.target.value })} aria-label="Paid on" />
-              <input className="ad-input" maxLength={120} value={pf.ref} onChange={(e) => setPf({ ...pf, ref: e.target.value })} placeholder="UTR / UPI ref / cheque no" aria-label="Reference" />
+              <input className="ga-input" type="number" min="0" step="0.01" value={pf.amt} onChange={(e) => setPf({ ...pf, amt: e.target.value })} aria-label="Amount received (₹)" placeholder="Amount received (₹)" />
+              <input className="ga-input" type="date" value={pf.on} onChange={(e) => setPf({ ...pf, on: e.target.value })} aria-label="Paid on" />
+              <input className="ga-input" maxLength={120} value={pf.ref} onChange={(e) => setPf({ ...pf, ref: e.target.value })} placeholder="UTR / UPI ref / cheque no" aria-label="Reference" />
             </div>
             <div className="bp-btns">
-              <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+              <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
                 {busy ? "Saving…" : "Mark paid & send receipt"}
               </button>
               <button type="button" className="bp-plain" onClick={() => setPay(null)}>
@@ -206,7 +206,7 @@ function BrandBilling() {
           <div className="bb-ask">
             <p>{ask.kind === "cancel" ? `Cancel ${ask.i.invoice_no}? The brand won’t be able to pay it.` : `Undo the manual “paid” on ${ask.i.invoice_no}? The bill goes back to unpaid.`}</p>
             <div className="bp-btns">
-              <button type="button" className="ad-btn ad-btn--danger" onClick={confirm}>
+              <button type="button" className="ga-btn ga-btn--danger" onClick={confirm}>
                 {ask.kind === "cancel" ? "Yes, cancel bill" : "Yes, undo"}
               </button>
               <button type="button" className="bp-plain" onClick={() => setAsk(null)}>
@@ -218,7 +218,7 @@ function BrandBilling() {
 
         {adding && (
           <form className="bb-form" onSubmit={add}>
-            <select className="ad-input" value={f.campaign} onChange={(e) => setF({ ...f, campaign: e.target.value })} aria-label="Campaign">
+            <select className="ga-input" value={f.campaign} onChange={(e) => setF({ ...f, campaign: e.target.value })} aria-label="Campaign">
               <option value="">General (no campaign)</option>
               {camps.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -226,19 +226,19 @@ function BrandBilling() {
                 </option>
               ))}
             </select>
-            <input className="ad-input" inputMode="decimal" placeholder="Amount (₹, before GST)" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} aria-label="Amount" autoFocus />
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+            <input className="ga-input" inputMode="decimal" placeholder="Amount (₹, before GST)" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} aria-label="Amount" autoFocus />
+            <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
               {busy ? "Sending…" : "Create"}
             </button>
           </form>
         )}
         <div className="bp-btns">
-          <button type="button" className="ad-btn ad-btn--primary" onClick={() => setAdding(!adding)}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={() => setAdding(!adding)}>
             {adding ? "Cancel" : "➕ New invoice"}
           </button>
         </div>
       </section>
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
       <style>{`
         .bb-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-top: 0; }
         .bb-stats div { display: flex; flex-direction: column; padding: 18px 16px 16px; border-radius: 13px; background: var(--ad-soft-2); }

@@ -51,24 +51,24 @@ export function InboxHead() {
   return (
     <>
       <PageHead title="Messages" sub="WhatsApp chats and Instagram DMs with creators — reply without leaving Geek OS.">
-        <Link href="/admin/inbox/new" className="ad-btn ad-btn--primary ih-new">
+        <Link href="/admin/inbox/new" className="ga-btn ga-btn--primary ih-new">
           + New
         </Link>
       </PageHead>
       <nav className="ih-tabs" aria-label="Inbox">
-        <Link href="/admin/inbox" className={`ad-tab ${!ig ? "is-on" : ""}`}>
+        <Link href="/admin/inbox" className={`ga-tab ${!ig ? "is-on" : ""}`}>
           💬 WhatsApp
         </Link>
-        <Link href="/admin/inbox/instagram" className={`ad-tab ${ig ? "is-on" : ""}`}>
+        <Link href="/admin/inbox/instagram" className={`ga-tab ${ig ? "is-on" : ""}`}>
           📸 Instagram DMs
         </Link>
       </nav>
       <style>{`
         .ih-new { height: 41px !important; padding: 0 16px !important; }
         .ih-tabs { display: flex; gap: 8px; margin: -4px 0 16px; }
-        .ih-tabs .ad-tab { height: 37px; }
-        .ih-tabs .ad-tab:not(.is-on) { color: #67718a; background: transparent; }
-        .ih-tabs .ad-tab:not(.is-on):hover { background: var(--ad-soft); }
+        .ih-tabs .ga-tab { height: 37px; }
+        .ih-tabs .ga-tab:not(.is-on) { color: #67718a; background: transparent; }
+        .ih-tabs .ga-tab:not(.is-on):hover { background: var(--ad-soft); }
       `}</style>
     </>
   );
@@ -151,10 +151,10 @@ export default function Inbox({ chatId }) {
 
   return (
     <div className={`ib ${chatId ? "ib--chat" : ""}`}>
-      <section className="ad-card ib-list">
+      <section className="ga-card ib-list">
         <div className="ib-list__head">
-          <h2 className="ad-h2">💬 WhatsApp chats</h2>
-          <input className="ad-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats…" aria-label="Search chats" />
+          <h2 className="ga-h2">💬 WhatsApp chats</h2>
+          <input className="ga-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats…" aria-label="Search chats" />
         </div>
         <div className="ib-rows">
           {list.map((c) => {
@@ -185,7 +185,7 @@ export default function Inbox({ chatId }) {
         </div>
       </section>
 
-      <section className="ad-card ib-chat">
+      <section className="ga-card ib-chat">
         <Link href="/admin/inbox" className="ib-back">
           ← Chats
         </Link>
@@ -193,7 +193,7 @@ export default function Inbox({ chatId }) {
           <>
             <div className="ib-chat__head">
               <div>
-                <h2 className="ad-h2">{who.name}</h2>
+                <h2 className="ga-h2">{who.name}</h2>
                 <p className="ib-chat__s">
                   {open.contact_phone_e164} · {open.subject || "Campaign updates"}
                 </p>
@@ -218,8 +218,8 @@ export default function Inbox({ chatId }) {
             </div>
             {sendErr && <p className="ib-senderr">{sendErr}</p>}
             <form className="ib-send" onSubmit={send}>
-              <input className="ad-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message…" aria-label="Type a message" disabled={sending} />
-              <button type="submit" className="ad-btn ad-btn--primary" aria-label="Send" disabled={sending || !text.trim()}>
+              <input className="ga-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message…" aria-label="Type a message" disabled={sending} />
+              <button type="submit" className="ga-btn ga-btn--primary" aria-label="Send" disabled={sending || !text.trim()}>
                 ➤
               </button>
             </form>
@@ -233,7 +233,7 @@ export default function Inbox({ chatId }) {
         .ib { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }
         .ib-list { padding: 22px 22px 30px; min-width: 0; }
         .ib-list__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-        .ib-list__head .ad-input { width: 173px; height: 42px; }
+        .ib-list__head .ga-input { width: 173px; height: 42px; }
         .ib-rows { display: flex; flex-direction: column; gap: 10px; }
         .ib-row { display: flex; align-items: center; gap: 14px; min-height: 67px; padding: 0 22px 0 13px; border-radius: 14px; border: 1px solid var(--ad-line); transition: border-color .15s, background .15s; }
         .ib-row:hover { border-color: #cfd2ee; }
@@ -262,12 +262,12 @@ export default function Inbox({ chatId }) {
         .ib-them { align-self: flex-start; width: 283px; background: #fff; }
         .ib-me { align-self: flex-end; background: #dcf6cf; }
         .ib-send { display: flex; gap: 8px; margin-top: 10px; }
-        .ib-send .ad-input { max-width: 173px; height: 42px; }
-        .ib-send .ad-btn { width: 44px; height: 42px; padding: 0; font-size: 14px; }
+        .ib-send .ga-input { max-width: 173px; height: 42px; }
+        .ib-send .ga-btn { width: 44px; height: 42px; padding: 0; font-size: 14px; }
 
         @media (max-width: 1180px) {
           .ib { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-          .ib-send .ad-input { max-width: none; flex: 1; }
+          .ib-send .ga-input { max-width: none; flex: 1; }
           .ib-them { width: auto; }
         }
         @media (max-width: 767px) {
@@ -278,7 +278,7 @@ export default function Inbox({ chatId }) {
           .ib-back { display: inline-flex; margin-bottom: 12px; font-size: 13px; font-weight: 800; color: var(--ad-primary-ink); }
           .ib-list, .ib-chat { padding: 18px 16px; }
           .ib-list__head { flex-wrap: wrap; }
-          .ib-list__head .ad-input { width: 100%; }
+          .ib-list__head .ga-input { width: 100%; }
           .ib-row { padding-right: 14px; }
           .ib-msgs { height: calc(100vh - 430px); min-height: 240px; }
           .ib-chat__head { flex-direction: column; gap: 0; }

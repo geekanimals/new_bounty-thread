@@ -50,7 +50,7 @@ export default function BrandCrm({ interactive = true }) {
         <Link href="/admin/brands/deleted" className="bc-del" tabIndex={interactive ? 0 : -1}>
           🗑️ Deleted brands
         </Link>
-        <button type="button" className="ad-btn ad-btn--primary" onClick={() => setAdding(!adding)} tabIndex={interactive ? 0 : -1}>
+        <button type="button" className="ga-btn ga-btn--primary" onClick={() => setAdding(!adding)} tabIndex={interactive ? 0 : -1}>
           ＋ Add brand
         </button>
       </PageHead>
@@ -66,43 +66,43 @@ export default function BrandCrm({ interactive = true }) {
       />
 
       {adding && interactive && (
-        <form className="ad-card bc-add" onSubmit={add}>
-          <h2 className="ad-h2">Add a brand</h2>
+        <form className="ga-card bc-add" onSubmit={add}>
+          <h2 className="ga-h2">Add a brand</h2>
           <div className="bc-add__grid">
             <div>
-              <label className="ad-label" htmlFor="bc-name">
+              <label className="ga-label" htmlFor="bc-name">
                 Brand name
               </label>
-              <input id="bc-name" className="ad-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Mamaearth" autoFocus />
+              <input id="bc-name" className="ga-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Mamaearth" autoFocus />
             </div>
             <div>
-              <label className="ad-label" htmlFor="bc-web">
+              <label className="ga-label" htmlFor="bc-web">
                 Website
               </label>
-              <input id="bc-web" className="ad-input" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="brand.in" />
+              <input id="bc-web" className="ga-input" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="brand.in" />
             </div>
             <div>
-              <label className="ad-label" htmlFor="bc-cat">
+              <label className="ga-label" htmlFor="bc-cat">
                 Category
               </label>
-              <input id="bc-cat" className="ad-input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Beauty" />
+              <input id="bc-cat" className="ga-input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Beauty" />
             </div>
           </div>
           <div className="bc-add__act">
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={!form.name.trim() || busy}>
+            <button type="submit" className="ga-btn ga-btn--primary" disabled={!form.name.trim() || busy}>
               {busy ? "Adding…" : "Add brand"}
             </button>
-            <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAdding(false)}>
+            <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setAdding(false)}>
               Cancel
             </button>
           </div>
         </form>
       )}
 
-      <section className="ad-card bc-card">
+      <section className="ga-card bc-card">
         <div className="bc-card__head">
-          <h2 className="ad-h2">Brands</h2>
-          <input className="ad-input bc-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search brand…" aria-label="Search brand" tabIndex={interactive ? 0 : -1} />
+          <h2 className="ga-h2">Brands</h2>
+          <input className="ga-input bc-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search brand…" aria-label="Search brand" tabIndex={interactive ? 0 : -1} />
         </div>
         {loading || error ? (
           <p className={`bc-state ${error ? "is-err" : ""}`}>
@@ -131,7 +131,7 @@ export default function BrandCrm({ interactive = true }) {
             `${num(b.active)} live`,
             num(b.creators),
             num(b.posted),
-            <span key="a" className={`ad-badge ${Number(b.logins) > 0 ? "ad-badge--green" : ""}`}>
+            <span key="a" className={`ga-badge ${Number(b.logins) > 0 ? "ga-badge--green" : ""}`}>
               {Number(b.logins) > 0 ? (Number(b.logins) > 1 ? `${b.logins} brand logins` : "Brand login") : "No login"}
             </span>,
             <Link key="o" href={`/admin/brands/${b.brand_id}/overview`} className="pt-link" tabIndex={interactive ? 0 : -1}>
@@ -143,7 +143,7 @@ export default function BrandCrm({ interactive = true }) {
         )}
       </section>
 
-      {toast && interactive && <div className="ad-toast">{toast}</div>}
+      {toast && interactive && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .bc-del { display: inline-flex; align-items: center; height: 42px; padding: 0 6px; font-size: 14px; font-weight: 800; color: #6657e9; }

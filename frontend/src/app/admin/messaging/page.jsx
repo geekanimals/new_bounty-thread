@@ -63,9 +63,9 @@ export default function MessagingDelivery() {
           </span>
         </p>
       )}
-      <section className="ad-card md-card">
+      <section className="ga-card md-card">
         <div className="md-head">
-          <h2 className="ad-h2">All messages</h2>
+          <h2 className="ga-h2">All messages</h2>
           <button type="button" className="md-retry" onClick={retry}>
             ↻ Retry failed (3 days)
           </button>
@@ -97,7 +97,7 @@ export default function MessagingDelivery() {
               <span key="m" title={r.error || r.title || r.template}>
                 {r.title || r.template || "—"}
               </span>,
-              <span key="s" className={`ad-badge ad-badge--${tone}`} title={r.error || ""}>
+              <span key="s" className={`ga-badge ga-badge--${tone}`} title={r.error || ""}>
                 {label}
                 {r.attempts > 1 ? ` ×${r.attempts}` : ""}
               </span>,
@@ -110,7 +110,7 @@ export default function MessagingDelivery() {
         />
         )}
       </section>
-      {toast && <div className="ad-toast">↻ {toast}</div>}
+      {toast && <div className="ga-toast">↻ {toast}</div>}
       <style>{`
         .md-warn { display: flex; gap: 10px; align-items: flex-start; min-height: 41px; margin: 0 0 18px; padding: 12px 15px; border-radius: 13px; border: 1px solid #f5c9d0; background: #fdeef0; font-size: 12px; line-height: 1.35; color: #b64455; }
         .md-warn b { font-weight: 700; }
@@ -119,7 +119,7 @@ export default function MessagingDelivery() {
         .md-state { padding: 14px 11px; font-size: 13px; color: var(--ad-red); }
         .md-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
         .md-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 30px; }
-        .md-head .ad-h2 { margin-top: 6px; }
+        .md-head .ga-h2 { margin-top: 6px; }
         .md-retry { border: 0; background: none; padding: 0; font-size: 14px; font-weight: 800; color: #6657e9; }
         .md-retry:hover { color: var(--ad-primary-2); }
         @media (max-width: 640px) {

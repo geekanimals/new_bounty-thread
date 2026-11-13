@@ -37,20 +37,20 @@ export function LinkTabs({ tabs }) {
       {tabs.map((t) => {
         const on = t.match ? t.match(pathname) : pathname === t.href;
         return (
-          <Link key={t.href} href={t.href} className={`ad-tab ${on ? "is-on" : ""}`} aria-current={on ? "page" : undefined}>
+          <Link key={t.href} href={t.href} className={`ga-tab ${on ? "is-on" : ""}`} aria-current={on ? "page" : undefined}>
             {t.label}
           </Link>
         );
       })}
       <style>{`
         .sk-tabs { display: flex; flex-wrap: wrap; gap: 7px 7px; margin: 1px 0 16px; }
-        .sk-tabs .ad-tab { height: 37px; padding: 0 14px; }
-        .sk-tabs .ad-tab:not(.is-on) { color: #67718a; }
-        .sk-tabs .ad-tab:not(.is-on):hover { background: var(--ad-lilac); color: var(--ad-primary-2); }
+        .sk-tabs .ga-tab { height: 37px; padding: 0 14px; }
+        .sk-tabs .ga-tab:not(.is-on) { color: #67718a; }
+        .sk-tabs .ga-tab:not(.is-on):hover { background: var(--ad-lilac); color: var(--ad-primary-2); }
         @media (max-width: 640px) {
           .sk-tabs { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px 16px; padding: 0 16px; scrollbar-width: none; }
           .sk-tabs::-webkit-scrollbar { display: none; }
-          .sk-tabs .ad-tab { flex-shrink: 0; }
+          .sk-tabs .ga-tab { flex-shrink: 0; }
         }
       `}</style>
     </nav>
@@ -71,11 +71,11 @@ export function SettingsTabs() {
 
 export function Panel({ title, sub, action, children, className = "" }) {
   return (
-    <section className={`ad-card sk-panel ${className}`}>
+    <section className={`ga-card sk-panel ${className}`}>
       {(title || action) && (
         <div className="sk-panel__head">
           <div className="sk-panel__txt">
-            {title && <h2 className="ad-h2">{title}</h2>}
+            {title && <h2 className="ga-h2">{title}</h2>}
             {sub && <p className="sk-panel__sub">{sub}</p>}
           </div>
           {action && <div className="sk-panel__act">{action}</div>}
@@ -86,10 +86,10 @@ export function Panel({ title, sub, action, children, className = "" }) {
         .sk-panel { padding: 22px 22px 30px; margin-bottom: 19px; }
         .sk-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
         .sk-panel__txt { min-width: 0; }
-        .sk-panel .ad-h2 { line-height: 1.35; }
+        .sk-panel .ga-h2 { line-height: 1.35; }
         .sk-panel__sub { margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--ad-muted); }
         .sk-panel__act { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-        .sk-panel__act .ad-btn { height: 40px; }
+        .sk-panel__act .ga-btn { height: 40px; }
         @media (max-width: 640px) {
           .sk-panel { padding: 18px 16px 20px; }
           .sk-panel__head { flex-wrap: wrap; }
@@ -148,7 +148,7 @@ export function Table({ cols, rows, rowH = 57, empty = "Nothing here yet.", minW
         .sk-t tbody tr:hover td { background: #fafbfe; }
         .sk-t td b, .sk-t td strong { font-weight: 700; }
         .sk-t .sk-t__empty { height: 80px; text-align: center; color: #8a8aa0; font-size: 14px; }
-        .sk-t .ad-badge { height: 24px; padding: 0 10px; }
+        .sk-t .ga-badge { height: 24px; padding: 0 10px; }
         .sk-link { font-size: 13px; font-weight: 800; color: #6657e9; background: none; border: 0; padding: 0; }
         .sk-link:hover { color: var(--ad-primary-2); }
         .sk-link--blue { color: #6151ea; }
@@ -180,7 +180,7 @@ export function useToast() {
     return () => clearTimeout(x);
   }, [t]);
   const node = t ? (
-    <div className="ad-toast" role="status" style={t.err ? { background: "var(--ad-red)" } : undefined}>
+    <div className="ga-toast" role="status" style={t.err ? { background: "var(--ad-red)" } : undefined}>
       {t.err ? "⚠" : "✓"} {t.msg}
     </div>
   ) : null;

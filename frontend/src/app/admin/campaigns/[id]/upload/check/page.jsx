@@ -316,7 +316,7 @@ export default function BulkUploadCheck() {
 
         <div className="uc-all">
           <span>Set everyone to</span>
-          <select className="ad-input" value={all} onChange={(e) => setEveryone(e.target.value)} aria-label="Set everyone to">
+          <select className="ga-input" value={all} onChange={(e) => setEveryone(e.target.value)} aria-label="Set everyone to">
             <option value="">— choose —</option>
             {steps.map(([k, l], n) => (
               <option key={k} value={k}>
@@ -400,12 +400,12 @@ export default function BulkUploadCheck() {
 
         <label className="uc-msg">
           <span>Message to the creators (optional — goes with the invite)</span>
-          <input className="ad-input" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="e.g. Diwali drop — we loved your recent reels!" />
+          <input className="ga-input" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="e.g. Diwali drop — we loved your recent reels!" />
         </label>
         {err && <p className="uc-err">{err}</p>}
 
         <div className="uc-act">
-          <button type="button" className="ad-btn ad-btn--primary" onClick={upload} disabled={!ready || busy || !okIdx.length || !hasContact}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={upload} disabled={!ready || busy || !okIdx.length || !hasContact}>
             {busy ? "Uploading…" : `Upload & invite ${okIdx.length} creator${okIdx.length === 1 ? "" : "s"}`}
           </button>
           {badIdx.length > 0 && <b className="uc-bad">{badIdx.length} not uploaded (fix above)</b>}
@@ -447,15 +447,15 @@ export default function BulkUploadCheck() {
         .uc-err { margin-top: 12px; font-size: 12px; color: #d4493f; }
         .uc-what small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.33; color: var(--ad-muted); }
         .uc-msg { display: flex; align-items: center; gap: 0; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: var(--ad-muted); }
-        .uc-msg .ad-input { width: 173px; height: 42px; }
+        .uc-msg .ga-input { width: 173px; height: 42px; }
         .uc-act { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-        .uc-act .ad-btn { height: 41px; }
+        .uc-act .ga-btn { height: 41px; }
         .uc-bad { font-size: 12px; font-weight: 700; color: #d6453d; }
         .uc-sum { font-size: 12px; color: var(--ad-muted); margin-right: 6px; }
         @media (max-width: 640px) {
-          .uc-all select, .uc-msg .ad-input { width: 100%; }
+          .uc-all select, .uc-msg .ga-input { width: 100%; }
           .uc-msg { gap: 6px; }
-          .uc-act .ad-btn { width: 100%; }
+          .uc-act .ga-btn { width: 100%; }
         }
       `}</style>
     </AdminShell>

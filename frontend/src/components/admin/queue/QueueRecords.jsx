@@ -41,7 +41,7 @@ export default function QueueRecords({ group, ask, toast, onDone }) {
   return (
     <div className="qr">
       <h3 className="qr-h">
-        Records <span className="ad-count">{list.length}</span>
+        Records <span className="ga-count">{list.length}</span>
       </h3>
       {!list.length && <p className="qr-empty">All done here ✓</p>}
       <ul className="qr-list">
@@ -54,7 +54,7 @@ export default function QueueRecords({ group, ask, toast, onDone }) {
             : [c.followers != null ? `${short(c.followers)} followers` : "", c.engagement != null ? `${c.engagement}% eng.` : "", c.city, x.due_on ? `due ${fmtDate(x.due_on)}` : "", ago(x.applied_at || x.since)].filter(Boolean).join(" · ");
           return (
             <li key={k} className="qr-row">
-              {c.profile_picture_url ? <img className="qr-pic" src={safeUrl(c.profile_picture_url)} alt="" referrerPolicy="no-referrer" /> : <span className="ad-av qr-pic">{(name.replace("@", "") || "?").slice(0, 2).toUpperCase()}</span>}
+              {c.profile_picture_url ? <img className="qr-pic" src={safeUrl(c.profile_picture_url)} alt="" referrerPolicy="no-referrer" /> : <span className="ga-av qr-pic">{(name.replace("@", "") || "?").slice(0, 2).toUpperCase()}</span>}
               <div className="qr-main">
                 <p className="qr-name">
                   {c.username ? (
@@ -64,7 +64,7 @@ export default function QueueRecords({ group, ask, toast, onDone }) {
                   ) : (
                     name
                   )}
-                  {x.applied_profile && c.username && x.applied_profile.toLowerCase() !== c.username.toLowerCase() && <span className="ad-badge qr-via">via @{x.applied_profile}</span>}
+                  {x.applied_profile && c.username && x.applied_profile.toLowerCase() !== c.username.toLowerCase() && <span className="ga-badge qr-via">via @{x.applied_profile}</span>}
                 </p>
                 <p className="qr-sub">{sub || "Instagram not connected"}</p>
               </div>
@@ -76,7 +76,7 @@ export default function QueueRecords({ group, ask, toast, onDone }) {
                     </button>
                     <button
                       type="button"
-                      className="ad-btn ad-btn--primary ad-btn--sm"
+                      className="ga-btn ga-btn--primary ga-btn--sm"
                       disabled={busy === k}
                       onClick={() => run(k, () => (x._legacy ? act.approveLegacy(x.id) : act.approveApplicant(x.participation_id)), `${name} approved`)}
                     >
@@ -94,23 +94,23 @@ export default function QueueRecords({ group, ask, toast, onDone }) {
                     <button type="button" className="qr-text" onClick={() => changes(x)}>
                       Ask changes
                     </button>
-                    <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" disabled={busy === k} onClick={() => run(k, () => act.approveVideo(k), `Video approved — ${name} can post`)}>
+                    <button type="button" className="ga-btn ga-btn--primary ga-btn--sm" disabled={busy === k} onClick={() => run(k, () => act.approveVideo(k), `Video approved — ${name} can post`)}>
                       {busy === k ? "…" : "Approve video"}
                     </button>
                   </>
                 )}
                 {group.proc === "deliver" && (
-                  <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" disabled={busy === k} onClick={() => run(k, () => act.markDelivered(k), `Marked delivered — ${name}`)}>
+                  <button type="button" className="ga-btn ga-btn--primary ga-btn--sm" disabled={busy === k} onClick={() => run(k, () => act.markDelivered(k), `Marked delivered — ${name}`)}>
                     {busy === k ? "…" : "📦 Mark delivered"}
                   </button>
                 )}
                 {group.proc === "ship" && (
-                  <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" onClick={() => setShip(x)}>
+                  <button type="button" className="ga-btn ga-btn--primary ga-btn--sm" onClick={() => setShip(x)}>
                     🚚 Add courier
                   </button>
                 )}
                 {group.proc === "contract" && (
-                  <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" disabled={busy === k} onClick={() => run(k, () => act.sendContract(k), `Contract sent to ${name}`)}>
+                  <button type="button" className="ga-btn ga-btn--primary ga-btn--sm" disabled={busy === k} onClick={() => run(k, () => act.sendContract(k), `Contract sent to ${name}`)}>
                     {busy === k ? "…" : "Send contract"}
                   </button>
                 )}
@@ -157,7 +157,7 @@ export default function QueueRecords({ group, ask, toast, onDone }) {
         .qr-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
         .qr-text { border: 0; background: none; padding: 0 2px; font-size: 12.5px; font-weight: 800; color: #6657e9; white-space: nowrap; }
         .qr-text:hover { color: var(--ad-primary-2); }
-        .qr-text:disabled, .qr-act .ad-btn:disabled { opacity: .5; }
+        .qr-text:disabled, .qr-act .ga-btn:disabled { opacity: .5; }
       `}</style>
     </div>
   );
@@ -170,9 +170,9 @@ function CourierForm({ rec, onClose, onSave }) {
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   return (
-    <div className="ad-overlay" onClick={onClose}>
+    <div className="ga-overlay" onClick={onClose}>
       <form
-        className="ad-modal cf"
+        className="ga-modal cf"
         onClick={(e) => e.stopPropagation()}
         onSubmit={async (e) => {
           e.preventDefault();
@@ -191,23 +191,23 @@ function CourierForm({ rec, onClose, onSave }) {
             ✕
           </button>
         </div>
-        <p className="ad-hint">The creator sees this straight away and can track the parcel from the app.</p>
-        <label className="ad-label">Product</label>
-        <input className="ad-input" value={f.product} onChange={set("product")} placeholder="Momo box" />
+        <p className="ga-hint">The creator sees this straight away and can track the parcel from the app.</p>
+        <label className="ga-label">Product</label>
+        <input className="ga-input" value={f.product} onChange={set("product")} placeholder="Momo box" />
         <div className="cf-row">
           <div>
-            <label className="ad-label">Courier</label>
-            <input className="ad-input" value={f.courier} onChange={set("courier")} placeholder="DTDC / Delhivery / Blue Dart" required />
+            <label className="ga-label">Courier</label>
+            <input className="ga-input" value={f.courier} onChange={set("courier")} placeholder="DTDC / Delhivery / Blue Dart" required />
           </div>
           <div>
-            <label className="ad-label">Tracking number</label>
-            <input className="ad-input" value={f.tracking} onChange={set("tracking")} placeholder="DT123456789" />
+            <label className="ga-label">Tracking number</label>
+            <input className="ga-input" value={f.tracking} onChange={set("tracking")} placeholder="DT123456789" />
           </div>
         </div>
-        <label className="ad-label">Tracking link (optional)</label>
-        <input className="ad-input" type="url" value={f.url} onChange={set("url")} placeholder="https://www.dtdc.in/tracking…" />
+        <label className="ga-label">Tracking link (optional)</label>
+        <input className="ga-input" type="url" value={f.url} onChange={set("url")} placeholder="https://www.dtdc.in/tracking…" />
         {err && <p className="cf-err">{err}</p>}
-        <button type="submit" className="ad-btn ad-btn--primary cf-go" disabled={busy}>
+        <button type="submit" className="ga-btn ga-btn--primary cf-go" disabled={busy}>
           {busy ? "Saving…" : "Save — creator gets the tracking"}
         </button>
         <style>{`
@@ -215,8 +215,8 @@ function CourierForm({ rec, onClose, onSave }) {
           .cf-head { display: flex; justify-content: space-between; gap: 12px; }
           .cf-head h3 { font-family: var(--ad-head); font-size: 19px; font-weight: 800; letter-spacing: -0.5px; }
           .cf-x { width: 34px; height: 34px; border: 0; border-radius: 10px; background: var(--ad-soft); color: #65718c; }
-          .cf .ad-hint { margin: 6px 0 10px; }
-          .cf .ad-label { margin-top: 12px; }
+          .cf .ga-hint { margin: 6px 0 10px; }
+          .cf .ga-label { margin-top: 12px; }
           .cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
           .cf-err { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
           .cf-go { width: 100%; margin-top: 16px; }

@@ -131,25 +131,25 @@ export default function FindMatching() {
           </div>
 
           <div className="fm-bar">
-            <button type="button" className={`ad-tab ${mode === "match" ? "is-on" : ""}`} onClick={() => setMode("match")}>
+            <button type="button" className={`ga-tab ${mode === "match" ? "is-on" : ""}`} onClick={() => setMode("match")}>
               ✨ Matching ({L.length})
             </button>
-            <button type="button" className={`ad-tab ${mode === "all" ? "is-on" : ""}`} onClick={() => setMode("all")}>
+            <button type="button" className={`ga-tab ${mode === "all" ? "is-on" : ""}`} onClick={() => setMode("all")}>
               🔎 Search all creators
             </button>
-            <select className="ad-input fm-sel" value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
+            <select className="ga-input fm-sel" value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
               <option>Not invited yet</option>
               <option>Invited</option>
               <option>Everyone</option>
             </select>
-            <button type="button" className="ad-btn ad-btn--primary fm-all" onClick={inviteAll} disabled={!rows.some((r) => !isInv(r) && r.member) || busy === "all"}>
+            <button type="button" className="ga-btn ga-btn--primary fm-all" onClick={inviteAll} disabled={!rows.some((r) => !isInv(r) && r.member) || busy === "all"}>
               {busy === "all" ? "Inviting…" : "Invite all shown"}
             </button>
           </div>
-          {mode === "all" && <input className="ad-input fm-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, @handle or city…" aria-label="Search all creators" autoFocus />}
+          {mode === "all" && <input className="ga-input fm-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, @handle or city…" aria-label="Search all creators" autoFocus />}
 
           <div className="fm-table">
-            <table className="ad-table">
+            <table className="ga-table">
               <thead>
                 <tr>
                   <th>Creator</th>
@@ -170,13 +170,13 @@ export default function FindMatching() {
                     <td>{r.eng}</td>
                     <td>{r.city}</td>
                     <td>
-                      <span className="ad-badge ad-badge--green">{r.fit}</span>
+                      <span className="ga-badge ga-badge--green">{r.fit}</span>
                     </td>
                     <td>
                       {isInv(r) ? (
                         <span className="fm-done">{mine[r.member] ? "✓ Invited" : STATE_TXT[r.state] || "✓ Invited"}</span>
                       ) : (
-                        <button type="button" className="ad-btn ad-btn--primary fm-inv" disabled={busy === r.id || !r.member} onClick={() => invite(r)}>
+                        <button type="button" className="ga-btn ga-btn--primary fm-inv" disabled={busy === r.id || !r.member} onClick={() => invite(r)}>
                           {busy === r.id ? "…" : "🎯 Invite"}
                         </button>
                       )}
@@ -199,11 +199,11 @@ export default function FindMatching() {
           </div>
         </aside>
       </div>
-      {toast && <div className="ad-toast fm-toast">{toast}</div>}
+      {toast && <div className="ga-toast fm-toast">{toast}</div>}
 
       <style>{`
         /* Figma: select par arrow nahi */
-        select.ad-input { appearance: none; -webkit-appearance: none; }
+        select.ga-input { appearance: none; -webkit-appearance: none; }
         .fm-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(20,33,59,.28); animation: adFade .15s ease; }
         .fm { position: absolute; right: 0; top: 0; bottom: 0; width: min(820px, 100%); padding: 30px 30px 30px; overflow-y: auto; background: #fff; box-shadow: -20px 0 60px -30px rgba(20,33,59,.5); animation: fmIn .2s ease; }
         @keyframes fmIn { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -216,14 +216,14 @@ export default function FindMatching() {
         .fm-stats strong { font-family: var(--ad-head); font-size: 23px; font-weight: 800; letter-spacing: -0.8px; color: var(--ad-ink); }
         .fm-stats span { margin-top: 8px; font-size: 12px; color: var(--ad-muted); }
         .fm-bar { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 18px 0 38px; border-bottom: 1px solid var(--ad-line); }
-        .fm-bar .ad-tab { height: 37px; }
-        .fm-bar .ad-tab:not(.is-on) { color: #67718a; }
+        .fm-bar .ga-tab { height: 37px; }
+        .fm-bar .ga-tab:not(.is-on) { color: #67718a; }
         .fm-sel { width: 137px; height: 45px; margin-left: 3px; padding: 0 12px; font-size: 14px; color: #293652; }
         .fm-all { height: 41px; padding: 0 16px; }
         .fm-q { margin-top: 14px; }
         .fm-table { margin: 18px -30px 0 0; overflow-x: auto; border-bottom: 1px solid var(--ad-line); padding-bottom: 14px; }
-        .fm-table .ad-table th { background: none; padding: 14px 11px; }
-        .fm-table .ad-table td { height: 70px; padding: 10px 11px; }
+        .fm-table .ga-table th { background: none; padding: 14px 11px; }
+        .fm-table .ga-table td { height: 70px; padding: 10px 11px; }
         .fm-name { font-weight: 700; }
         .fm-inv { height: 39px; padding: 0 16px; font-size: 13px; }
         .fm-done { font-size: 12px; font-weight: 800; color: var(--ad-green); }

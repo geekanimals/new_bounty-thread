@@ -39,11 +39,11 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
       >
         {actions || (
           <>
-            <Link href="/admin/campaigns" className="ad-btn ad-btn--ghost wh-back">
+            <Link href="/admin/campaigns" className="ga-btn ga-btn--ghost wh-back">
               ← All campaigns
             </Link>
             {(!row || row.id) && (
-              <Link href={`/admin/campaigns/new/basics?edit=${row?.id || id}`} className="ad-btn ad-btn--primary">
+              <Link href={`/admin/campaigns/new/basics?edit=${row?.id || id}`} className="ga-btn ga-btn--primary">
                 Edit brief
               </Link>
             )}
@@ -52,7 +52,7 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
       </PageHead>
       <nav className="wh-tabs" aria-label="Campaign workspace" data-scroll>
         {WS_TABS.map((t) => (
-          <Link key={t.k} href={`/admin/campaigns/${c.id}/${t.k}`} className={`ad-tab ${active === t.k ? "is-on" : ""}`}>
+          <Link key={t.k} href={`/admin/campaigns/${c.id}/${t.k}`} className={`ga-tab ${active === t.k ? "is-on" : ""}`}>
             {t.label}
           </Link>
         ))}
@@ -61,8 +61,8 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
         @media (min-width: 1181px) { .wh-back { margin-right: 200px; } }
         .wh-tabs { display: flex; gap: 8px; margin: -4px 0 26px; overflow-x: auto; scrollbar-width: none; }
         .wh-tabs::-webkit-scrollbar { display: none; }
-        .wh-tabs .ad-tab { height: 37px; flex-shrink: 0; }
-        .wh-tabs .ad-tab:not(.is-on) { color: #67718a; }
+        .wh-tabs .ga-tab { height: 37px; flex-shrink: 0; }
+        .wh-tabs .ga-tab:not(.is-on) { color: #67718a; }
         @media (max-width: 640px) { .wh-tabs { margin: 0 -16px 20px; padding: 0 16px; } }
       `}</style>
     </>

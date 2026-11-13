@@ -14,7 +14,7 @@ export function SubTabs({ items, active }) {
   return (
     <nav className="c2-sub" aria-label="Section" data-scroll>
       {items.map((t) => (
-        <Link key={t.href} href={t.href} className={`ad-tab ${active === t.k ? "is-on" : ""}`}>
+        <Link key={t.href} href={t.href} className={`ga-tab ${active === t.k ? "is-on" : ""}`}>
           {t.label}
         </Link>
       ))}
@@ -25,12 +25,12 @@ export function SubTabs({ items, active }) {
 /* Bada white card: title + sub + right side actions */
 export function Panel({ title, sub, actions, children, className = "" }) {
   return (
-    <section className={`ad-card c2-panel ${className}`}>
+    <section className={`ga-card c2-panel ${className}`}>
       <Kit />
       {(title || actions) && (
         <div className="c2-panel__head">
           <div className="c2-panel__txt">
-            {title && <h2 className="ad-h2 c2-panel__title">{title}</h2>}
+            {title && <h2 className="ga-h2 c2-panel__title">{title}</h2>}
             {sub && <p className="c2-panel__sub">{sub}</p>}
           </div>
           {actions && <div className="c2-panel__act">{actions}</div>}
@@ -77,7 +77,7 @@ export function useToast() {
   }, []);
   useEffect(() => () => clearTimeout(t.current), []);
   const node = msg ? (
-    <div className="ad-toast" role="status">
+    <div className="ga-toast" role="status">
       {msg}
     </div>
   ) : null;
@@ -270,8 +270,8 @@ export function Kit() {
     <style>{`
       .c2-sub { display: flex; gap: 8px; margin: -9px 0 17px; overflow-x: auto; scrollbar-width: none; }
       .c2-sub::-webkit-scrollbar { display: none; }
-      .c2-sub .ad-tab { height: 36px; flex-shrink: 0; }
-      .c2-sub .ad-tab:not(.is-on) { color: #67718a; background: var(--ad-soft-2); }
+      .c2-sub .ga-tab { height: 36px; flex-shrink: 0; }
+      .c2-sub .ga-tab:not(.is-on) { color: #67718a; background: var(--ad-soft-2); }
 
       .c2-panel { padding: 22px 22px 30px; margin-bottom: 20px; min-width: 0; }
       .c2-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
@@ -279,7 +279,7 @@ export function Kit() {
       .c2-panel__title { font-size: 17px; line-height: 1.3; }
       .c2-panel__sub { margin-top: 8px; font-size: 12px; line-height: 1.35; color: var(--ad-muted); }
       .c2-panel__act { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: flex-end; padding-top: 6px; }
-      .c2-panel__act .ad-btn { height: 43px; padding: 0 16px; }
+      .c2-panel__act .ga-btn { height: 43px; padding: 0 16px; }
 
       .c2-tbtn { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 14px; font-weight: 800; color: #6657e9; white-space: nowrap; }
       .c2-tbtn:hover { color: var(--ad-primary-2); }

@@ -29,8 +29,8 @@ export default function CreatorUpload() {
   return (
     <AdminShell>
       <PageHead title="Creator upload" sub="Add creators who aren’t on Geek OS yet and invite them to the live campaigns." />
-      <section className="ad-card cu1-card">
-        <h2 className="ad-h2">📥 Creator upload</h2>
+      <section className="ga-card cu1-card">
+        <h2 className="ga-h2">📥 Creator upload</h2>
         <p className="cu1-intro">
           Each creator is saved to your creator pool (and Discovery) and gets a WhatsApp + email inviting them to<b>explore the live campaigns</b>— no login needed to look. When they tap <b>Apply</b>they sign in with WhatsApp, connect Instagram and the normal campaign flow carries on. Anyone already on Geek OS is matched by WhatsApp, email or Instagram and isn’t messaged.
         </p>

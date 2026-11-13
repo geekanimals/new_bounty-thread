@@ -139,8 +139,8 @@ export default function OwnerAgent({ name = "" }) {
           send();
         }}
       >
-        <input className="ad-input" value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Ask the Owner Agent..." aria-label="Ask the Owner Agent" />
-        <button type="submit" className="ad-btn ad-btn--primary" disabled={!ask.trim()}>
+        <input className="ga-input" value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Ask the Owner Agent..." aria-label="Ask the Owner Agent" />
+        <button type="submit" className="ga-btn ga-btn--primary" disabled={!ask.trim()}>
           Send
         </button>
       </form>

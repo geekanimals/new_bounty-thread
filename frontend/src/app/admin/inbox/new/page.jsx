@@ -66,13 +66,13 @@ export default function NewChat() {
               <label className="nc-l" htmlFor="nc-num">
                 WhatsApp number
               </label>
-              <input id="nc-num" className="ad-input nc-in" inputMode="tel" placeholder="+91 98765 43210" value={num} onChange={(e) => setNum(e.target.value)} />
+              <input id="nc-num" className="ga-input nc-in" inputMode="tel" placeholder="+91 98765 43210" value={num} onChange={(e) => setNum(e.target.value)} />
             </div>
             <div>
               <label className="nc-l" htmlFor="nc-msg">
                 Message
               </label>
-              <textarea id="nc-msg" className="ad-input nc-in nc-ta" placeholder="Write your message" value={msg} onChange={(e) => setMsg(e.target.value)} />
+              <textarea id="nc-msg" className="ga-input nc-in nc-ta" placeholder="Write your message" value={msg} onChange={(e) => setMsg(e.target.value)} />
             </div>
           </div>
           {tplOn && (
@@ -81,13 +81,13 @@ export default function NewChat() {
                 <label className="nc-l" htmlFor="nc-tpl">
                   Approved template name
                 </label>
-                <input id="nc-tpl" className="ad-input nc-in" placeholder="campaign_update" value={tpl} onChange={(e) => setTpl(e.target.value)} />
+                <input id="nc-tpl" className="ga-input nc-in" placeholder="campaign_update" value={tpl} onChange={(e) => setTpl(e.target.value)} />
               </div>
               <div>
                 <label className="nc-l" htmlFor="nc-vars">
                   Template variables (comma-separated, in order)
                 </label>
-                <input id="nc-vars" className="ad-input nc-in" placeholder="Priya, Summer Glow" value={vars} onChange={(e) => setVars(e.target.value)} />
+                <input id="nc-vars" className="ga-input nc-in" placeholder="Priya, Summer Glow" value={vars} onChange={(e) => setVars(e.target.value)} />
               </div>
             </div>
           )}
@@ -96,13 +96,13 @@ export default function NewChat() {
           </p>
           {err && <p className="nc-err">{err}</p>}
           <div className="nc-act">
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={!!toast || busy}>
+            <button type="submit" className="ga-btn ga-btn--primary" disabled={!!toast || busy}>
               {busy ? "Sending…" : "Send"}
             </button>
           </div>
         </form>
       </Drawer>
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ga-toast">✓ {toast}</div>}
       <style>{`
         .nc { padding-bottom: 18px; border-bottom: 1px solid var(--ad-line); }
         .nc-eye { font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #8b92aa; }
@@ -117,7 +117,7 @@ export default function NewChat() {
         .nc-note { display: flex; gap: 10px; margin-top: 18px; padding: 12px 15px; border-radius: 13px; border: 1px solid #f6dfb5; background: #fff6e6; font-size: 12px; line-height: 1.35; color: #986016; }
         .nc-err { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: var(--ad-red-bg); color: var(--ad-red); font-size: 12.5px; font-weight: 700; }
         .nc-act { margin-top: 16px; }
-        .nc-act .ad-btn { height: 41px; padding: 0 16px; }
+        .nc-act .ga-btn { height: 41px; padding: 0 16px; }
         @media (max-width: 560px) { .nc-grid { grid-template-columns: 1fr; } .nc h2 { margin-top: 14px; } }
       `}</style>
     </AdminShell>

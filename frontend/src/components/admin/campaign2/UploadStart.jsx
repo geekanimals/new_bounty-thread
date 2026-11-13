@@ -121,7 +121,7 @@ export default function UploadStart({ id, mode = "upload" }) {
           <div className="us-row">
             <span className="us-lab">⬇️ Download</span>
             <div className="us-ctl">
-              <select className="ad-input us-sel" value={step} onChange={(e) => setStep(e.target.value)} aria-label="Which creators">
+              <select className="ga-input us-sel" value={step} onChange={(e) => setStep(e.target.value)} aria-label="Which creators">
                 {opts.map(([k, l]) => {
                   const n = sheet.data ? cnt(k) : null;
                   if (k && n === 0) return null;
@@ -133,10 +133,10 @@ export default function UploadStart({ id, mode = "upload" }) {
                   );
                 })}
               </select>
-              <button type="button" className="ad-btn ad-btn--primary us-b" onClick={() => download("xlsx")} disabled={!sheet.data}>
+              <button type="button" className="ga-btn ga-btn--primary us-b" onClick={() => download("xlsx")} disabled={!sheet.data}>
                 ⬇️ Excel
               </button>
-              <button type="button" className="ad-btn ad-btn--ghost us-b" onClick={() => download("csv")} disabled={!sheet.data}>
+              <button type="button" className="ga-btn ga-btn--ghost us-b" onClick={() => download("csv")} disabled={!sheet.data}>
                 ⬇️ CSV
               </button>
               <span className="us-or">or</span>
@@ -153,8 +153,8 @@ export default function UploadStart({ id, mode = "upload" }) {
               Sheet
             </span>
             <form className="us-ctl" onSubmit={linkSheet}>
-              <input className="ad-input us-link" value={gval} onChange={(e) => setGsheet(e.target.value)} placeholder="Paste your Google Sheet link (https://docs.google.com/spreadsheets/…)" aria-label="Google Sheet link" />
-              <button type="submit" className="ad-btn ad-btn--primary us-b" disabled={busy === "gs"}>
+              <input className="ga-input us-link" value={gval} onChange={(e) => setGsheet(e.target.value)} placeholder="Paste your Google Sheet link (https://docs.google.com/spreadsheets/…)" aria-label="Google Sheet link" />
+              <button type="submit" className="ga-btn ga-btn--primary us-b" disabled={busy === "gs"}>
                 {busy === "gs" ? "Saving…" : saved ? "Save" : "Link it"}
               </button>
             </form>
@@ -219,21 +219,21 @@ export default function UploadStart({ id, mode = "upload" }) {
 
         <div className="us-act">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.doc,.docx,.txt" hidden onChange={onFile} />
-          <button type="button" className="ad-btn ad-btn--primary" onClick={() => fileRef.current?.click()} disabled={busy === "file"}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={() => fileRef.current?.click()} disabled={busy === "file"}>
             {busy === "file" ? "Reading…" : "📄 Choose file"}
           </button>
-          <input className="ad-input us-paste" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="or paste a Google Sheet link" aria-label="Google Sheet link to upload" />
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={loadLink} disabled={busy === "link"}>
+          <input className="ga-input us-paste" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="or paste a Google Sheet link" aria-label="Google Sheet link to upload" />
+          <button type="button" className="ga-btn ga-btn--ghost" onClick={loadLink} disabled={busy === "link"}>
             {busy === "link" ? "Loading…" : "Load sheet"}
           </button>
-          <Link href={`/admin/campaigns/${id}/find`} className="ad-btn ad-btn--ghost">
+          <Link href={`/admin/campaigns/${id}/find`} className="ga-btn ga-btn--ghost">
             🎯 Pick from Geek OS instead
           </Link>
         </div>
         <details className="us-rows">
           <summary>…or paste rows (copy cells from Sheets / Excel / Word)</summary>
-          <textarea className="ad-input" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={"Name\tInstagram\tWhatsApp\tStatus\nAsha Rao\t@asha.creates\t+91 98765 43210\tApproved"} rows={5} />
-          <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" onClick={() => (paste.trim() ? start("pasted rows", readPasted(paste)) : show("Paste some rows first"))}>
+          <textarea className="ga-input" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={"Name\tInstagram\tWhatsApp\tStatus\nAsha Rao\t@asha.creates\t+91 98765 43210\tApproved"} rows={5} />
+          <button type="button" className="ga-btn ga-btn--ghost ga-btn--sm" onClick={() => (paste.trim() ? start("pasted rows", readPasted(paste)) : show("Paste some rows first"))}>
             Use these rows
           </button>
         </details>
@@ -304,7 +304,7 @@ export default function UploadStart({ id, mode = "upload" }) {
         .us-t { margin-top: 13px; font-weight: 400; }
         .us-t td { height: 48px; padding-top: 6px; padding-bottom: 6px; }
         .us-act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
-        .us-act .ad-btn { height: 42px; }
+        .us-act .ga-btn { height: 42px; }
         .us-paste { width: 270px; height: 42px; }
         .us-rows { margin-top: 16px; font-size: 12px; color: var(--ad-muted); }
         .us-rows summary { cursor: pointer; list-style: none; }
@@ -332,7 +332,7 @@ export default function UploadStart({ id, mode = "upload" }) {
           .us-lab { width: auto; }
           .us-sel, .us-link, .us-paste { width: 100%; }
           .us-ctl { width: 100%; }
-          .us-act .ad-btn { flex: 1 1 auto; }
+          .us-act .ga-btn { flex: 1 1 auto; }
           .us-guide { padding: 22px 18px; }
           .us-x { right: 18px; top: 18px; }
           .us-guide h2 { font-size: 21px; padding-right: 40px; }

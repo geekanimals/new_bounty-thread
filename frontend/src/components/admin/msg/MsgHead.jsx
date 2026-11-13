@@ -20,7 +20,7 @@ export default function MsgHead() {
       <PageHead title="Messaging & bot" sub="WhatsApp and email delivery, automatic messages and the help bot — in one place." />
       <nav className="mh-tabs" aria-label="Messaging sections">
         {TABS.map((t) => (
-          <Link key={t.href} href={t.href} className={`ad-tab ${pathname === t.href ? "is-on" : ""}`}>
+          <Link key={t.href} href={t.href} className={`ga-tab ${pathname === t.href ? "is-on" : ""}`}>
             {t.label}
           </Link>
         ))}
@@ -28,8 +28,8 @@ export default function MsgHead() {
       <style>{`
         .mh-tabs { display: flex; gap: 8px; margin: -4px 0 16px; overflow-x: auto; scrollbar-width: none; }
         .mh-tabs::-webkit-scrollbar { display: none; }
-        .mh-tabs .ad-tab { height: 37px; flex-shrink: 0; }
-        .mh-tabs .ad-tab:not(.is-on) { color: #67718a; background: #f1f2f8; }
+        .mh-tabs .ga-tab { height: 37px; flex-shrink: 0; }
+        .mh-tabs .ga-tab:not(.is-on) { color: #67718a; background: #f1f2f8; }
         @media (max-width: 767px) { .mh-tabs { margin: 0 -16px 16px; padding: 0 16px; } }
       `}</style>
     </>

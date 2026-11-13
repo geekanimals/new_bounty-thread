@@ -10,7 +10,7 @@ import { fmtWhen } from "@/components/admin/brand/util";
 
 const TONE = { OK: "green", Held: "orange", Sending: "violet", Failed: "red", "No number": "red", "No email": "red", Stopped: "", "—": "" };
 const badge = (v, title) => (
-  <span className={`ad-badge ad-badge--${TONE[v] ?? ""}`} title={title || ""}>
+  <span className={`ga-badge ga-badge--${TONE[v] ?? ""}`} title={title || ""}>
     {v}
   </span>
 );
@@ -48,8 +48,8 @@ export default function DeliveryDoctor() {
           { value: cnt((c) => waState(c) === "Held" || emState(c) === "Held"), label: "Waiting", note: "Held — auto messages off", href: "/admin/settings/auto-messages" },
         ]}
       />
-      <section className="ad-card mdd-card">
-        <h2 className="ad-h2">Why a message did or didn’t reach them</h2>
+      <section className="ga-card mdd-card">
+        <h2 className="ga-h2">Why a message did or didn’t reach them</h2>
         {error ? (
           <p className="mdd-state">
             Couldn’t load: {errText(error)}{" "}
@@ -91,12 +91,12 @@ export default function DeliveryDoctor() {
       </section>
       <style>{`
         .mdd-card { padding: 24px 22px 18px; }
-        .mdd-card .ad-h2 { margin-bottom: 26px; }
+        .mdd-card .ga-h2 { margin-bottom: 26px; }
         .mdd-fix { color: var(--ad-ink); }
         .mdd-state { padding: 14px 11px; font-size: 13px; color: var(--ad-red); }
         .mdd-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
         .mdd-fix:hover { color: var(--ad-primary); text-decoration: underline; }
-        @media (max-width: 640px) { .mdd-card { padding: 18px 16px; } .mdd-card .ad-h2 { margin-bottom: 14px; } }
+        @media (max-width: 640px) { .mdd-card { padding: 18px 16px; } .mdd-card .ga-h2 { margin-bottom: 14px; } }
       `}</style>
     </AdminShell>
   );

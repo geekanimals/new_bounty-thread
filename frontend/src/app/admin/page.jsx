@@ -73,20 +73,20 @@ export default function AdminLogin() {
             <span className="al-mark">geek</span>
             <strong>Geek OS</strong>
           </div>
-          <p className="ad-eyebrow">Geek OS / Super Admin</p>
-          <h1 className="ad-h1">Sign in</h1>
-          <p className="ad-sub">Enter your admin ID and password to continue.</p>
+          <p className="ga-eyebrow">Geek OS / Super Admin</p>
+          <h1 className="ga-h1">Sign in</h1>
+          <p className="ga-sub">Enter your admin ID and password to continue.</p>
 
-          <label className="ad-label" htmlFor="al-id">
+          <label className="ga-label" htmlFor="al-id">
             Admin ID (email)
           </label>
-          <input id="al-id" className="ad-input" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="you@geekcreativeagency.com" value={adminId} onChange={(e) => { setAdminId(e.target.value); setErr(""); }} />
+          <input id="al-id" className="ga-input" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="you@geekcreativeagency.com" value={adminId} onChange={(e) => { setAdminId(e.target.value); setErr(""); }} />
 
-          <label className="ad-label" htmlFor="al-pass">
+          <label className="ga-label" htmlFor="al-pass">
             Password
           </label>
           <div className="al-pass">
-            <input id="al-pass" className="ad-input" type={show ? "text" : "password"} autoComplete="current-password" placeholder="••••••••" value={pass} onChange={(e) => { setPass(e.target.value); setErr(""); }} />
+            <input id="al-pass" className="ga-input" type={show ? "text" : "password"} autoComplete="current-password" placeholder="••••••••" value={pass} onChange={(e) => { setPass(e.target.value); setErr(""); }} />
             <button type="button" onClick={() => setShow(!show)}>
               {show ? "Hide" : "Show"}
             </button>
@@ -94,7 +94,7 @@ export default function AdminLogin() {
 
           {err && <p className="al-err">{err}</p>}
 
-          <button type="submit" className="ad-btn ad-btn--primary al-btn" disabled={busy}>
+          <button type="submit" className="ga-btn ga-btn--primary al-btn" disabled={busy}>
             {busy ? "Signing in…" : "Sign in →"}
           </button>
           <p className="al-note">
@@ -122,10 +122,10 @@ export default function AdminLogin() {
         .al-card { width: min(420px, 100%); padding: 32px 30px; border-radius: 22px; background: #fff; border: 1px solid var(--ad-line); box-shadow: 0 24px 60px -36px rgba(20,33,59,.4); }
         .al-logo--m { display: none; color: var(--ad-ink); margin-bottom: 22px; }
         .al-logo--m .al-mark { color: var(--ad-cyan); }
-        .al-card .ad-sub { margin: 8px 0 22px; }
-        .al-card .ad-label { margin-top: 14px; }
+        .al-card .ga-sub { margin: 8px 0 22px; }
+        .al-card .ga-label { margin-top: 14px; }
         .al-pass { position: relative; }
-        .al-pass .ad-input { padding-right: 64px; }
+        .al-pass .ga-input { padding-right: 64px; }
         .al-pass button { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--ad-soft); font-size: 12px; font-weight: 700; color: var(--ad-muted-2); }
         .al-err { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: var(--ad-red-bg); color: var(--ad-red); font-size: 12.5px; font-weight: 700; }
         .al-btn { width: 100%; height: 46px; margin-top: 20px; }

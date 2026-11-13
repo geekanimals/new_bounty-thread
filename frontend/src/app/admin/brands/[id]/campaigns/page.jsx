@@ -40,7 +40,7 @@ function BrandCampaigns() {
             {c.name}
           </span>,
           TYPE[c.type] || c.type || "—",
-          <span key="s" className={`ad-badge ad-badge--${tone(c.status)}`}>
+          <span key="s" className={`ga-badge ga-badge--${tone(c.status)}`}>
             {c.status || "—"}
           </span>,
           num(c.creators),

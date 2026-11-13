@@ -95,11 +95,11 @@ function BrandOverview() {
             <div className="bo-grid">
               {DET.map(([l, k]) => (
                 <div key={k}>
-                  <label className="ad-label" htmlFor={`bo-${k}`}>
+                  <label className="ga-label" htmlFor={`bo-${k}`}>
                     {l}
                   </label>
                   {k === "status" ? (
-                    <select id={`bo-${k}`} className="ad-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    <select id={`bo-${k}`} className="ga-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                       {Object.entries(STATUS).map(([v, t]) => (
                         <option key={v} value={v}>
                           {t}
@@ -107,15 +107,15 @@ function BrandOverview() {
                       ))}
                     </select>
                   ) : k === "added" ? (
-                    <input id={`bo-${k}`} className="ad-input" value={cell.added} disabled />
+                    <input id={`bo-${k}`} className="ga-input" value={cell.added} disabled />
                   ) : (
-                    <input id={`bo-${k}`} className="ad-input" value={form[k]} maxLength={k === "website" ? 200 : 60} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
+                    <input id={`bo-${k}`} className="ga-input" value={form[k]} maxLength={k === "website" ? 200 : 60} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
                   )}
                 </div>
               ))}
             </div>
             <div className="bp-btns">
-              <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+              <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
                 {busy ? "Saving…" : "Save details"}
               </button>
               <button type="button" className="bp-plain" onClick={() => setEdit(false)}>
@@ -141,7 +141,7 @@ function BrandOverview() {
                   Campaigns, bills and reports are kept — you can restore it any time.
                 </p>
                 <div className="bp-btns">
-                  <button type="button" className="ad-btn ad-btn--danger" onClick={del} disabled={busy}>
+                  <button type="button" className="ga-btn ga-btn--danger" onClick={del} disabled={busy}>
                     {busy ? "Deleting…" : "Yes, delete brand"}
                   </button>
                   <button type="button" className="bp-plain" onClick={() => setConfirmDel(false)}>
@@ -151,7 +151,7 @@ function BrandOverview() {
               </div>
             ) : (
               <div className="bp-btns">
-                <button type="button" className="ad-btn ad-btn--ghost" onClick={startEdit}>
+                <button type="button" className="ga-btn ga-btn--ghost" onClick={startEdit}>
                   ✏️ Edit details
                 </button>
                 <button type="button" className="bp-plain" onClick={() => setConfirmDel(true)}>
@@ -169,7 +169,7 @@ function BrandOverview() {
           <ul className="bo-list">
             {contacts.map((x) => (
               <li key={x.contact_id}>
-                <span className="ad-av">{String(x.name || "?")[0].toUpperCase()}</span>
+                <span className="ga-av">{String(x.name || "?")[0].toUpperCase()}</span>
                 <div>
                   <strong>
                     {x.name}
@@ -212,15 +212,15 @@ function BrandOverview() {
                 ["phone", "Phone", "+91 98765 43210"],
               ].map(([k, l, ph]) => (
                 <div key={k}>
-                  <label className="ad-label" htmlFor={`bc-${k}`}>
+                  <label className="ga-label" htmlFor={`bc-${k}`}>
                     {l}
                   </label>
-                  <input id={`bc-${k}`} className="ad-input" placeholder={ph} value={c[k]} type={k === "email" ? "email" : "text"} maxLength={k === "email" ? 120 : k === "phone" ? 20 : 80} onChange={(e) => setC({ ...c, [k]: e.target.value })} />
+                  <input id={`bc-${k}`} className="ga-input" placeholder={ph} value={c[k]} type={k === "email" ? "email" : "text"} maxLength={k === "email" ? 120 : k === "phone" ? 20 : 80} onChange={(e) => setC({ ...c, [k]: e.target.value })} />
                 </div>
               ))}
             </div>
             <div className="bp-btns">
-              <button type="submit" className="ad-btn ad-btn--primary" disabled={!c.name.trim() || busy}>
+              <button type="submit" className="ga-btn ga-btn--primary" disabled={!c.name.trim() || busy}>
                 {busy ? "Saving…" : "Save contact"}
               </button>
               <button type="button" className="bp-plain" onClick={() => setAdding(null)}>
@@ -230,14 +230,14 @@ function BrandOverview() {
           </form>
         ) : (
           <div className="bp-btns bo-addc">
-            <button type="button" className="ad-btn ad-btn--ghost" onClick={() => openContact(null)}>
+            <button type="button" className="ga-btn ga-btn--ghost" onClick={() => openContact(null)}>
               ➕ Add contact
             </button>
           </div>
         )}
       </section>
 
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .bo-sec { padding-bottom: 24px; }

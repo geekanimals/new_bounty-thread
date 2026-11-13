@@ -132,56 +132,56 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
     <>
       <div className="pm-row">
         <div>
-          <label className="ad-label" htmlFor="pm-utr">
+          <label className="ga-label" htmlFor="pm-utr">
             UTR / reference
           </label>
-          <input id="pm-utr" className="ad-input" value={f.utr} onChange={set("utr")} maxLength={40} placeholder="e.g. 425123456789" />
+          <input id="pm-utr" className="ga-input" value={f.utr} onChange={set("utr")} maxLength={40} placeholder="e.g. 425123456789" />
         </div>
         <div>
-          <label className="ad-label" htmlFor="pm-on">
+          <label className="ga-label" htmlFor="pm-on">
             Paid on
           </label>
-          <input id="pm-on" type="date" className="ad-input" value={f.on} onChange={set("on")} />
+          <input id="pm-on" type="date" className="ga-input" value={f.on} onChange={set("on")} />
         </div>
       </div>
-      <label className="ad-label" htmlFor="pm-proof">
+      <label className="ga-label" htmlFor="pm-proof">
         Screenshot of the payment (optional)
       </label>
-      <input id="pm-proof" ref={fileRef} type="file" accept="image/*,.pdf" className="ad-input pm-file" />
-      <p className="ad-hint">Add the UTR, the screenshot, or both — the creator can open it.</p>
+      <input id="pm-proof" ref={fileRef} type="file" accept="image/*,.pdf" className="ga-input pm-file" />
+      <p className="ga-hint">Add the UTR, the screenshot, or both — the creator can open it.</p>
     </>
   );
 
   return (
-    <div className="ad-overlay" onClick={onClose}>
-      <form className="ad-modal pm" onClick={(e) => e.stopPropagation()} onSubmit={save} role="dialog" aria-label={title}>
-        <h3 className="ad-h2">
+    <div className="ga-overlay" onClick={onClose}>
+      <form className="ga-modal pm" onClick={(e) => e.stopPropagation()} onSubmit={save} role="dialog" aria-label={title}>
+        <h3 className="ga-h2">
           {title} · {name}
         </h3>
         {kind === "fee" && (
           <>
-            <label className="ad-label" htmlFor="pm-amt">
+            <label className="ga-label" htmlFor="pm-amt">
               Fee (₹)
             </label>
-            <input id="pm-amt" className="ad-input" value={f.amount} onChange={set("amount")} inputMode="numeric" placeholder="15000" autoFocus />
+            <input id="pm-amt" className="ga-input" value={f.amount} onChange={set("amount")} inputMode="numeric" placeholder="15000" autoFocus />
             <div className="pm-row">
               <div>
-                <label className="ad-label" htmlFor="pm-adv">
+                <label className="ga-label" htmlFor="pm-adv">
                   Advance % (after signing)
                 </label>
-                <input id="pm-adv" className="ad-input" value={f.adv} onChange={set("adv")} inputMode="numeric" placeholder="0" />
+                <input id="pm-adv" className="ga-input" value={f.adv} onChange={set("adv")} inputMode="numeric" placeholder="0" />
               </div>
               <div>
-                <label className="ad-label" htmlFor="pm-days">
+                <label className="ga-label" htmlFor="pm-days">
                   Pay days after posts
                 </label>
-                <input id="pm-days" className="ad-input" value={f.days} onChange={set("days")} inputMode="numeric" placeholder={String(days || 7)} />
+                <input id="pm-days" className="ga-input" value={f.days} onChange={set("days")} inputMode="numeric" placeholder={String(days || 7)} />
               </div>
             </div>
-            <label className="ad-label" htmlFor="pm-note">
+            <label className="ga-label" htmlFor="pm-note">
               Terms (goes into their contract)
             </label>
-            <input id="pm-note" className="ad-input" value={f.note} onChange={set("note")} maxLength={300} placeholder="includes 1 story repost" />
+            <input id="pm-note" className="ga-input" value={f.note} onChange={set("note")} maxLength={300} placeholder="includes 1 story repost" />
           </>
         )}
         {kind === "verify" && (
@@ -190,19 +190,19 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
               Only do this after you&apos;ve checked {p.method === "upi" ? `UPI ${p.upi_id || ""}` : `a/c ••${p.account_last4 || ""} · ${p.ifsc || ""}`} is in {name}&apos;s own name
               {p.account_name ? ` (name given: ${p.account_name})` : ""}.
             </p>
-            <label className="ad-label" htmlFor="pm-note">
+            <label className="ga-label" htmlFor="pm-note">
               How did you check?
             </label>
-            <input id="pm-note" className="ad-input" value={f.note} onChange={set("note")} placeholder="₹1 test transfer, bank statement…" />
+            <input id="pm-note" className="ga-input" value={f.note} onChange={set("note")} placeholder="₹1 test transfer, bank statement…" />
           </>
         )}
         {kind === "ask" && (
           <>
             <p className="pm-txt">They get this on WhatsApp, email and in the app.</p>
-            <label className="ad-label" htmlFor="pm-note">
+            <label className="ga-label" htmlFor="pm-note">
               What&apos;s wrong / what you need
             </label>
-            <input id="pm-note" className="ad-input" value={f.note} onChange={set("note")} autoFocus />
+            <input id="pm-note" className="ga-input" value={f.note} onChange={set("note")} autoFocus />
           </>
         )}
         {kind === "pay" && (
@@ -210,10 +210,10 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
             <p className="pm-txt">
               Total {inr(p.amount)} · paid {inr(p.paid_total || 0)} · left {inr(left)} · due now {inr(dueNow)}
             </p>
-            <label className="ad-label" htmlFor="pm-pay">
+            <label className="ga-label" htmlFor="pm-pay">
               Amount to pay now (₹)
             </label>
-            <input id="pm-pay" className="ad-input" value={f.pay} onChange={set("pay")} inputMode="numeric" />
+            <input id="pm-pay" className="ga-input" value={f.pay} onChange={set("pay")} inputMode="numeric" />
             <div className="pm-seg">
               <button type="button" className={f.how === "razorpay" ? "is-on" : ""} disabled={!canRzp} onClick={() => setF((o) => ({ ...o, how: "razorpay" }))} title={canRzp ? "" : "Razorpay needs verified details and a connected account"}>
                 ⚡ Pay via Razorpay
@@ -255,11 +255,11 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
         )}
         {err && <p className="pm-err">{err}</p>}
         <div className="pm-act">
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={onClose}>
+          <button type="button" className="ga-btn ga-btn--ghost" onClick={onClose}>
             {kind === "details" ? "Close" : "Cancel"}
           </button>
           {kind !== "details" && (
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+            <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
               {busy ? "Saving…" : kind === "verify" ? "Mark verified" : kind === "ask" ? "Send" : kind === "pay" && f.how === "razorpay" ? "⚡ Pay now" : "Save"}
             </button>
           )}
@@ -267,7 +267,7 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
       </form>
       <style>{`
         .pm { padding: 24px; }
-        .pm .ad-label { margin-top: 16px; }
+        .pm .ga-label { margin-top: 16px; }
         .pm-txt { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--ad-muted); }
         .pm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
         .pm-file { padding-top: 9px; }

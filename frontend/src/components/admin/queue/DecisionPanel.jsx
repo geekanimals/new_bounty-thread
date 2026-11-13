@@ -12,7 +12,7 @@ export default function DecisionPanel({ meta, badges = [], why, actions, childre
       <p className="dp-meta">{meta}</p>
       <div className="dp-badges">
         {badges.map((b) => (
-          <span key={b.label} className={`ad-badge ad-badge--${b.tone || ""}`}>
+          <span key={b.label} className={`ga-badge ga-badge--${b.tone || ""}`}>
             {b.label}
           </span>
         ))}
@@ -41,7 +41,7 @@ export default function DecisionPanel({ meta, badges = [], why, actions, childre
       <style>{`
         .dp-meta { margin-top: 22px; font-size: 12px; color: var(--ad-muted); }
         .dp-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 15px; }
-        .dp-badges .ad-badge { height: 26px; }
+        .dp-badges .ga-badge { height: 26px; }
         .dp-h { margin: 22px 0 0; font-size: 13px; font-weight: 700; color: var(--ad-ink); }
         .dp-why { margin-top: 13px; font-size: 14px; line-height: 1.36; color: var(--ad-ink); }
         .dp-why--muted { color: var(--ad-muted); }
@@ -52,10 +52,10 @@ export default function DecisionPanel({ meta, badges = [], why, actions, childre
         .dp-list li { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--ad-ink); }
         .dp-list i { width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; background: var(--ad-lilac); color: #6657f5; font-style: normal; font-size: 11px; font-weight: 800; }
         .dp-act { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 14px; padding-bottom: 18px; border-bottom: 1px solid var(--ad-line); }
-        .dp-act .ad-btn { height: 40px; padding: 0 15px; }
-        .dp-act .ad-btn--primary { background: #6757f5; box-shadow: none; }
-        .dp-act .ad-btn--ghost { border-color: var(--ad-line-2); }
-        @media (max-width: 480px) { .dp-act .ad-btn { flex: 1; } }
+        .dp-act .ga-btn { height: 40px; padding: 0 15px; }
+        .dp-act .ga-btn--primary { background: #6757f5; box-shadow: none; }
+        .dp-act .ga-btn--ghost { border-color: var(--ad-line-2); }
+        @media (max-width: 480px) { .dp-act .ga-btn { flex: 1; } }
       `}</style>
     </div>
   );

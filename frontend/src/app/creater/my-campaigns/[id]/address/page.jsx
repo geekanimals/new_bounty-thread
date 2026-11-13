@@ -169,41 +169,41 @@ export default function AddressStep() {
           <span className="ts-ic">📍</span>
           <h2>{editing.address_id ? "Edit address" : "Add a new address"}</h2>
           {addrs.length > 0 && (
-            <button type="button" className="ts-link ad-back" onClick={() => setEditing(null)}>
+            <button type="button" className="ts-link ga-back" onClick={() => setEditing(null)}>
               ← Saved addresses
             </button>
           )}
-          <div className="ad-form">
-            <label className="ad-f ad-f--wide">
+          <div className="ga-form">
+            <label className="ga-f ga-f--wide">
               <span>Full name *</span>
               <input className="bx-input" autoComplete="name" value={f.name || ""} onChange={set("name")} />
             </label>
-            <label className="ad-f">
+            <label className="ga-f">
               <span>Mobile number *</span>
               <input className="bx-input" inputMode="tel" autoComplete="tel" maxLength={14} value={f.phone || ""} onChange={set("phone")} placeholder="10-digit number" />
             </label>
-            <label className="ad-f">
+            <label className="ga-f">
               <span>PIN code *</span>
               <input className="bx-input" inputMode="numeric" autoComplete="postal-code" maxLength={6} value={f.pin || ""} onChange={onPin} placeholder="6-digit PIN" />
-              {pinMsg && <small className="ad-pin">{pinMsg}</small>}
+              {pinMsg && <small className="ga-pin">{pinMsg}</small>}
             </label>
-            <label className="ad-f ad-f--wide">
+            <label className="ga-f ga-f--wide">
               <span>Flat / house no., building *</span>
               <input className="bx-input" autoComplete="address-line1" value={f.l1 || ""} onChange={set("l1")} />
             </label>
-            <label className="ad-f ad-f--wide">
+            <label className="ga-f ga-f--wide">
               <span>Area / street / sector *</span>
               <input className="bx-input" autoComplete="address-line2" value={f.l2 || ""} onChange={set("l2")} />
             </label>
-            <label className="ad-f ad-f--wide">
+            <label className="ga-f ga-f--wide">
               <span>Landmark *</span>
               <input className="bx-input" value={f.lm || ""} onChange={set("lm")} placeholder="Near…" />
             </label>
-            <label className="ad-f">
+            <label className="ga-f">
               <span>Town / city *</span>
               <input className="bx-input" autoComplete="address-level2" value={f.city || ""} onChange={set("city")} />
             </label>
-            <label className="ad-f">
+            <label className="ga-f">
               <span>State *</span>
               <select className="bx-input" value={f.state || ""} onChange={set("state")}>
                 <option value="">Choose a state</option>
@@ -212,7 +212,7 @@ export default function AddressStep() {
                 ))}
               </select>
             </label>
-            <label className="ad-f ad-f--wide">
+            <label className="ga-f ga-f--wide">
               <span>Delivery instructions (optional)</span>
               <input className="bx-input" value={f.di || ""} onChange={set("di")} />
             </label>
@@ -227,7 +227,7 @@ export default function AddressStep() {
       <>
         <span className="ts-ic">📍</span>
         <h2>Where should {c.brand} send your kit?</h2>
-        <div className="ad-list">
+        <div className="ga-list">
           {addrs.map((a) => {
             const ok = complete(a);
             return (
@@ -235,7 +235,7 @@ export default function AddressStep() {
                 <input type="radio" name="addr" checked={sel === a.address_id} onChange={() => setSel(a.address_id)} />
                 <span>
                   <strong>
-                    <Pin size={12} /> {a.label || "Address"} {a.is_default && <em>Default</em>} {!ok && <em className="ad-warn">Needs a few details</em>}
+                    <Pin size={12} /> {a.label || "Address"} {a.is_default && <em>Default</em>} {!ok && <em className="ga-warn">Needs a few details</em>}
                   </strong>
                   {a.recipient_name && (
                     <small>
@@ -246,7 +246,7 @@ export default function AddressStep() {
                 </span>
                 <button
                   type="button"
-                  className="ad-edit"
+                  className="ga-edit"
                   onClick={(e) => {
                     e.preventDefault();
                     setEditing(a);
@@ -258,7 +258,7 @@ export default function AddressStep() {
             );
           })}
         </div>
-        <button type="button" className="ts-link ad-back" onClick={() => setEditing({})}>
+        <button type="button" className="ts-link ga-back" onClick={() => setEditing({})}>
           + Add a new address
         </button>
         {err && <p className="ts-err">{err}</p>}
@@ -278,23 +278,23 @@ export default function AddressStep() {
         {body()}
       </TrackerFrame>
       <style>{`
-        .ad-list { display: grid; gap: 10px; margin-top: 12px; }
-        .ad-list label { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--bx-line); background: #fffaf0; cursor: pointer; }
-        .ad-list label.is-on { border-color: var(--bx-teal); box-shadow: 0 0 0 3px rgba(46,156,148,.15); }
-        .ad-list label > span { flex: 1; min-width: 0; }
-        .ad-list input { accent-color: var(--bx-teal); margin-top: 3px; }
-        .ad-list strong { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 13.5px; }
-        .ad-list strong em { padding: 1px 7px; border-radius: 999px; background: var(--bx-ok-bg); font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--bx-ok); }
-        .ad-list strong em.ad-warn { background: #fbe7b5; color: #8a5d14; }
-        .ad-list small { display: block; font-size: 12.5px; color: var(--bx-text); overflow-wrap: anywhere; }
-        .ad-edit { align-self: flex-start; border: 1px solid var(--bx-line); border-radius: 999px; background: #fff; padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-        .ad-back { border: 0; background: none; padding: 0; cursor: pointer; }
-        .ad-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
-        .ad-f { display: grid; gap: 4px; min-width: 0; }
-        .ad-f span { font-size: 12px; font-weight: 700; color: #14231a; }
-        .ad-f--wide { grid-column: 1 / -1; }
-        .ad-pin { font-size: 11.5px; color: var(--bx-text); }
-        @media (max-width: 640px) { .ad-form { grid-template-columns: 1fr; } }
+        .ga-list { display: grid; gap: 10px; margin-top: 12px; }
+        .ga-list label { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--bx-line); background: #fffaf0; cursor: pointer; }
+        .ga-list label.is-on { border-color: var(--bx-teal); box-shadow: 0 0 0 3px rgba(46,156,148,.15); }
+        .ga-list label > span { flex: 1; min-width: 0; }
+        .ga-list input { accent-color: var(--bx-teal); margin-top: 3px; }
+        .ga-list strong { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 13.5px; }
+        .ga-list strong em { padding: 1px 7px; border-radius: 999px; background: var(--bx-ok-bg); font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--bx-ok); }
+        .ga-list strong em.ga-warn { background: #fbe7b5; color: #8a5d14; }
+        .ga-list small { display: block; font-size: 12.5px; color: var(--bx-text); overflow-wrap: anywhere; }
+        .ga-edit { align-self: flex-start; border: 1px solid var(--bx-line); border-radius: 999px; background: #fff; padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .ga-back { border: 0; background: none; padding: 0; cursor: pointer; }
+        .ga-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
+        .ga-f { display: grid; gap: 4px; min-width: 0; }
+        .ga-f span { font-size: 12px; font-weight: 700; color: #14231a; }
+        .ga-f--wide { grid-column: 1 / -1; }
+        .ga-pin { font-size: 11.5px; color: var(--bx-text); }
+        @media (max-width: 640px) { .ga-form { grid-template-columns: 1fr; } }
       `}</style>
     </BountyShell>
   );

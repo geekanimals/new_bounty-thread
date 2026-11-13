@@ -71,14 +71,14 @@ export default function ActionQueueView({ filter = "all", openId }) {
         ]}
       />
 
-      <section className="ad-card aq">
+      <section className="ga-card aq">
         <div className="aq-head">
-          <h2 className="ad-h2">Decision inbox</h2>
+          <h2 className="ga-h2">Decision inbox</h2>
           <p className="aq-note">Live · refreshes every 20s</p>
         </div>
-        <nav className="ad-tabs aq-tabs" aria-label="Filter decisions" data-scroll>
+        <nav className="ga-tabs aq-tabs" aria-label="Filter decisions" data-scroll>
           {FILTERS.map((f) => (
-            <Link key={f.k} href={base(f.k)} className={`ad-tab ${filter === f.k ? "is-on" : ""}`} aria-current={filter === f.k ? "page" : undefined}>
+            <Link key={f.k} href={base(f.k)} className={`ga-tab ${filter === f.k ? "is-on" : ""}`} aria-current={filter === f.k ? "page" : undefined}>
               {f.label}
             </Link>
           ))}
@@ -91,19 +91,19 @@ export default function ActionQueueView({ filter = "all", openId }) {
               <span className="aq-ic">{q.icon}</span>
               <div className="aq-main">
                 <p className="aq-title">
-                  <Link href={itemHref(q)}>{q.title}</Link> <span className="ad-count">{q.count}</span>
+                  <Link href={itemHref(q)}>{q.title}</Link> <span className="ga-count">{q.count}</span>
                 </p>
                 <p className="aq-sub">{q.line || `${q.campaign} · ${q.reason}`}</p>
               </div>
               <div className="aq-side">
-                <span className={`ad-badge ad-badge--${q.tone}`}>{q.pri}</span>
+                <span className={`ga-badge ga-badge--${q.tone}`}>{q.pri}</span>
                 <span className="aq-when">{q.when}</span>
                 {q.kind === "campaign" ? (
                   <>
                     <Link href={itemHref(q)} className="aq-text">
                       Open brief
                     </Link>
-                    <button type="button" className="ad-btn ad-btn--primary aq-solid" disabled={busy === q.id} onClick={() => approveCampaign(q)}>
+                    <button type="button" className="ga-btn ga-btn--primary aq-solid" disabled={busy === q.id} onClick={() => approveCampaign(q)}>
                       {busy === q.id ? "…" : "Approve & go live"}
                     </button>
                   </>
@@ -112,12 +112,12 @@ export default function ActionQueueView({ filter = "all", openId }) {
                     <button type="button" className="aq-text" disabled={busy === q.id} onClick={() => declineSignup(q)}>
                       Decline
                     </button>
-                    <button type="button" className="ad-btn ad-btn--primary aq-solid" disabled={busy === q.id} onClick={() => approveSignup(q)}>
+                    <button type="button" className="ga-btn ga-btn--primary aq-solid" disabled={busy === q.id} onClick={() => approveSignup(q)}>
                       {busy === q.id ? "…" : "Approve"}
                     </button>
                   </>
                 ) : (
-                  <Link href={itemHref(q)} className="ad-btn ad-btn--ghost aq-review">
+                  <Link href={itemHref(q)} className="ga-btn ga-btn--ghost aq-review">
                     Review →
                   </Link>
                 )}
@@ -146,37 +146,37 @@ export default function ActionQueueView({ filter = "all", openId }) {
               <>
                 {open.kind === "campaign" ? (
                   <>
-                    <button type="button" className="ad-btn ad-btn--primary" disabled={busy === open.id} onClick={() => approveCampaign(open)}>
+                    <button type="button" className="ga-btn ga-btn--primary" disabled={busy === open.id} onClick={() => approveCampaign(open)}>
                       {busy === open.id ? "…" : "Approve & go live"}
                     </button>
-                    <button type="button" className="ad-btn ad-btn--ghost" onClick={() => sendBack(open)}>
+                    <button type="button" className="ga-btn ga-btn--ghost" onClick={() => sendBack(open)}>
                       Send back
                     </button>
                   </>
                 ) : open.kind === "signup" ? (
                   <>
-                    <button type="button" className="ad-btn ad-btn--primary" disabled={busy === open.id} onClick={() => approveSignup(open)}>
+                    <button type="button" className="ga-btn ga-btn--primary" disabled={busy === open.id} onClick={() => approveSignup(open)}>
                       {busy === open.id ? "…" : "Approve"}
                     </button>
-                    <button type="button" className="ad-btn ad-btn--ghost" onClick={() => declineSignup(open)}>
+                    <button type="button" className="ga-btn ga-btn--ghost" onClick={() => declineSignup(open)}>
                       Decline
                     </button>
                   </>
                 ) : open.f === "applications" ? (
-                  <Link href="/admin/applications" className="ad-btn ad-btn--primary">
+                  <Link href="/admin/applications" className="ga-btn ga-btn--primary">
                     Open applications
                   </Link>
                 ) : open.f === "logistics" ? (
-                  <Link href="/admin/logistics" className="ad-btn ad-btn--primary">
+                  <Link href="/admin/logistics" className="ga-btn ga-btn--primary">
                     Open logistics
                   </Link>
                 ) : null}
                 {open.cid ? (
-                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ad-btn ad-btn--ghost">
+                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
                     Open campaign
                   </Link>
                 ) : (
-                  <Link href="/admin/users" className="ad-btn ad-btn--ghost">
+                  <Link href="/admin/users" className="ga-btn ga-btn--ghost">
                     Open all users
                   </Link>
                 )}
@@ -201,9 +201,9 @@ export default function ActionQueueView({ filter = "all", openId }) {
         .aq-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .aq-note { font-size: 12px; color: var(--ad-muted); }
         .aq-tabs { margin-top: 17px; }
-        .aq-tabs .ad-tab { height: 37px; }
-        .aq-tabs .ad-tab:not(.is-on) { color: #67718a; }
-        .aq-tabs .ad-tab:not(.is-on):hover { background: var(--ad-lilac); color: var(--ad-primary-2); }
+        .aq-tabs .ga-tab { height: 37px; }
+        .aq-tabs .ga-tab:not(.is-on) { color: #67718a; }
+        .aq-tabs .ga-tab:not(.is-on):hover { background: var(--ad-lilac); color: var(--ad-primary-2); }
         .aq-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
         .aq-row {
           display: flex; align-items: center; gap: 14px; min-height: 74px; padding: 12px 14px 12px 13px; border-radius: 14px;
@@ -214,7 +214,7 @@ export default function ActionQueueView({ filter = "all", openId }) {
         .aq-main { flex: 1; min-width: 0; }
         .aq-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 700; color: var(--ad-ink); }
         .aq-title a:hover { color: var(--ad-primary); }
-        .aq-title .ad-count { min-width: 26px; height: 24px; border-radius: 12px; }
+        .aq-title .ga-count { min-width: 26px; height: 24px; border-radius: 12px; }
         .aq-sub { margin-top: 8px; font-size: 12px; line-height: 1.33; color: #8791a7; }
         .aq-side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .aq-when { font-size: 12px; color: var(--ad-muted); }
@@ -238,7 +238,7 @@ export default function ActionQueueView({ filter = "all", openId }) {
           .aq { padding: 18px 16px 20px; }
           .aq-tabs { flex-wrap: nowrap; overflow-x: auto; margin: 18px -16px 0; padding: 0 16px; scrollbar-width: none; }
           .aq-tabs::-webkit-scrollbar { display: none; }
-          .aq-tabs .ad-tab { flex-shrink: 0; }
+          .aq-tabs .ga-tab { flex-shrink: 0; }
           .aq-row { gap: 12px; align-items: flex-start; }
           .aq-side { padding-left: 0; flex-wrap: wrap; }
         }

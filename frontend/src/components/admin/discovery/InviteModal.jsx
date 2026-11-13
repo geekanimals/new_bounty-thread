@@ -49,17 +49,17 @@ export default function InviteModal({ who, onDone, onClose }) {
   };
 
   return (
-    <div className="ad-overlay" onClick={onClose}>
-      <form className="ad-modal im" onClick={(e) => e.stopPropagation()} onSubmit={send} role="dialog" aria-label={`Invite @${who.handle}`}>
-        <h3 className="ad-h2">Invite {who.handle ? `@${who.handle}` : who.name}</h3>
+    <div className="ga-overlay" onClick={onClose}>
+      <form className="ga-modal im" onClick={(e) => e.stopPropagation()} onSubmit={send} role="dialog" aria-label={`Invite @${who.handle}`}>
+        <h3 className="ga-h2">Invite {who.handle ? `@${who.handle}` : who.name}</h3>
         {camps && !camps.length ? (
           <p className="im-note">Create a campaign first — then you can invite creators to it.</p>
         ) : (
           <>
-            <label className="ad-label" htmlFor="imCamp">
+            <label className="ga-label" htmlFor="imCamp">
               Campaign
             </label>
-            <select id="imCamp" className="ad-input" value={cid} onChange={(e) => setCid(e.target.value)} disabled={!camps}>
+            <select id="imCamp" className="ga-input" value={cid} onChange={(e) => setCid(e.target.value)} disabled={!camps}>
               {!camps && <option>Loading campaigns…</option>}
               {(camps || []).map((c) => (
                 <option key={c.id} value={c.id}>
@@ -67,24 +67,24 @@ export default function InviteModal({ who, onDone, onClose }) {
                 </option>
               ))}
             </select>
-            <label className="ad-label" htmlFor="imNote">
+            <label className="ga-label" htmlFor="imNote">
               Note (optional)
             </label>
-            <input id="imNote" className="ad-input" maxLength={140} placeholder="Why you'd love them on this" value={note} onChange={(e) => setNote(e.target.value)} />
+            <input id="imNote" className="ga-input" maxLength={140} placeholder="Why you'd love them on this" value={note} onChange={(e) => setNote(e.target.value)} />
           </>
         )}
         {err && <p className="im-err">{err}</p>}
         <div className="im-acts">
-          <button type="button" className="ad-btn ad-btn--ghost" onClick={onClose}>
+          <button type="button" className="ga-btn ga-btn--ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="ad-btn ad-btn--primary" disabled={busy || !cid}>
+          <button type="submit" className="ga-btn ga-btn--primary" disabled={busy || !cid}>
             {busy ? "Sending…" : "Send invite"}
           </button>
         </div>
         <style>{`
           .im { padding: 24px; }
-          .im .ad-label { margin-top: 14px; }
+          .im .ga-label { margin-top: 14px; }
           .im-note { margin-top: 12px; font-size: 13.5px; color: var(--ad-muted); }
           .im-err { margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
           .im-acts { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }

@@ -129,19 +129,19 @@ export default function InstagramDMs() {
   return (
     <AdminShell>
       <InboxHead />
-      <section className="ad-card ig-card">
-        <h2 className="ad-h2">📸 Instagram DMs</h2>
+      <section className="ga-card ig-card">
+        <h2 className="ga-h2">📸 Instagram DMs</h2>
         <p className="ig-sub">Connect your Instagram and your DMs open right here — reply to creators without leaving Geek OS. Invites you send also go out from this handle.</p>
         {state !== "on" ? (
           <div className="ig-cta">
             {problem && <p className="ig-prob">{problem.text}</p>}
             {(!problem || problem.connect) && (
-              <button type="button" className="ad-btn ad-btn--primary" onClick={connect} disabled={state === "busy"}>
+              <button type="button" className="ga-btn ga-btn--primary" onClick={connect} disabled={state === "busy"}>
                 {state === "busy" ? "Connecting…" : "📸 Connect Instagram"}
               </button>
             )}
             {problem && !problem.connect && (
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={load}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={load}>
                 Try again
               </button>
             )}
@@ -176,8 +176,8 @@ export default function InstagramDMs() {
                     </div>
                   )}
                   <form className="ig-reply" onSubmit={(e) => send(e, c)}>
-                    <input className="ad-input" placeholder="Reply…" value={reply[c.id] || ""} onChange={(e) => setReply({ ...reply, [c.id]: e.target.value })} aria-label={`Reply to @${c.with_username || "user"}`} />
-                    <button type="submit" className="ad-btn ad-btn--soft">
+                    <input className="ga-input" placeholder="Reply…" value={reply[c.id] || ""} onChange={(e) => setReply({ ...reply, [c.id]: e.target.value })} aria-label={`Reply to @${c.with_username || "user"}`} />
+                    <button type="submit" className="ga-btn ga-btn--soft">
                       Send
                     </button>
                   </form>
@@ -188,7 +188,7 @@ export default function InstagramDMs() {
           </div>
         )}
       </section>
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
       <style>{`
         .ig-card { padding: 24px 22px 52px; }
         .ig-sub { margin-top: 9px; font-size: 12px; line-height: 1.4; color: var(--ad-muted); }
@@ -201,7 +201,7 @@ export default function InstagramDMs() {
         .ig-me { align-self: flex-end; background: var(--ad-primary); color: #fff; }
         .ig-them { align-self: flex-start; background: #fff; border: 1px solid var(--ad-line); }
         .ig-sys { align-self: center; font-size: 12px; color: var(--ad-muted); }
-        .ig-cta .ad-btn { height: 41px; padding: 0 16px; }
+        .ig-cta .ga-btn { height: 41px; padding: 0 16px; }
         .ig-list { margin-top: 22px; display: grid; gap: 10px; }
         .ig-ok { font-size: 12px; font-weight: 700; color: var(--ad-green); }
         .ig-dm { display: flex; gap: 14px; padding: 14px; border-radius: 14px; border: 1px solid var(--ad-line); }
@@ -211,8 +211,8 @@ export default function InstagramDMs() {
         .ig-dm__main em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--ad-muted); }
         .ig-dm__t { margin-top: 4px; font-size: 13px; color: var(--ad-text); }
         .ig-reply { display: flex; gap: 8px; margin-top: 10px; }
-        .ig-reply .ad-input { height: 38px; }
-        .ig-reply .ad-btn { height: 38px; }
+        .ig-reply .ga-input { height: 38px; }
+        .ig-reply .ga-btn { height: 38px; }
         @media (max-width: 640px) { .ig-card { padding: 18px 16px 30px; } .ig-cta { margin-top: 26px; } }
       `}</style>
     </AdminShell>

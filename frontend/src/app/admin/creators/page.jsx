@@ -56,10 +56,10 @@ export default function AdminCreators() {
   return (
     <AdminShell>
       <PageHead title="Creators" sub="A trusted creator directory: verified Instagram signals, fit and campaign history.">
-        <button type="button" className="ad-btn cl-csv" onClick={() => (csv(list, CSV_COLS, "creators.csv"), flash(`CSV downloaded — ${list.length} creators`))}>
+        <button type="button" className="ga-btn cl-csv" onClick={() => (csv(list, CSV_COLS, "creators.csv"), flash(`CSV downloaded — ${list.length} creators`))}>
           ⬇️ CSV
         </button>
-        <Link href="/admin/creator-upload" className="ad-btn ad-btn--primary">
+        <Link href="/admin/creator-upload" className="ga-btn ga-btn--primary">
           ⇧ Add / import
         </Link>
       </PageHead>
@@ -74,12 +74,12 @@ export default function AdminCreators() {
         ]}
       />
 
-      <section className="ad-card cl-card">
+      <section className="ga-card cl-card">
         <div className="cl-top">
-          <h2 className="ad-h2">Creator directory</h2>
+          <h2 className="ga-h2">Creator directory</h2>
           <div className="cl-view">
-            <span className="ad-tab is-on">☰ List</span>
-            <Link href="/admin/creators/cards" className="ad-tab">
+            <span className="ga-tab is-on">☰ List</span>
+            <Link href="/admin/creators/cards" className="ga-tab">
               ▦ Cards
             </Link>
           </div>
@@ -87,7 +87,7 @@ export default function AdminCreators() {
 
         <div className="cl-filters">
           <input
-            className="ad-input cl-search"
+            className="ga-input cl-search"
             placeholder="Search name, handle, niche or city…"
             value={q}
             onChange={(e) => {
@@ -96,14 +96,14 @@ export default function AdminCreators() {
             }}
             aria-label="Search creators"
           />
-          <select className="ad-input cl-sel" value={ig} onChange={(e) => (setIg(e.target.value), setPage(0))} aria-label="Instagram">
+          <select className="ga-input cl-sel" value={ig} onChange={(e) => (setIg(e.target.value), setPage(0))} aria-label="Instagram">
             {["All", "Connected", "Not connected"].map((o) => (
               <option key={o} value={o}>
                 Instagram: {o}
               </option>
             ))}
           </select>
-          <select className="ad-input cl-sel" value={cat} onChange={(e) => (setCat(e.target.value), setPage(0))} aria-label="Category">
+          <select className="ga-input cl-sel" value={cat} onChange={(e) => (setCat(e.target.value), setPage(0))} aria-label="Category">
             {cats.map((o) => (
               <option key={o}>{o}</option>
             ))}
@@ -125,7 +125,7 @@ export default function AdminCreators() {
         </div>
 
         <div className="cl-table">
-          <table className="ad-table">
+          <table className="ga-table">
             <thead>
               <tr>
                 <th>Creator</th>
@@ -152,10 +152,10 @@ export default function AdminCreators() {
                   <td>{c.city}</td>
                   <td>{c.category}</td>
                   <td>
-                    <span className={`ad-badge ${c.ig ? "ad-badge--green" : ""}`}>{c.ig ? "Connected" : "Not connected"}</span>
+                    <span className={`ga-badge ${c.ig ? "ga-badge--green" : ""}`}>{c.ig ? "Connected" : "Not connected"}</span>
                   </td>
                   <td>
-                    <span className={`ad-badge ${c.complete ? "ad-badge--violet" : "ad-badge--orange"}`}>{c.complete ? "Complete" : "Incomplete"}</span>
+                    <span className={`ga-badge ${c.complete ? "ga-badge--violet" : "ga-badge--orange"}`}>{c.complete ? "Complete" : "Incomplete"}</span>
                   </td>
                   <td>
                     <Link href={`/admin/creators/${c.id}/profile`} className="cl-link">
@@ -205,8 +205,8 @@ export default function AdminCreators() {
                 {c.city} · {c.category}
               </p>
               <div className="cl-m__b">
-                <span className={`ad-badge ${c.ig ? "ad-badge--green" : ""}`}>{c.ig ? "Connected" : "Not connected"}</span>
-                <span className={`ad-badge ${c.complete ? "ad-badge--violet" : "ad-badge--orange"}`}>{c.complete ? "Complete" : "Incomplete"}</span>
+                <span className={`ga-badge ${c.ig ? "ga-badge--green" : ""}`}>{c.ig ? "Connected" : "Not connected"}</span>
+                <span className={`ga-badge ${c.complete ? "ga-badge--violet" : "ga-badge--orange"}`}>{c.complete ? "Complete" : "Incomplete"}</span>
               </div>
             </Link>
           ))}
@@ -228,7 +228,7 @@ export default function AdminCreators() {
         </div>
       </section>
 
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ga-toast">✓ {toast}</div>}
 
       <style>{`
         .cl-retry { border: 0; background: none; font-weight: 800; color: #6657e9; }
@@ -236,14 +236,14 @@ export default function AdminCreators() {
         .cl-card { padding: 22px 22px 26px; }
         .cl-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .cl-view { display: flex; gap: 8px; }
-        .cl-view .ad-tab:not(.is-on) { color: #67718a; }
+        .cl-view .ga-tab:not(.is-on) { color: #67718a; }
         .cl-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 34px; }
         .cl-search { width: 270px; height: 44px; }
         .cl-sel { width: auto; field-sizing: content; min-width: 0; height: 44px; padding: 0 12px; color: var(--ad-text); appearance: none; cursor: pointer; }
         .cl-save { border: 0; background: none; padding: 0 8px; font-size: 14px; font-weight: 800; color: #6657e9; }
         .cl-table { margin-top: 22px; overflow-x: auto; }
-        .cl-table .ad-table th { background: transparent; padding: 12px 11px; }
-        .cl-table .ad-table td { padding: 14px 11px; height: 67.5px; }
+        .cl-table .ga-table th { background: transparent; padding: 12px 11px; }
+        .cl-table .ga-table td { padding: 14px 11px; height: 67.5px; }
         .cl-name { display: block; font-weight: 800; color: var(--ad-ink); }
         .cl-name:hover { color: var(--ad-primary); }
         .cl-handle { display: block; margin-top: 4px; font-size: 11px; font-weight: 500; color: #9aa1b3; }

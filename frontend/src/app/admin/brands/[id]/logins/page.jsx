@@ -150,7 +150,7 @@ function BrandLogins() {
                 : `Make a new password for ${ask.x.email}? The old password stops working.`}
             </p>
             <div className="bp-btns">
-              <button type="button" className={`ad-btn ${ask.kind === "remove" ? "ad-btn--danger" : "ad-btn--primary"}`} onClick={confirm}>
+              <button type="button" className={`ga-btn ${ask.kind === "remove" ? "ga-btn--danger" : "ga-btn--primary"}`} onClick={confirm}>
                 {ask.kind === "remove" ? "Yes, remove" : "Make new password"}
               </button>
               <button type="button" className="bp-plain" onClick={() => setAsk(null)}>
@@ -180,10 +180,10 @@ function BrandLogins() {
               </dd>
             </dl>
             <div className="bp-btns">
-              <button type="button" className="ad-btn ad-btn--primary" onClick={copy}>
+              <button type="button" className="ga-btn ga-btn--primary" onClick={copy}>
                 📋 Copy login
               </button>
-              <a className="ad-btn ad-btn--ghost" href={`mailto:${encodeURIComponent(creds.email || "")}?subject=${encodeURIComponent("Your Geek OS login")}&body=${encodeURIComponent(credText)}`}>
+              <a className="ga-btn ga-btn--ghost" href={`mailto:${encodeURIComponent(creds.email || "")}?subject=${encodeURIComponent("Your Geek OS login")}&body=${encodeURIComponent(credText)}`}>
                 ✉️ Email it
               </a>
               <button type="button" className="bp-plain" onClick={() => setCreds(null)}>
@@ -195,23 +195,23 @@ function BrandLogins() {
 
         {adding && (
           <form className="bl-form" onSubmit={add}>
-            <input className="ad-input" placeholder="Name" maxLength={80} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-label="Name" autoFocus />
-            <input className="ad-input" placeholder="name@brand.in" type="email" maxLength={120} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />
-            <select className="ad-input" value={f.access} onChange={(e) => setF({ ...f, access: e.target.value })} aria-label="Access">
+            <input className="ga-input" placeholder="Name" maxLength={80} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-label="Name" autoFocus />
+            <input className="ga-input" placeholder="name@brand.in" type="email" maxLength={120} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-label="Email" />
+            <select className="ga-input" value={f.access} onChange={(e) => setF({ ...f, access: e.target.value })} aria-label="Access">
               <option value="approver">Brand reviewer</option>
               <option value="owner">Brand admin</option>
               <option value="viewer">View only</option>
             </select>
-            <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+            <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
               {busy ? "Creating…" : "Create login"}
             </button>
           </form>
         )}
         <div className="bp-btns">
-          <button type="button" className="ad-btn ad-btn--primary" onClick={() => setAdding(!adding)}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={() => setAdding(!adding)}>
             🔑 {adding ? "Cancel" : "Add a login"}
           </button>
-          <a href="/brands" target="_blank" rel="noreferrer" className="ad-btn ad-btn--ghost">
+          <a href="/brands" target="_blank" rel="noreferrer" className="ga-btn ga-btn--ghost">
             👁️ View as brand
           </a>
         </div>
@@ -221,13 +221,13 @@ function BrandLogins() {
         <h3 className="bp-sec__t">🏢 Brand portal</h3>
         <p className="bp-sec__s">What {b.name} sees: their campaigns, the final creator list to approve, posts and the report.</p>
         <div className="bp-btns">
-          <a href="/brands" target="_blank" rel="noreferrer" className="ad-btn ad-btn--ghost">
+          <a href="/brands" target="_blank" rel="noreferrer" className="ga-btn ga-btn--ghost">
             Open brand portal ↗
           </a>
         </div>
       </section>
 
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .bl-t { margin-top: 13px; }

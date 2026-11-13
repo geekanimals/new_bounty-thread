@@ -92,7 +92,7 @@ export default function AllUsers() {
 
       <Panel className="au-panel">
         <div className="au-top">
-          <h2 className="ad-h2 au-title">
+          <h2 className="ga-h2 au-title">
             {FILTERS.find((x) => x.k === f).k === "all" ? "Everyone" : FILTERS.find((x) => x.k === f).label.replace(/^\S+\s/, "")} · {L(rows.length)}
           </h2>
           <div className="au-right">
@@ -103,7 +103,7 @@ export default function AllUsers() {
                   type="button"
                   role="tab"
                   aria-selected={f === x.k}
-                  className={`ad-tab ${f === x.k ? "is-on" : ""}`}
+                  className={`ga-tab ${f === x.k ? "is-on" : ""}`}
                   onClick={() => {
                     setF(x.k);
                     setPage(0);
@@ -115,7 +115,7 @@ export default function AllUsers() {
               ))}
             </div>
             <input
-              className="ad-input au-search"
+              className="ga-input au-search"
               placeholder="Search name, email, @handle…"
               value={q}
               onChange={(e) => {
@@ -185,23 +185,23 @@ export default function AllUsers() {
       </Panel>
 
       {del && (
-        <div className="ad-overlay" onClick={() => setDel(null)}>
-          <div className="ad-modal au-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete account">
-            <h2 className="ad-h2">Delete {nameOf(del)}?</h2>
+        <div className="ga-overlay" onClick={() => setDel(null)}>
+          <div className="ga-modal au-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete account">
+            <h2 className="ga-h2">Delete {nameOf(del)}?</h2>
             <p className="au-modal__p">
               Removes for good: their login, creator profile, Instagram and WhatsApp link, every campaign they were on, alerts and activity. Kept: campaigns they created (moved to you) and a record in the Audit log. They can
               sign up again fresh.
             </p>
-            <label className="ad-label au-l" htmlFor="au-del">
+            <label className="ga-label au-l" htmlFor="au-del">
               Type <b>DELETE</b> to confirm
             </label>
-            <input id="au-del" className="ad-input" autoComplete="off" placeholder="DELETE" value={typed} onChange={(e) => setTyped(e.target.value)} />
+            <input id="au-del" className="ga-input" autoComplete="off" placeholder="DELETE" value={typed} onChange={(e) => setTyped(e.target.value)} />
             {msg && <p className="au-err">{msg}</p>}
             <div className="au-modal__btns">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setDel(null)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setDel(null)}>
                 Keep
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" onClick={remove} disabled={busy || typed.trim() !== "DELETE"}>
+              <button type="button" className="ga-btn ga-btn--danger" onClick={remove} disabled={busy || typed.trim() !== "DELETE"}>
                 {busy ? "Deleting…" : "Delete permanently"}
               </button>
             </div>
@@ -216,8 +216,8 @@ export default function AllUsers() {
         .au-title { width: 102px; flex-shrink: 0; line-height: 1.35; }
         .au-right { min-width: 0; flex: 1; }
         .au-filters { display: flex; flex-wrap: wrap; gap: 8px; }
-        .au-filters .ad-tab { height: 37px; }
-        .au-filters .ad-tab:not(.is-on) { color: #67718a; }
+        .au-filters .ga-tab { height: 37px; }
+        .au-filters .ga-tab:not(.is-on) { color: #67718a; }
         .au-search { width: min(270px, 100%); height: 43px; margin-top: 25px; }
         .au-panel .sk-tw { margin-top: 27px; }
         .au-acts { display: inline-flex; align-items: center; gap: 22px; padding-left: 4px; }
@@ -237,7 +237,7 @@ export default function AllUsers() {
         @media (max-width: 1023px) { .au-top { flex-direction: column; align-items: flex-start; gap: 14px; } .au-title { width: auto; } }
         @media (max-width: 640px) {
           .au-filters { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; scrollbar-width: none; }
-          .au-filters .ad-tab { flex-shrink: 0; }
+          .au-filters .ga-tab { flex-shrink: 0; }
           .au-right { width: 100%; }
           .au-search { width: 100%; margin-top: 14px; }
           .au-panel .sk-tw { margin-top: 18px; }

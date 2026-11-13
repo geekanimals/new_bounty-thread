@@ -149,7 +149,7 @@ export default function SettingsTeam() {
         title="Team"
         sub="People who run Geek OS with you."
         action={
-          <button type="button" className="ad-btn ad-btn--primary" onClick={() => setModal("invite")}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={() => setModal("invite")}>
             Invite teammate
           </button>
         }
@@ -226,14 +226,14 @@ export default function SettingsTeam() {
         title="Public workspace page"
         sub="Your agency page brands see when you share a link."
         action={
-          <button type="button" className="ad-btn ad-btn--primary" onClick={save} disabled={busy}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={save} disabled={busy}>
             Save &amp; get link
           </button>
         }
       >
         <div className="st-pub">
-          <input className="ad-input" placeholder="Geek Creative Agency" value={agency} onChange={(e) => setAgency(e.target.value)} aria-label="Agency name" />
-          <input className="ad-input" placeholder="geekcreativeagency.com" value={site} onChange={(e) => setSite(e.target.value)} aria-label="Website" />
+          <input className="ga-input" placeholder="Geek Creative Agency" value={agency} onChange={(e) => setAgency(e.target.value)} aria-label="Agency name" />
+          <input className="ga-input" placeholder="geekcreativeagency.com" value={site} onChange={(e) => setSite(e.target.value)} aria-label="Website" />
         </div>
         {link && (
           <p className="st-link">
@@ -243,18 +243,18 @@ export default function SettingsTeam() {
       </Panel>
 
       {modal === "invite" && (
-        <div className="ad-overlay" onClick={() => setModal(null)}>
-          <form className="ad-modal st-modal" onClick={(e) => e.stopPropagation()} onSubmit={invite} role="dialog" aria-label="Invite teammate">
-            <h2 className="ad-h2">Invite teammate</h2>
+        <div className="ga-overlay" onClick={() => setModal(null)}>
+          <form className="ga-modal st-modal" onClick={(e) => e.stopPropagation()} onSubmit={invite} role="dialog" aria-label="Invite teammate">
+            <h2 className="ga-h2">Invite teammate</h2>
             <p className="st-modal__p">When they sign up with this email (using the invite link), they join your workspace.</p>
-            <label className="ad-label" htmlFor="st-email">
+            <label className="ga-label" htmlFor="st-email">
               Email
             </label>
-            <input id="st-email" className="ad-input" type="email" autoFocus placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <label className="ad-label" htmlFor="st-role">
+            <input id="st-email" className="ga-input" type="email" autoFocus placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label className="ga-label" htmlFor="st-role">
               Role
             </label>
-            <select id="st-role" className="ad-input" value={role} onChange={(e) => setRole(e.target.value)}>
+            <select id="st-role" className="ga-input" value={role} onChange={(e) => setRole(e.target.value)}>
               {ROLES.map(([k, l]) => (
                 <option key={k} value={k}>
                   {l}
@@ -263,10 +263,10 @@ export default function SettingsTeam() {
             </select>
             {err && <p className="st-err">{err}</p>}
             <div className="st-modal__btns">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setModal(null)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setModal(null)}>
                 Cancel
               </button>
-              <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+              <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
                 {busy ? "Sending…" : "Send invite"}
               </button>
             </div>
@@ -274,15 +274,15 @@ export default function SettingsTeam() {
         </div>
       )}
       {modal?.remove && (
-        <div className="ad-overlay" onClick={() => setModal(null)}>
-          <div className="ad-modal st-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Remove teammate">
-            <h2 className="ad-h2">Remove {modal.remove}?</h2>
+        <div className="ga-overlay" onClick={() => setModal(null)}>
+          <div className="ga-modal st-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Remove teammate">
+            <h2 className="ga-h2">Remove {modal.remove}?</h2>
             <p className="st-modal__p">They will lose access to Geek OS straight away. You can invite them again later.</p>
             <div className="st-modal__btns">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setModal(null)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setModal(null)}>
                 Keep
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" onClick={remove}>
+              <button type="button" className="ga-btn ga-btn--danger" onClick={remove}>
                 Remove
               </button>
             </div>
@@ -303,18 +303,18 @@ export default function SettingsTeam() {
         .st-int strong { font-family: var(--ad-head); font-size: 23px; font-weight: 800; letter-spacing: -0.6px; color: var(--ad-ink); }
         .st-int span { margin-top: 3px; font-size: 12px; color: var(--ad-muted); }
         .st-pub { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
-        .st-pub .ad-input { width: 270px; height: 43px; }
-        .st-pub .ad-input::placeholder { color: #757575; }
+        .st-pub .ga-input { width: 270px; height: 43px; }
+        .st-pub .ga-input::placeholder { color: #757575; }
         .st-link { margin-top: 14px; font-size: 13px; font-weight: 700; color: var(--ad-ink); }
         .st-link a { color: var(--ad-primary); word-break: break-all; }
         .st-modal { width: min(460px, 100%); padding: 24px; }
         .st-modal__p { margin: 8px 0 6px; font-size: 13.5px; line-height: 1.5; color: var(--ad-muted); }
-        .st-modal .ad-label { margin-top: 14px; }
+        .st-modal .ga-label { margin-top: 14px; }
         .st-err { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
         .st-modal__btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
         @media (max-width: 640px) {
           .st-int { grid-template-columns: 1fr; }
-          .st-pub .ad-input { width: 100%; }
+          .st-pub .ga-input { width: 100%; }
           .st-modal__btns > * { flex: 1; }
         }
       `}</style>

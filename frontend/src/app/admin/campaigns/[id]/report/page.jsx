@@ -89,7 +89,7 @@ export default function CampaignReport() {
         title="📈 Campaign report"
         sub="Every creator who posted, with their numbers. Updates on its own as Instagram shares insights."
         actions={
-          <button type="button" className="ad-btn ad-btn--primary" onClick={download} disabled={!rows.length}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={download} disabled={!rows.length}>
             ⬇️ Download report
           </button>
         }

@@ -94,7 +94,7 @@ export default function SettingsAudit() {
             fmtDateTime(l.at),
             <b key="w">{l.actor_email || "System"}</b>,
             TABLE_NAME[l.table_name] || l.table_name,
-            <span key="a" className={`ad-badge ad-badge--${TONE[l.action] || ""}`}>
+            <span key="a" className={`ga-badge ga-badge--${TONE[l.action] || ""}`}>
               {l.action}
             </span>,
             <span key="c" className="sg-chg">
@@ -111,9 +111,9 @@ export default function SettingsAudit() {
         />
       </Panel>
       {diff && (
-        <div className="ad-overlay" onClick={() => setDiff(null)}>
-          <div className="ad-modal sg-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Change detail">
-            <h2 className="ad-h2">Change detail</h2>
+        <div className="ga-overlay" onClick={() => setDiff(null)}>
+          <div className="ga-modal sg-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Change detail">
+            <h2 className="ga-h2">Change detail</h2>
             <p className="sg-modal__p">
               {fmtDateTime(diff.at)} · {diff.actor_email || "System"} · {TABLE_NAME[diff.table_name] || diff.table_name} · {diff.action}
             </p>
@@ -122,7 +122,7 @@ export default function SettingsAudit() {
             <p className="sg-lbl">After</p>
             <pre className="sg-pre">{diff.new_data ? JSON.stringify(diff.new_data, null, 2) : "—"}</pre>
             <div className="sg-modal__btns">
-              <button type="button" className="ad-btn ad-btn--primary" onClick={() => setDiff(null)}>
+              <button type="button" className="ga-btn ga-btn--primary" onClick={() => setDiff(null)}>
                 Done
               </button>
             </div>
@@ -130,15 +130,15 @@ export default function SettingsAudit() {
         </div>
       )}
       {ask && (
-        <div className="ad-overlay" onClick={() => setAsk(null)}>
-          <div className="ad-modal sg-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Restore">
-            <h2 className="ad-h2">{RESTORE[ask.action]} this change?</h2>
+        <div className="ga-overlay" onClick={() => setAsk(null)}>
+          <div className="ga-modal sg-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Restore">
+            <h2 className="ga-h2">{RESTORE[ask.action]} this change?</h2>
             <p className="sg-modal__p">The row will be brought back / reverted to its earlier state. This action is itself logged.</p>
             <div className="sg-modal__btns">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAsk(null)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setAsk(null)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--primary" onClick={restore}>
+              <button type="button" className="ga-btn ga-btn--primary" onClick={restore}>
                 {RESTORE[ask.action]}
               </button>
             </div>
@@ -161,7 +161,7 @@ export default function SettingsAudit() {
         .sg-sel:hover { border-color: var(--ad-primary); }
         .sg-sel select { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
         .sg-panel .sk-tw { margin-top: 14px; }
-        .sg-panel .ad-badge { padding: 0 9px; }
+        .sg-panel .ga-badge { padding: 0 9px; }
       `}</style>
     </AdminShell>
   );

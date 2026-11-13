@@ -181,14 +181,14 @@ export default function CampaignAttribution() {
         </div>
 
         <div className="at-bar">
-          <select className="ad-input at-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
+          <select className="ga-input at-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
             {SORTS.map(([k, l]) => (
               <option key={k} value={k}>
                 {l}
               </option>
             ))}
           </select>
-          <input className="ad-input at-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator…" aria-label="Search creator" />
+          <input className="ga-input at-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator…" aria-label="Search creator" />
         </div>
 
         <div className="c2-tw">

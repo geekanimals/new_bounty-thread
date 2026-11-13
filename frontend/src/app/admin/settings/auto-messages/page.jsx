@@ -65,7 +65,7 @@ export default function SettingsAutoMessages() {
           empty={emptyState({ loading: sw.loading, error: sw.error, reload: sw.reload, empty: "—" })}
           rows={ch.map((c) => [
             <b key="n" title={c.sub || ""}>{c.name}</b>,
-            <span key="s" className={`ad-badge ${c.on ? "ad-badge--green" : ""}`}>
+            <span key="s" className={`ga-badge ${c.on ? "ga-badge--green" : ""}`}>
               {c.on ? "ON" : "OFF"}
             </span>,
             c.held ? `${c.held} stopped (last 7 days)` : "0",
@@ -74,7 +74,7 @@ export default function SettingsAutoMessages() {
                 {busy === c.k ? "…" : "Turn off"}
               </button>
             ) : (
-              <button key="b" type="button" className="ad-btn ad-btn--primary sa-on" disabled={busy === c.k} onClick={() => flip(c)}>
+              <button key="b" type="button" className="ga-btn ga-btn--primary sa-on" disabled={busy === c.k} onClick={() => flip(c)}>
                 {busy === c.k ? "…" : "Turn on"}
               </button>
             ),
@@ -87,19 +87,19 @@ export default function SettingsAutoMessages() {
         </Notice>
       </Panel>
       {ask && (
-        <div className="ad-overlay" onClick={() => setAsk(null)}>
-          <div className="ad-modal sa-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Automatic messages">
-            <h2 className="ad-h2">{ask.on ? "Turn automatic messages back ON?" : "Turn automatic messages OFF?"}</h2>
+        <div className="ga-overlay" onClick={() => setAsk(null)}>
+          <div className="ga-modal sa-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Automatic messages">
+            <h2 className="ga-h2">{ask.on ? "Turn automatic messages back ON?" : "Turn automatic messages OFF?"}</h2>
             <p className="sa-modal__p">
               {ask.on
                 ? "New invites, step updates, reminders and bot replies will go by themselves again. What was stopped while OFF is NOT sent."
                 : "Nothing goes by itself any more — only what the team sends by hand. Login codes and team alerts still go."}
             </p>
             <div className="sa-modal__btns">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAsk(null)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setAsk(null)}>
                 Cancel
               </button>
-              <button type="button" className={`ad-btn ${ask.on ? "ad-btn--primary" : "ad-btn--danger"}`} onClick={() => flipAuto(ask.on)}>
+              <button type="button" className={`ga-btn ${ask.on ? "ga-btn--primary" : "ga-btn--danger"}`} onClick={() => flipAuto(ask.on)}>
                 {ask.on ? "Turn on" : "Turn off"}
               </button>
             </div>

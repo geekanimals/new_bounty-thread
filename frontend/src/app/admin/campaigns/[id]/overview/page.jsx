@@ -121,10 +121,10 @@ export default function WorkspaceOverview() {
     return (
       <AdminShell>
         <WorkspaceHead id={id} campaign={row} />
-        <section className="ad-card" style={{ padding: 22 }}>
+        <section className="ga-card" style={{ padding: 22 }}>
           <p style={{ fontSize: 13, color: "var(--ad-muted)" }}>
             {errText(error) || "Couldn’t open this campaign."}{" "}
-            <button type="button" className="ad-btn ad-btn--ghost ad-btn--sm" onClick={reload}>
+            <button type="button" className="ga-btn ga-btn--ghost ga-btn--sm" onClick={reload}>
               Retry
             </button>
           </p>
@@ -138,13 +138,13 @@ export default function WorkspaceOverview() {
 
       <div className="wo-grid">
         <div className="wo-col">
-          <section className="ad-card wo-card">
+          <section className="ga-card wo-card">
             <div className="wo-status">
               <div>
-                <h2 className="ad-h2">Campaign status</h2>
+                <h2 className="ga-h2">Campaign status</h2>
                 <p className="wo-sub">Who can see and apply.</p>
               </div>
-              <select className="ad-input wo-select" value={statusSel} disabled={!row || busy === "status"} onChange={(e) => setStatus(e.target.value)} aria-label="Campaign status">
+              <select className="ga-input wo-select" value={statusSel} disabled={!row || busy === "status"} onChange={(e) => setStatus(e.target.value)} aria-label="Campaign status">
                 {STATUS.map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
@@ -167,7 +167,7 @@ export default function WorkspaceOverview() {
                 ["mail", "✉️", "Email"],
               ].map(([k, ic, label]) => (
                 <div key={k} className="wo-ch">
-                  <button type="button" className={`ad-toggle wo-tg ${chan[k].on ? "is-on" : ""}`} disabled={busy === k || msg.loading} onClick={() => toggle(k, label)} aria-pressed={chan[k].on} aria-label={`${label} messages for this campaign`} />
+                  <button type="button" className={`ga-toggle wo-tg ${chan[k].on ? "is-on" : ""}`} disabled={busy === k || msg.loading} onClick={() => toggle(k, label)} aria-pressed={chan[k].on} aria-label={`${label} messages for this campaign`} />
                   <div>
                     <p className="wo-ch__t">
                       {ic} {label}
@@ -179,10 +179,10 @@ export default function WorkspaceOverview() {
             </div>
           </section>
 
-          <section className="ad-card wo-card">
+          <section className="ga-card wo-card">
             <div className="wo-dhead">
               <div>
-                <h2 className="ad-h2">Campaign details</h2>
+                <h2 className="ga-h2">Campaign details</h2>
                 <p className="wo-sub">Everything creators see in the brief.</p>
               </div>
               <Link href={`/admin/campaigns/${c.id}/contract`} className="wo-edit">
@@ -202,8 +202,8 @@ export default function WorkspaceOverview() {
         </div>
 
         <div className="wo-col">
-          <section className="ad-card wo-card">
-            <h2 className="ad-h2">Campaign tools</h2>
+          <section className="ga-card wo-card">
+            <h2 className="ga-h2">Campaign tools</h2>
             <div className="wo-tools">
               {TOOLS.map((t) => (
                 <Link key={t.t} href={t.href} className={`wo-tool ${t.short ? "wo-tool--s" : ""}`}>
@@ -216,8 +216,8 @@ export default function WorkspaceOverview() {
             </button>
           </section>
 
-          <section className="ad-card wo-card">
-            <h2 className="ad-h2">Creator journey</h2>
+          <section className="ga-card wo-card">
+            <h2 className="ga-h2">Creator journey</h2>
             <div className="wo-journey">
               <Link href={`/admin/campaigns/${c.id}/creators`}>
                 <strong>{jn(total)}</strong>
@@ -238,33 +238,33 @@ export default function WorkspaceOverview() {
       </div>
 
       {ask && (
-        <div className="ad-overlay" onClick={() => setAsk(false)}>
-          <div className="ad-modal wo-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete campaign">
-            <h2 className="ad-h2">Delete “{c.name}”?</h2>
+        <div className="ga-overlay" onClick={() => setAsk(false)}>
+          <div className="ga-modal wo-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete campaign">
+            <h2 className="ga-h2">Delete “{c.name}”?</h2>
             <p>
               This permanently removes <b>{c.name}</b> and everything in it — creators in the campaign, contracts, addresses, shipments, videos, posts, invites and unsent WhatsApp / email messages. Creator, brand and agency accounts are not touched. <b>It can’t be undone.</b>
             </p>
-            <label className="ad-label wo-lbl" htmlFor="wo-confirm">
+            <label className="ga-label wo-lbl" htmlFor="wo-confirm">
               Type the campaign name to confirm
             </label>
-            <input id="wo-confirm" className="ad-input" autoComplete="off" placeholder={c.name} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-            <label className="ad-label wo-lbl" htmlFor="wo-note">
+            <input id="wo-confirm" className="ga-input" autoComplete="off" placeholder={c.name} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            <label className="ga-label wo-lbl" htmlFor="wo-note">
               Note (optional)
             </label>
-            <input id="wo-note" className="ad-input" maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
+            <input id="wo-note" className="ga-input" maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
             {delErr && <p className="wo-err">{delErr}</p>}
             <div className="wo-modal__act">
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAsk(false)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setAsk(false)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" disabled={busy === "del"} onClick={del}>
+              <button type="button" className="ga-btn ga-btn--danger" disabled={busy === "del"} onClick={del}>
                 {busy === "del" ? "Deleting…" : "🗑 Delete campaign permanently"}
               </button>
             </div>
           </div>
         </div>
       )}
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
         .wo-grid { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }

@@ -59,8 +59,8 @@ export default function SettingsLinks() {
       <SettingsTabs />
       <Panel title="🔗 Make a short link" sub="Paste any link — a shop page, a form, a Drive file, a reel. Every click is tracked: when, city, phone / browser.">
         <form className="sl-form" onSubmit={shorten}>
-          <input className="ad-input" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link to shorten" />
-          <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+          <input className="ga-input" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link to shorten" />
+          <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
             {busy ? "Shortening…" : "Shorten"}
           </button>
         </form>
@@ -99,13 +99,13 @@ export default function SettingsLinks() {
       {toast}
       <style>{`
         .sl-form { display: flex; gap: 8px; margin-top: 18px; }
-        .sl-form .ad-input { width: 270px; height: 43px; }
-        .sl-form .ad-input::placeholder { color: #757575; }
-        .sl-form .ad-btn { height: 40px; margin-top: 1px; }
+        .sl-form .ga-input { width: 270px; height: 43px; }
+        .sl-form .ga-input::placeholder { color: #757575; }
+        .sl-form .ga-btn { height: 40px; margin-top: 1px; }
         .sl-err { margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
         .sl-list { padding-bottom: 20px; }
         .sl-off { color: var(--ad-muted); }
-        @media (max-width: 640px) { .sl-form .ad-input { flex: 1; width: auto; min-width: 0; } }
+        @media (max-width: 640px) { .sl-form .ga-input { flex: 1; width: auto; min-width: 0; } }
       `}</style>
     </AdminShell>
   );
@@ -145,9 +145,9 @@ function LinkStats({ link, base, onClose, say, onChange }) {
   };
 
   return (
-    <div className="ad-overlay" onClick={onClose}>
-      <div className="ad-modal sl-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Link clicks">
-        <h2 className="ad-h2">
+    <div className="ga-overlay" onClick={onClose}>
+      <div className="ga-modal sl-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Link clicks">
+        <h2 className="ga-h2">
           {short(base)}/s/{link.slug}
         </h2>
         <p className="sl-modal__p">Goes to {short(d.url || link.url)}</p>
@@ -192,12 +192,12 @@ function LinkStats({ link, base, onClose, say, onChange }) {
         )}
         {ask && <p className="sl-warn">Stop this link? Anyone who opens it will see “Link not found”. You can turn it back on any time.</p>}
         <div className="sl-modal__btns">
-          <button type="button" className={`ad-btn ${ask ? "ad-btn--danger" : "ad-btn--ghost"}`} onClick={toggle}>
+          <button type="button" className={`ga-btn ${ask ? "ga-btn--danger" : "ga-btn--ghost"}`} onClick={toggle}>
             {active ? (ask ? "Yes, stop link" : "⏸ Stop") : "▶ Turn on"}
           </button>
           <button
             type="button"
-            className="ad-btn ad-btn--ghost"
+            className="ga-btn ga-btn--ghost"
             onClick={async () => {
               await copy(sh);
               say("Link copied");
@@ -205,14 +205,14 @@ function LinkStats({ link, base, onClose, say, onChange }) {
           >
             Copy link
           </button>
-          <button type="button" className="ad-btn ad-btn--primary" onClick={onClose}>
+          <button type="button" className="ga-btn ga-btn--primary" onClick={onClose}>
             Done
           </button>
         </div>
       </div>
       <style>{`
         .sl-modal { width: min(460px, 100%); padding: 24px; }
-        .sl-modal .ad-h2 { word-break: break-all; }
+        .sl-modal .ga-h2 { word-break: break-all; }
         .sl-modal__p { margin-top: 10px; font-size: 13px; color: var(--ad-muted); word-break: break-word; }
         .sl-modal__p b { color: var(--ad-ink); }
         .sl-days { position: relative; display: inline-flex; align-items: center; height: 34px; margin-top: 12px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--ad-line-2); font-size: 12.5px; color: #293652; }

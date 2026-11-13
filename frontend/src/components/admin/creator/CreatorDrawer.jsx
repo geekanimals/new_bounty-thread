@@ -157,7 +157,7 @@ export default function CreatorDrawer({ id, tab, children }) {
 
           <nav className="cdw-tabs" data-scroll>
             {CP_TABS.map((t) => (
-              <Link key={t.k} href={`/admin/creators/${id}/${t.k}`} className={`ad-tab ${tab === t.k ? "is-on" : ""}`}>
+              <Link key={t.k} href={`/admin/creators/${id}/${t.k}`} className={`ga-tab ${tab === t.k ? "is-on" : ""}`}>
                 {t.label}
               </Link>
             ))}
@@ -169,30 +169,30 @@ export default function CreatorDrawer({ id, tab, children }) {
       </div>
 
       {ask && (
-        <div className="ad-overlay" style={{ zIndex: 130 }} onClick={() => setAsk(false)}>
-          <div className="ad-modal cdw-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete user">
-            <h3 className="ad-h2">Delete {p.name}?</h3>
+        <div className="ga-overlay" style={{ zIndex: 130 }} onClick={() => setAsk(false)}>
+          <div className="ga-modal cdw-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Delete user">
+            <h3 className="ga-h2">Delete {p.name}?</h3>
             <p>
               This removes for good: their login, creator profile (personal details, contact, addresses, pets, rates), Instagram and WhatsApp link, every campaign they were on, alerts
               and activity. Campaigns they created move to you; a record stays in the Audit log. They can sign up again fresh.
             </p>
-            <label className="ad-label cdw-lbl" htmlFor="cdwDel">
+            <label className="ga-label cdw-lbl" htmlFor="cdwDel">
               Type <b>DELETE</b> to confirm
             </label>
-            <input id="cdwDel" className="ad-input" autoComplete="off" placeholder="DELETE" value={confirmTxt} onChange={(e) => setConfirmTxt(e.target.value)} />
+            <input id="cdwDel" className="ga-input" autoComplete="off" placeholder="DELETE" value={confirmTxt} onChange={(e) => setConfirmTxt(e.target.value)} />
             {delErr && <p className="cdw-err">{delErr}</p>}
             <div>
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setAsk(false)}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setAsk(false)}>
                 Cancel
               </button>
-              <button type="button" className="ad-btn ad-btn--danger" disabled={busy || confirmTxt.trim() !== "DELETE"} onClick={doDelete}>
+              <button type="button" className="ga-btn ga-btn--danger" disabled={busy || confirmTxt.trim() !== "DELETE"} onClick={doDelete}>
                 {busy ? "Deleting…" : "Delete permanently"}
               </button>
             </div>
           </div>
         </div>
       )}
-      {toast && <div className="ad-toast" style={{ zIndex: 140 }}>✓ {toast}</div>}
+      {toast && <div className="ga-toast" style={{ zIndex: 140 }}>✓ {toast}</div>}
 
       <style>{`
         .cdw-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(20,33,59,.42); animation: adFade .15s ease; }
@@ -215,8 +215,8 @@ export default function CreatorDrawer({ id, tab, children }) {
         .cdw-live { display: inline-flex; align-items: center; height: 40px; padding: 0 10px; margin-left: -6px; border-radius: 20px; background: var(--ad-green-bg); color: var(--ad-green); font-size: 11px; font-weight: 700; }
         .cdw-tabs { display: flex; gap: 7px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
         .cdw-tabs::-webkit-scrollbar { display: none; }
-        .cdw-tabs .ad-tab { flex-shrink: 0; height: 36px; }
-        .cdw-tabs .ad-tab:not(.is-on) { color: #67718a; }
+        .cdw-tabs .ga-tab { flex-shrink: 0; height: 36px; }
+        .cdw-tabs .ga-tab:not(.is-on) { color: #67718a; }
         .cdw-body { margin-top: 34px; }
         .cdw-priv { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--ad-line); font-size: 12px; color: var(--ad-muted); }
         .cdw-modal { padding: 24px; }

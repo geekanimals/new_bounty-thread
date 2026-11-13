@@ -60,17 +60,17 @@ export default function DiscoveryBusiness() {
   return (
     <AdminShell>
       <DiscoveryHead />
-      <section className="dbz-card ad-card">
+      <section className="dbz-card ga-card">
         <div className="dbz-top">
           <div>
-            <h2 className="ad-h2">Instagram Business discovery</h2>
+            <h2 className="ga-h2">Instagram Business discovery</h2>
             <p className="dbz-sub">Type any public Business or Creator username — see their profile and latest posts.</p>
           </div>
-          <span className="ad-badge">{igName ? `Searching with @${igName}` : "Searching with the team's Instagram"}</span>
+          <span className="ga-badge">{igName ? `Searching with @${igName}` : "Searching with the team's Instagram"}</span>
         </div>
         <form className="dbz-row" onSubmit={search}>
-          <input className="ad-input dbz-q" placeholder="@kabirfoodtrail" value={user} onChange={(e) => setUser(e.target.value)} aria-label="Instagram username" />
-          <button type="submit" className="ad-btn ad-btn--primary dbz-go" disabled={st.busy}>
+          <input className="ga-input dbz-q" placeholder="@kabirfoodtrail" value={user} onChange={(e) => setUser(e.target.value)} aria-label="Instagram username" />
+          <button type="submit" className="ga-btn ga-btn--primary dbz-go" disabled={st.busy}>
             {st.busy ? "Searching…" : "🔎 Search"}
           </button>
         </form>
@@ -114,10 +114,10 @@ export default function DiscoveryBusiness() {
               {!posts.length && <p className="dbz-none">No posts shared.</p>}
             </div>
             <div className="dbz-acts">
-              <button type="button" className="ad-btn ad-btn--primary" onClick={add}>
+              <button type="button" className="ga-btn ga-btn--primary" onClick={add}>
                 Add to Geek OS
               </button>
-              <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setInv({ handle, member_id: null, name: P.name })}>
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setInv({ handle, member_id: null, name: P.name })}>
                 Invite to a campaign
               </button>
             </div>
@@ -134,12 +134,12 @@ export default function DiscoveryBusiness() {
           }}
         />
       )}
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ga-toast">✓ {toast}</div>}
 
       <style>{`
         .dbz-card { padding: 25px 22px 22px; }
         .dbz-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-        .dbz-top .ad-badge { margin-top: 9px; }
+        .dbz-top .ga-badge { margin-top: 9px; }
         .dbz-sub { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
         .dbz-row { display: flex; gap: 10px; margin-top: 17px; }
         .dbz-q { width: 270px; height: 42px; }

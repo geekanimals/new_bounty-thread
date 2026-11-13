@@ -51,7 +51,7 @@ function Act({ id }) {
           </div>
           <h3>Recent activity</h3>
           <div className="cpa-wrap">
-            <table className="ad-table">
+            <table className="ga-table">
               <thead>
                 <tr>
                   <th>When</th>
@@ -80,14 +80,14 @@ function Act({ id }) {
             .cpa-nums span { margin-top: 12px; font-size: 12px; color: var(--ad-muted); }
             .cpa h3 { margin-top: 26px; font-size: 13px; font-weight: 700; }
             .cpa-wrap { margin-top: 10px; overflow-x: auto; }
-            .cpa .ad-table th { background: transparent; padding: 12px 11px; width: 46%; }
-            .cpa .ad-table td { height: 48px; padding: 10px 11px; }
+            .cpa .ga-table th { background: transparent; padding: 12px 11px; width: 46%; }
+            .cpa .ga-table td { height: 48px; padding: 10px 11px; }
             .cpa-none { font-size: 13px; color: var(--ad-muted); }
             @media (max-width: 640px) {
               .cpa-nums { grid-template-columns: 1fr 1fr; gap: 8px; }
               .cpa-nums div { min-height: 0; padding: 14px; }
               .cpa-nums strong { font-size: 23px; }
-              .cpa .ad-table td { white-space: normal; }
+              .cpa .ga-table td { white-space: normal; }
             }
           `}</style>
         </div>

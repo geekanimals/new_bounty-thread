@@ -60,7 +60,7 @@ export default function CreatorInstagramTab() {
                     .join(" · ")}
                 </small>
               </div>
-              {a.active && <span className="ad-badge ad-badge--green">Active</span>}
+              {a.active && <span className="ga-badge ga-badge--green">Active</span>}
             </div>
           ))}
           <style>{`

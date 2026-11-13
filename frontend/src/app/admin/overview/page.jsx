@@ -101,7 +101,7 @@ export default function AdminOverview() {
   return (
     <AdminShell>
       <PageHead title={<Hello hello={hello} />} sub="One workspace for the decisions, people and campaigns that move Geek OS forward.">
-        <Link href="/admin/campaigns/new" className="ad-btn ad-btn--primary">
+        <Link href="/admin/campaigns/new" className="ga-btn ga-btn--primary">
           ＋ New campaign
         </Link>
       </PageHead>
@@ -119,10 +119,10 @@ export default function AdminOverview() {
       <div className="ov-grid">
         <div className="ov-col">
           {/* Priority queue */}
-          <section className="ad-card ov-card">
+          <section className="ga-card ov-card">
             <div className="ov-card__head">
               <div>
-                <h2 className="ad-h2">⚡ Your priority queue</h2>
+                <h2 className="ga-h2">⚡ Your priority queue</h2>
                 <p className="ov-sub">One-click triage. Open an item to review its context before acting.</p>
               </div>
               <Link href="/admin/action-queue" className="ov-link">
@@ -137,14 +137,14 @@ export default function AdminOverview() {
                   <span className="ov-ic">{q.icon}</span>
                   <div className="ov-q__main">
                     <p className="ov-q__title">
-                      {q.title} <span className="ad-count">{q.count}</span>
+                      {q.title} <span className="ga-count">{q.count}</span>
                     </p>
                     <p className="ov-q__sub">{q.line || `${q.campaign} · ${q.reason}`}</p>
                   </div>
                   <div className="ov-q__side">
-                    <span className={`ad-badge ad-badge--${q.tone}`}>{q.pri}</span>
+                    <span className={`ga-badge ga-badge--${q.tone}`}>{q.pri}</span>
                     <span className="ov-when">{q.when}</span>
-                    <Link href={qHref(q)} className="ad-btn ad-btn--ghost ov-review">
+                    <Link href={qHref(q)} className="ga-btn ga-btn--ghost ov-review">
                       Review →
                     </Link>
                   </div>
@@ -154,12 +154,12 @@ export default function AdminOverview() {
           </section>
 
           {/* Live activity */}
-          <section className="ad-card ov-card">
-            <h2 className="ad-h2">🕒 Live activity</h2>
+          <section className="ga-card ov-card">
+            <h2 className="ga-h2">🕒 Live activity</h2>
             <p className="ov-sub">Sign-ins, campaigns and Instagram connections as they happen.</p>
-            <div className="ad-tabs ov-tabs" role="tablist">
+            <div className="ga-tabs ov-tabs" role="tablist">
               {TABS.filter(([, k]) => k !== "prof" || tabN(k)).map(([label, k]) => (
-                <button key={k} type="button" role="tab" aria-selected={tab === k} className={`ad-tab ${tab === k ? "is-on" : ""}`} onClick={() => setTab(k)}>
+                <button key={k} type="button" role="tab" aria-selected={tab === k} className={`ga-tab ${tab === k ? "is-on" : ""}`} onClick={() => setTab(k)}>
                   {label} {tabN(k)}
                 </button>
               ))}
@@ -182,7 +182,7 @@ export default function AdminOverview() {
                       </p>
                       <p className="ov-q__sub">{sub}</p>
                     </div>
-                    <span className={`ad-badge ad-badge--${KIND[k][1]}`}>{KIND[k][0]}</span>
+                    <span className={`ga-badge ga-badge--${KIND[k][1]}`}>{KIND[k][0]}</span>
                   </Link>
                 );
               })}
@@ -192,8 +192,8 @@ export default function AdminOverview() {
 
         <div className="ov-col">
           {/* People */}
-          <section className="ad-card ov-card">
-            <h2 className="ad-h2">👥 People</h2>
+          <section className="ga-card ov-card">
+            <h2 className="ga-h2">👥 People</h2>
             <p className="ov-sub">Who is on Geek OS right now.</p>
             <div className="ov-people">
               {PEOPLE.map((p) => (
@@ -207,10 +207,10 @@ export default function AdminOverview() {
           </section>
 
           {/* Creator pipeline */}
-          <section className="ad-card ov-card">
+          <section className="ga-card ov-card">
             <div className="ov-card__head ov-card__head--c">
-              <h2 className="ad-h2">Creator pipeline</h2>
-              <span className="ad-badge ad-badge--green">Live</span>
+              <h2 className="ga-h2">Creator pipeline</h2>
+              <span className="ga-badge ga-badge--green">Live</span>
             </div>
             <div className="ov-pipe">
               {PIPE.map(([n, l]) => (
@@ -223,9 +223,9 @@ export default function AdminOverview() {
           </section>
 
           {/* Fulfilment pulse */}
-          <section className="ad-card ov-card">
+          <section className="ga-card ov-card">
             <div className="ov-card__head ov-card__head--c">
-              <h2 className="ad-h2">Fulfilment pulse</h2>
+              <h2 className="ga-h2">Fulfilment pulse</h2>
               <Link href="/admin/logistics" className="ov-link">
                 Open logistics →
               </Link>
@@ -268,14 +268,14 @@ export default function AdminOverview() {
         .ov-ic { width: 38px; height: 38px; flex-shrink: 0; border-radius: 11px; display: grid; place-items: center; background: var(--ad-soft); font-size: 19px; color: var(--ad-ink); }
         .ov-q__main { flex: 1; min-width: 0; }
         .ov-q__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 700; color: var(--ad-ink); }
-        .ov-q__title .ad-count { min-width: 30px; height: 24px; border-radius: 12px; }
+        .ov-q__title .ga-count { min-width: 30px; height: 24px; border-radius: 12px; }
         .ov-q__sub { margin-top: 6px; font-size: 12px; line-height: 1.33; color: #8791a7; }
         .ov-q__side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .ov-when { font-size: 12px; color: var(--ad-muted); }
         .ov-review { height: 42px; padding: 0 15px; border-color: var(--ad-line-2); color: var(--ad-primary-ink); }
         .ov-tabs { margin-top: 26px; }
-        .ov-tabs .ad-tab { height: 37px; }
-        .ov-tabs .ad-tab:not(.is-on) { color: #67718a; }
+        .ov-tabs .ga-tab { height: 37px; }
+        .ov-tabs .ga-tab:not(.is-on) { color: #67718a; }
 
         .ov-people { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
         .ov-p { display: flex; flex-direction: column; min-height: 120px; padding: 25px 19px 16px; border-radius: 14px; border: 1px solid var(--ad-line); transition: border-color .15s; }
@@ -307,7 +307,7 @@ export default function AdminOverview() {
           .ov-q { flex-wrap: wrap; gap: 12px; }
           .ov-q__side { width: 100%; padding-left: 52px; }
           .ov-review { margin-left: auto; height: 38px; }
-          .ov-a .ad-badge { display: none; }
+          .ov-a .ga-badge { display: none; }
           .ov-people { gap: 10px; }
           .ov-p, .ov-p--short { min-height: 0; padding: 16px 14px; }
           .ov-p strong, .ov-pipe strong { font-size: 24px; }

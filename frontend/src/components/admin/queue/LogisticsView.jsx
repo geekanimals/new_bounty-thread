@@ -85,10 +85,10 @@ export default function LogisticsView({ openId }) {
         ]}
       />
 
-      <section className="ad-card lg">
+      <section className="ga-card lg">
         <div className="lg-head">
-          <h2 className="ad-h2">Shipment tracker</h2>
-          <button type="button" className="ad-btn ad-btn--ghost lg-import" onClick={() => fileRef.current?.click()}>
+          <h2 className="ga-h2">Shipment tracker</h2>
+          <button type="button" className="ga-btn ga-btn--ghost lg-import" onClick={() => fileRef.current?.click()}>
             ⇧ Import tracking
           </button>
           <input
@@ -105,8 +105,8 @@ export default function LogisticsView({ openId }) {
         </div>
 
         <div className="lg-filters">
-          <input className="ad-input lg-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator, kit, courier…" aria-label="Search shipments" />
-          <select className="ad-input lg-select" value={st} onChange={(e) => setSt(e.target.value)} aria-label="Status">
+          <input className="ga-input lg-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search creator, kit, courier…" aria-label="Search shipments" />
+          <select className="ga-input lg-select" value={st} onChange={(e) => setSt(e.target.value)} aria-label="Status">
             <option value="">All statuses</option>
             {SHIP_STATUSES.map((s) => (
               <option key={s}>{s}</option>
@@ -147,7 +147,7 @@ export default function LogisticsView({ openId }) {
                       <td>{s.campaign || "—"}</td>
                       <td>{s.product || "—"}</td>
                       <td>
-                        <span className={`ad-badge ad-badge--${status === "To send" || status === "No address" ? "orange" : status === "Received" ? "green" : "violet"}`}>{status}</span>
+                        <span className={`ga-badge ga-badge--${status === "To send" || status === "No address" ? "orange" : status === "Received" ? "green" : "violet"}`}>{status}</span>
                       </td>
                       <td>{s.courier ? `${s.courier}${s.tracking_ref ? ` · ${s.tracking_ref}` : ""}` : "—"}</td>
                       <td>{last ? ago(last) : status === "No address" ? "Needs verification" : "Awaiting pickup"}</td>
@@ -197,7 +197,7 @@ export default function LogisticsView({ openId }) {
           {open.status === "pending" && (
             <button
               type="button"
-              className="ad-btn ad-btn--primary lg-update"
+              className="ga-btn ga-btn--primary lg-update"
               disabled={!open.has_address}
               title={open.has_address ? "" : "Creator hasn't added an address yet"}
               onClick={() => setForm({ product: open.product || "", courier: open.courier || "", tracking: open.tracking_ref || "", url: open.tracking_url || "", err: "" })}
@@ -206,32 +206,32 @@ export default function LogisticsView({ openId }) {
             </button>
           )}
           {open.status === "shipped" && (
-            <button type="button" className="ad-btn ad-btn--primary lg-update" disabled={busy} onClick={() => markDelivered(open)}>
+            <button type="button" className="ga-btn ga-btn--primary lg-update" disabled={busy} onClick={() => markDelivered(open)}>
               {busy ? "…" : "📦 Mark delivered"}
             </button>
           )}
           {open.campaign_id && (
-            <Link href={`/admin/campaigns/${open.campaign_id}/fulfilment`} className="ad-btn ad-btn--ghost lg-update lg-camp">
+            <Link href={`/admin/campaigns/${open.campaign_id}/fulfilment`} className="ga-btn ga-btn--ghost lg-update lg-camp">
               Open campaign
             </Link>
           )}
 
           {form && (
             <form className="lg-form" onSubmit={saveCourier}>
-              <label className="ad-label">Product</label>
-              <input className="ad-input" value={form.product} onChange={(e) => setForm({ ...form, product: e.target.value })} placeholder="Momo box" />
-              <label className="ad-label">Courier</label>
-              <input className="ad-input" value={form.courier} onChange={(e) => setForm({ ...form, courier: e.target.value, err: "" })} placeholder="DTDC / Delhivery / Blue Dart" />
-              <label className="ad-label">Tracking number</label>
-              <input className="ad-input" value={form.tracking} onChange={(e) => setForm({ ...form, tracking: e.target.value })} placeholder="DT123456789" />
-              <label className="ad-label">Tracking link (optional)</label>
-              <input className="ad-input" type="url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://www.dtdc.in/tracking…" />
+              <label className="ga-label">Product</label>
+              <input className="ga-input" value={form.product} onChange={(e) => setForm({ ...form, product: e.target.value })} placeholder="Momo box" />
+              <label className="ga-label">Courier</label>
+              <input className="ga-input" value={form.courier} onChange={(e) => setForm({ ...form, courier: e.target.value, err: "" })} placeholder="DTDC / Delhivery / Blue Dart" />
+              <label className="ga-label">Tracking number</label>
+              <input className="ga-input" value={form.tracking} onChange={(e) => setForm({ ...form, tracking: e.target.value })} placeholder="DT123456789" />
+              <label className="ga-label">Tracking link (optional)</label>
+              <input className="ga-input" type="url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://www.dtdc.in/tracking…" />
               {form.err && <p className="lg-ferr">{form.err}</p>}
               <div className="lg-fact">
-                <button type="submit" className="ad-btn ad-btn--primary" disabled={busy}>
+                <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
                   {busy ? "Saving…" : "Save — creator gets the tracking"}
                 </button>
-                <button type="button" className="ad-btn ad-btn--ghost" onClick={() => setForm(null)}>
+                <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setForm(null)}>
                   Cancel
                 </button>
               </div>
@@ -287,7 +287,7 @@ export default function LogisticsView({ openId }) {
         .lg-track a { color: var(--ad-primary); }
         .lg-err { color: var(--ad-red); font-weight: 700; }
         .lg-form { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--ad-line); }
-        .lg-form .ad-label { margin-top: 12px; }
+        .lg-form .ga-label { margin-top: 12px; }
         .lg-ferr { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
         .lg-fact { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 

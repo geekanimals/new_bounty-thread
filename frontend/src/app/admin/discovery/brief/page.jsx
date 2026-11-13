@@ -67,8 +67,8 @@ export default function DiscoveryBrief() {
   return (
     <AdminShell>
       <DiscoveryHead />
-      <section className="db-card ad-card">
-        <h2 className="ad-h2">Match creators to a brief</h2>
+      <section className="db-card ga-card">
+        <h2 className="ga-h2">Match creators to a brief</h2>
         <p className="db-sub">Describe who you need — we rank creators by fit.</p>
         <form
           className="db-row"
@@ -77,8 +77,8 @@ export default function DiscoveryBrief() {
             find();
           }}
         >
-          <input className="ad-input db-q" placeholder="Female fashion creators in Mumbai, 50k+" value={brief} onChange={(e) => setBrief(e.target.value)} aria-label="Describe who you need" />
-          <button type="submit" className="ad-btn ad-btn--primary db-go" disabled={busy}>
+          <input className="ga-input db-q" placeholder="Female fashion creators in Mumbai, 50k+" value={brief} onChange={(e) => setBrief(e.target.value)} aria-label="Describe who you need" />
+          <button type="submit" className="ga-btn ga-btn--primary db-go" disabled={busy}>
             {busy ? "Finding…" : "✨ Find creators"}
           </button>
         </form>
@@ -91,7 +91,7 @@ export default function DiscoveryBrief() {
         </div>
 
         <div className="db-table">
-          <table className="ad-table">
+          <table className="ga-table">
             <thead>
               <tr>
                 <th>Creator</th>
@@ -123,7 +123,7 @@ export default function DiscoveryBrief() {
                     </td>
                     <td>{why}</td>
                     <td>{kNum(c.followers)}</td>
-                    <td>{fit == null ? "—" : <span className={`ad-badge ${fit >= 75 ? "ad-badge--green" : "ad-badge--orange"}`}>{fit}%</span>}</td>
+                    <td>{fit == null ? "—" : <span className={`ga-badge ${fit >= 75 ? "ga-badge--green" : "ga-badge--orange"}`}>{fit}%</span>}</td>
                     <td>
                       {invited.includes(key) ? (
                         <span className="db-done">✓ Invited</span>
@@ -157,7 +157,7 @@ export default function DiscoveryBrief() {
           }}
         />
       )}
-      {toast && <div className="ad-toast">✓ {toast}</div>}
+      {toast && <div className="ga-toast">✓ {toast}</div>}
 
       <style>{`
         .db-empty, .db-chips { margin-top: 14px; font-size: 12.5px; color: var(--ad-muted); }
@@ -170,10 +170,10 @@ export default function DiscoveryBrief() {
         .db-ideas button { height: 26px; padding: 0 10px; border: 0; border-radius: 13.3px; background: var(--ad-soft); color: #7a8398; font-size: 11px; font-weight: 700; }
         .db-ideas button:hover { background: var(--ad-lilac); color: #6857ec; }
         .db-table { margin-top: 20px; overflow-x: auto; }
-        .db-table .ad-table th { background: transparent; padding: 12px 11px; }
-        .db-table .ad-table td { height: 67.5px; padding: 14px 11px; }
-        .db-table .ad-table th:nth-child(2) { width: 40%; }
-        .db-table .ad-table th:nth-child(3) { width: 16%; }
+        .db-table .ga-table th { background: transparent; padding: 12px 11px; }
+        .db-table .ga-table td { height: 67.5px; padding: 14px 11px; }
+        .db-table .ga-table th:nth-child(2) { width: 40%; }
+        .db-table .ga-table th:nth-child(3) { width: 16%; }
         .db-name { display: block; font-weight: 800; }
         .db-name:hover { color: var(--ad-primary); }
         .db-handle { display: block; margin-top: 4px; font-size: 11px; font-weight: 500; color: #9aa1b3; }
@@ -183,7 +183,7 @@ export default function DiscoveryBrief() {
           .db-card { padding: 18px 16px 20px; }
           .db-row { flex-direction: column; }
           .db-q { width: 100%; }
-          .db-table .ad-table th:nth-child(2), .db-table .ad-table td:nth-child(2), .db-table .ad-table th:nth-child(3), .db-table .ad-table td:nth-child(3) { display: none; }
+          .db-table .ga-table th:nth-child(2), .db-table .ga-table td:nth-child(2), .db-table .ga-table th:nth-child(3), .db-table .ga-table td:nth-child(3) { display: none; }
         }
       `}</style>
     </AdminShell>

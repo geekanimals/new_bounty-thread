@@ -104,14 +104,14 @@ export default function WhatsAppBot() {
         </p>
       )}
       <div className="mb-grid">
-        <section className="ad-card mb-card">
+        <section className="ga-card mb-card">
           <div className="mb-top">
             <div>
-              <h2 className="ad-h2">🤖 WhatsApp help bot</h2>
+              <h2 className="ga-h2">🤖 WhatsApp help bot</h2>
               <p className="mb-sub">Answers creators on WhatsApp from their live data — campaign, step, deadline, courier, profile.</p>
             </div>
-            <span className={`ad-badge ${bot ? "ad-badge--green" : ""}`}>{loading ? "…" : bot ? "ON" : "OFF"}</span>
-            <button type="button" className={`ad-btn ${bot ? "ad-btn--ghost" : "ad-btn--primary"} mb-turn`} onClick={toggleBot} disabled={loading || !!error}>
+            <span className={`ga-badge ${bot ? "ga-badge--green" : ""}`}>{loading ? "…" : bot ? "ON" : "OFF"}</span>
+            <button type="button" className={`ga-btn ${bot ? "ga-btn--ghost" : "ga-btn--primary"} mb-turn`} onClick={toggleBot} disabled={loading || !!error}>
               {bot ? "Turn bot off" : "Turn bot on"}
             </button>
           </div>
@@ -119,7 +119,7 @@ export default function WhatsAppBot() {
             <div className="mb-ask">
               Turn the WhatsApp bot on? It will auto-reply to creators who message your snapto number, when the team hasn’t replied.
               <div className="mb-ask__b">
-                <button type="button" className="ad-btn ad-btn--primary ad-btn--sm" onClick={toggleBot}>
+                <button type="button" className="ga-btn ga-btn--primary ga-btn--sm" onClick={toggleBot}>
                   Yes, turn on
                 </button>
                 <button type="button" className="mb-link" onClick={() => setAskOn(false)}>
@@ -138,14 +138,14 @@ export default function WhatsAppBot() {
           <h3 className="mb-h3 mb-rules-h">Rules</h3>
           <div className="mb-rules">
             <button type="button" className="mb-rule" onClick={() => save({ p_pause_hours: quiet ? 0 : 12 }, quiet ? "Bot keeps replying after the team" : "Bot stays quiet after a team reply ✓")} aria-pressed={quiet} disabled={loading}>
-              <i className={`ad-toggle ${quiet ? "is-on" : ""}`} />
+              <i className={`ga-toggle ${quiet ? "is-on" : ""}`} />
               <span>
                 <strong>Stay quiet when the team replies</strong>
                 <small>{quiet ? `for ${S.team_pause_hours} h · from snapto or the app` : "from snapto or the app"}</small>
               </span>
             </button>
             <button type="button" className="mb-rule" onClick={() => save({ p_delay: delay ? 0 : 1 }, delay ? "Bot replies right away" : "Bot waits a minute before replying ✓")} aria-pressed={delay} disabled={loading}>
-              <i className={`ad-toggle ${delay ? "is-on" : ""}`} />
+              <i className={`ga-toggle ${delay ? "is-on" : ""}`} />
               <span>
                 <strong>Reply after</strong>
                 <small>{delay ? `${S.reply_delay_min} min` : "right away"}</small>
@@ -154,9 +154,9 @@ export default function WhatsAppBot() {
           </div>
         </section>
 
-        <section className="ad-card mb-card mb-side">
+        <section className="ga-card mb-card mb-side">
           <div className="mb-side__head">
-            <h2 className="ad-h2">Recent replies</h2>
+            <h2 className="ga-h2">Recent replies</h2>
             <button type="button" className="mb-link" onClick={() => setSees(!sees)}>
               {sees ? "Hide data" : "What the bot sees"}
             </button>
@@ -164,8 +164,8 @@ export default function WhatsAppBot() {
           {sees && (
             <div className="mb-seebox">
               <form className="mb-pause" onSubmit={check}>
-                <input className="ad-input" inputMode="tel" placeholder="+91… creator’s WhatsApp" value={seeNum} onChange={(e) => setSeeNum(e.target.value)} aria-label="Creator WhatsApp number" />
-                <button type="submit" className="ad-btn ad-btn--primary">
+                <input className="ga-input" inputMode="tel" placeholder="+91… creator’s WhatsApp" value={seeNum} onChange={(e) => setSeeNum(e.target.value)} aria-label="Creator WhatsApp number" />
+                <button type="submit" className="ga-btn ga-btn--primary">
                   Check
                 </button>
               </form>
@@ -203,8 +203,8 @@ export default function WhatsAppBot() {
           )}
           {pause ? (
             <form className="mb-pause" onSubmit={doPause}>
-              <input className="ad-input" inputMode="tel" placeholder="+91 98765 43210" value={num} onChange={(e) => setNum(e.target.value)} aria-label="WhatsApp number" autoFocus />
-              <button type="submit" className="ad-btn ad-btn--primary">
+              <input className="ga-input" inputMode="tel" placeholder="+91 98765 43210" value={num} onChange={(e) => setNum(e.target.value)} aria-label="WhatsApp number" autoFocus />
+              <button type="submit" className="ga-btn ga-btn--primary">
                 Pause
               </button>
             </form>
@@ -215,7 +215,7 @@ export default function WhatsAppBot() {
           )}
         </section>
       </div>
-      {toast && <div className="ad-toast">{toast}</div>}
+      {toast && <div className="ga-toast">{toast}</div>}
       <style>{`
         .mb-err { margin: 0 0 14px; font-size: 13px; color: var(--ad-red); }
         .mb-err button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
@@ -229,7 +229,7 @@ export default function WhatsAppBot() {
         .mb-card { padding: 24px 22px 22px; min-width: 0; }
         .mb-top { display: flex; align-items: flex-start; gap: 10px; }
         .mb-top > div { flex: 1; min-width: 0; }
-        .mb-top .ad-badge { margin-top: 17px; height: 26px; }
+        .mb-top .ga-badge { margin-top: 17px; height: 26px; }
         .mb-turn { flex-shrink: 0; width: 88px; height: 59px; padding: 0 18px; white-space: normal; line-height: 1.3; }
         .mb-sub { margin-top: 9px; font-size: 12px; line-height: 1.33; color: var(--ad-muted); }
         .mb-h3 { margin-top: 18px; font-family: var(--ad-sans); font-size: 16.4px; font-weight: 700; color: var(--ad-ink); }
@@ -244,12 +244,12 @@ export default function WhatsAppBot() {
         .mb-rule strong { display: block; font-family: var(--ad-head); font-size: 23px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.37; color: var(--ad-ink); }
         .mb-rule small { display: block; margin-top: 3px; font-size: 12px; color: var(--ad-muted); }
         .mb-side__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 30px; }
-        .mb-side__head .ad-h2 { margin-top: 8px; }
+        .mb-side__head .ga-h2 { margin-top: 8px; }
         .mb-link { border: 0; background: none; padding: 0; font-size: 14px; font-weight: 800; color: #6657e9; }
         .mb-link:hover { color: var(--ad-primary-2); }
         .mb-pause-btn { margin-top: 30px; }
         .mb-pause { display: flex; gap: 8px; margin-top: 18px; }
-        .mb-pause .ad-btn { flex-shrink: 0; }
+        .mb-pause .ga-btn { flex-shrink: 0; }
         .mb-paused { margin-top: 14px; font-size: 12px; color: var(--ad-orange); }
         .mb-sees { margin: -14px 0 18px; padding: 12px 14px; border-radius: 12px; background: var(--ad-soft-2); font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.6; color: var(--ad-text); white-space: pre-wrap; }
         .mb-side .pt-wrap { overflow-x: hidden; }
@@ -258,7 +258,7 @@ export default function WhatsAppBot() {
         @media (max-width: 640px) {
           .mb-card { padding: 18px 16px; }
           .mb-top { flex-wrap: wrap; }
-          .mb-top .ad-badge { margin-top: 0; }
+          .mb-top .ga-badge { margin-top: 0; }
           .mb-turn { width: auto; height: 40px; margin-left: auto; }
           .mb-rules { grid-template-columns: 1fr; }
           .mb-rule { min-height: 0; }

@@ -65,10 +65,10 @@ export default function CampaignMessages() {
         actions={
           data && (
             <div className="mt-pills">
-              <Link href="/admin/settings/auto-messages" className={`ad-badge ${sw.wa_global && sw.wa ? "ad-badge--green" : ""}`}>
+              <Link href="/admin/settings/auto-messages" className={`ga-badge ${sw.wa_global && sw.wa ? "ga-badge--green" : ""}`}>
                 {pill(sw.wa_global, sw.wa, "WhatsApp")}
               </Link>
-              <Link href="/admin/settings/auto-messages" className={`ad-badge ${sw.email_global && sw.email ? "ad-badge--green" : ""}`}>
+              <Link href="/admin/settings/auto-messages" className={`ga-badge ${sw.email_global && sw.email ? "ga-badge--green" : ""}`}>
                 {pill(sw.email_global, sw.email, "Email")}
               </Link>
             </div>
@@ -107,13 +107,13 @@ export default function CampaignMessages() {
 
       <style>{`
         .mt-pills { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 0; }
-        .mt-pills .ad-badge { height: 26px; }
-        .mt-pills .ad-badge:hover { background: var(--ad-lilac); color: var(--ad-primary); }
+        .mt-pills .ga-badge { height: 26px; }
+        .mt-pills .ga-badge:hover { background: var(--ad-lilac); color: var(--ad-primary); }
         .mt-t { margin-top: 23px; }
         .mt-row { cursor: pointer; }
         .mt-row:hover td { background: var(--ad-soft-2); }
         .mt-row td { height: 57px; padding-top: 8px; padding-bottom: 8px; }
-        .mt-row .ad-badge { margin-left: 4px; height: 24px; }
+        .mt-row .ga-badge { margin-left: 4px; height: 24px; }
         .mt-row td.mt-sub { font-size: 12px; color: var(--ad-muted); }
         .mt-row td.mt-ck { font-size: 13px; color: var(--ad-ink); }
         .mt-open td { padding: 0 11px 16px; white-space: normal; }
@@ -144,7 +144,7 @@ function Row({ n, p, open, busy, onToggle, onSubmit, onCopy }) {
         </td>
         <td>
           {w.template || "—"}
-          <span className={`ad-badge ad-badge--${tone}`}>{label}</span>
+          <span className={`ga-badge ga-badge--${tone}`}>{label}</span>
         </td>
         <td className="mt-sub">{e.subject || "—"}</td>
         <td className="mt-ck">{a.title ? "✓" : "—"}</td>
@@ -177,7 +177,7 @@ function Row({ n, p, open, busy, onToggle, onSubmit, onCopy }) {
                   {canSubmit && (
                     <button
                       type="button"
-                      className="ad-btn ad-btn--primary ad-btn--sm"
+                      className="ga-btn ga-btn--primary ga-btn--sm"
                       disabled={busy === w.template}
                       onClick={(ev) => {
                         ev.stopPropagation();
@@ -190,7 +190,7 @@ function Row({ n, p, open, busy, onToggle, onSubmit, onCopy }) {
                   {w.text && (
                     <button
                       type="button"
-                      className="ad-btn ad-btn--ghost ad-btn--sm"
+                      className="ga-btn ga-btn--ghost ga-btn--sm"
                       onClick={(ev) => {
                         ev.stopPropagation();
                         onCopy(String(w.text));
