@@ -27,7 +27,9 @@ const nextConfig = {
   // Cache Components (Next 16 ka strict mode) by default BAND hai — isse har [id]/[slug] page par build
   // "Suspense boundary" error deta tha. Band rehne par sab pages normal chalte hain, code baar baar nahi badalna padta.
   // Kabhi chalu karna ho to env mein NEXT_CACHE_COMPONENTS=1 daal do.
-  ...(STRICT ? { cacheComponents: true, partialPrefetching: true } : {}),
+  // Explicit false zaroori hai: value na likho to Vercel ka build env ise apne aap chalu kar deta hai.
+  cacheComponents: STRICT,
+  partialPrefetching: STRICT,
 
   async redirects() {
     return [
