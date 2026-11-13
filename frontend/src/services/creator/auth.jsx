@@ -16,6 +16,7 @@
 import { useEffect, useState } from "react";
 import { DOOR, sb, call, api, fn, K, ls } from "./core";
 import { buildReq } from "./helpers";
+import { clearRpcCache } from "@/lib/supabase";
 
 /* ---------- Store (har component mein ek hi creator state) ---------- */
 const EMPTY = {
@@ -236,6 +237,7 @@ export async function signOut() {
   // pehle UI ka state turant "logged out" — taaki koi guard purane login par aage na bheje
   state = { ...EMPTY, ready: true };
   emit();
+  clearRpcCache(DOOR);
   try {
     await sb().auth.signOut({ scope: "local" });
   } catch {

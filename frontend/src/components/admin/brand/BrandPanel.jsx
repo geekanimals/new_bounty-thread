@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import BrandCrm from "@/components/admin/brand/BrandCrm";
 import Drawer from "@/components/admin/brand/Drawer";
@@ -21,7 +21,20 @@ export const STATUS = { active: "Active client", lead: "Lead", paused: "Paused",
  * Har tab apna route: /admin/brands/[id]/{overview,campaigns,creators,notes,logins,billing}
  * children = JSX ya function ({ d, b, reload }) => JSX
  */
-export default function BrandPanel({ id, children }) {
+export default function BrandPanel({ children }) {
+  // Tab page ka hissa — data layout wale panel se aata hai (panel tab badalne par dobara nahi banta)
+  const ctx = useContext(BrandCtx);
+  if (!ctx) return null;
+  return typeof children === "function" ? children(ctx) : children;
+}
+
+/** /admin/brands/[id]/layout — shell + brand list + drawer ek hi baar banta hai, tab route badalne par sirf andar ka hissa badalta hai */
+export function BrandPanelFrame({ children }) {
+  const { id } = useParams();
+  return <PanelFrame id={id}>{children}</PanelFrame>;
+}
+
+function PanelFrame({ id, children }) {
   const pathname = usePathname() || "";
   const { data: d, error, loading, reload } = useRpc("admin", "api.brand_detail", { p_brand: id }, { skip: !id || id === "sample" });
   const b = d?.brand || {};
@@ -101,7 +114,7 @@ export default function BrandPanel({ id, children }) {
               </button>
             </p>
           ) : ctx ? (
-            <BrandCtx.Provider value={ctx}>{typeof children === "function" ? children(ctx) : children}</BrandCtx.Provider>
+            <BrandCtx.Provider value={ctx}>{children}</BrandCtx.Provider>
           ) : null}
         </div>
       </Drawer>

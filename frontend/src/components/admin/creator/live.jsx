@@ -104,12 +104,43 @@ export function rowOf(c) {
 
 const since = (t) => (t ? (Date.now() - new Date(t).getTime()) / 864e5 : Infinity);
 /** List page ke search (naam, @handle, city, niche, phone…) — purane filteredCreators jaisa */
-export const matchQ = (c, q) =>
-  !q ||
-  [c.name, c.ig_username, (c.ig_accounts || []).map((a) => a.username).join(" "), c.city, c.state, c.whatsapp, c.email, (c.categories || []).join(" "), (c.skills || []).join(" ")]
-    .join(" ")
-    .toLowerCase()
-    .includes(q.toLowerCase());
+/* creator ki har value (naam, @handle, sab Instagram accounts, phone, email, city, state, category, skills, language, gender…) ek text mein */
+const flatText = (v, out = [], d = 0) => {
+  if (v == null || d > 3) return out;
+  if (typeof v === "string" || typeof v === "number") out.push(String(v));
+  else if (Array.isArray(v)) v.forEach((x) => flatText(x, out, d + 1));
+  else if (typeof v === "object") Object.values(v).forEach((x) => flatText(x, out, d + 1));
+  return out;
+};
+const HAY = new WeakMap();
+const hayOf = (c) => {
+  let h = HAY.get(c);
+  if (!h) {
+    const txt = flatText(c).join(" ").toLowerCase();
+    h = { txt, digits: txt.replace(/\D/g, "") };
+    HAY.set(c, h);
+  }
+  return h;
+};
+/**
+ * Creator search — kuch bhi likho: naam, @handle, phone (+91 / space ke saath bhi), email, city, category…
+ * Kai shabd likhe to sab match hone chahiye ("food bengaluru" = Bengaluru ke food creators).
+ */
+export const matchQ = (c, q) => {
+  const words = String(q || "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const h = hayOf(c);
+  // poora number space/+91 ke saath likha ho to bhi
+  const qd = String(q).replace(/\D/g, "");
+  if (qd.length >= 6 && h.digits.includes(qd.slice(-10))) return true;
+  return words.every((w) => {
+    const t = w.replace(/^@/, "");
+    if (!t) return true;
+    if (h.txt.includes(t)) return true;
+    const d = t.replace(/\D/g, "");
+    return d.length >= 4 && d.length === t.replace(/[\s+\-()]/g, "").length && h.digits.includes(d);
+  });
+};
 
 /* Cards page ke 12 filters — Figma ke labels, purane app ke rules */
 export const CARD_FILTERS = [

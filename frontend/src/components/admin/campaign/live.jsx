@@ -194,31 +194,40 @@ export const initials = (n = "") =>
  * se campaign ka naam lekar uski legacy row dhundhte hain. c.id hamesha legacy id hota hai (status / delete / edit isi se).
  * api.* RPC dono id lete hain, isliye unhe URL wala id dena theek hai.
  */
+/* campaign row ka memory cache — workspace ke tab badalne par title turant dikhe ("Loading campaign…" flash nahi) */
+const CAMP_CACHE = new Map();
 export function useCampaign(id) {
-  const [st, setSt] = useState({ c: null, loading: true, error: null });
+  const [st, setSt] = useState(() => (CAMP_CACHE.has(id) ? { c: CAMP_CACHE.get(id), loading: false, error: null } : { c: null, loading: true, error: null }));
   const load = useCallback(async () => {
-    if (!id || id === "sample") return setSt({ c: null, loading: false, error: id === "sample" ? null : { message: "No campaign" } });
-    const sb = sbFor("admin");
-    const { data, error } = await sb.from("campaigns").select("*").eq("id", id).maybeSingle();
-    if (data) return setSt({ c: data, loading: false, error: null });
-    // intel campaign_id → legacy row (naam + brand se)
-    const { data: bt } = await sb.schema("api").rpc("barter_tracker", { p_campaign: id });
-    const ic = bt && bt.campaign;
-    if (ic && ic.name) {
-      let q = sb.from("campaigns").select("*").eq("name", ic.name);
-      if (ic.brand) q = q.eq("brand", ic.brand);
-      const { data: rows } = await q.order("created_at", { ascending: false }).limit(1);
-      const row = Array.isArray(rows) ? rows[0] : rows;
-      if (row) return setSt({ c: row, loading: false, error: null });
-      // legacy row nahi mili — intel campaign se jitna pata hai utna dikhao (status/delete legacy id ke bina nahi chalte)
-      return setSt({ c: { id: null, intel_id: ic.campaign_id, name: ic.name, brand: ic.brand, status: ic.status === "active" ? "Live" : ic.status, start_date: ic.starts_on, end_date: ic.ends_on, intelOnly: true }, loading: false, error: null });
-    }
-    setSt({ c: null, loading: false, error: error || { message: "Couldn't open this campaign." } });
+    const r = await loadCampaign(id);
+    if (r.c) CAMP_CACHE.set(id, r.c);
+    setSt(r);
   }, [id]);
   useEffect(() => {
     load();
   }, [load]);
   return { ...st, reload: load };
+}
+
+/** campaigns row (id = public.campaigns.id YA intel campaign_id) → { c, loading, error } */
+async function loadCampaign(id) {
+  if (!id || id === "sample") return ({ c: null, loading: false, error: id === "sample" ? null : { message: "No campaign" } });
+  const sb = sbFor("admin");
+  const { data, error } = await sb.from("campaigns").select("*").eq("id", id).maybeSingle();
+  if (data) return ({ c: data, loading: false, error: null });
+  // intel campaign_id → legacy row (naam + brand se)
+  const { data: bt } = await sb.schema("api").rpc("barter_tracker", { p_campaign: id });
+  const ic = bt && bt.campaign;
+  if (ic && ic.name) {
+    let q = sb.from("campaigns").select("*").eq("name", ic.name);
+    if (ic.brand) q = q.eq("brand", ic.brand);
+    const { data: rows } = await q.order("created_at", { ascending: false }).limit(1);
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    if (row) return ({ c: row, loading: false, error: null });
+    // legacy row nahi mili — intel campaign se jitna pata hai utna dikhao (status/delete legacy id ke bina nahi chalte)
+    return ({ c: { id: null, intel_id: ic.campaign_id, name: ic.name, brand: ic.brand, status: ic.status === "active" ? "Live" : ic.status, start_date: ic.starts_on, end_date: ic.ends_on, intelOnly: true }, loading: false, error: null });
+  }
+  return ({ c: null, loading: false, error: error || { message: "Couldn't open this campaign." } });
 }
 
 /** Chhota toast hook — const [toast, say] = useToast(); say("Saved ✓") */

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import CreatorCards from "@/app/admin/creators/cards/page";
 import { useCreatorProfile, profileView, useMsgPause, agoTxt, uaShort } from "@/components/admin/creator/live";
 import { rpc, useRpc, errText } from "@/lib/supabase";
@@ -21,7 +21,27 @@ export const CP_TABS = [
  * Har tab apna route: /admin/creators/[id]/<tab>. Band karo → wapas cards.
  * Data: admin_creator_profile (purane app ka Creator 360) — id = member id.
  */
-export default function CreatorDrawer({ id, tab, children }) {
+const CreatorCtx = createContext(null);
+
+/**
+ * Tab page ke andar: drawer (layout) se creator ka data leta hai — `{(p) => …}` children.
+ * Drawer ab layout mein ek hi baar bana rehta hai, isliye tab badalne par flash / "Loading creator…" nahi aata.
+ */
+export default function CreatorDrawer({ children }) {
+  const p = useContext(CreatorCtx);
+  if (!p) return null;
+  return typeof children === "function" ? children(p) : children;
+}
+
+/** /admin/creators/[id]/layout — drawer frame, tab route badalne par bhi mounted rehta hai */
+export function CreatorDrawerFrame({ children }) {
+  const { id } = useParams();
+  const seg = (usePathname() || "").split("/")[4] || "profile";
+  const tab = CP_TABS.some((t) => t.k === seg) ? seg : "profile";
+  return <DrawerFrame id={id} tab={tab}>{children}</DrawerFrame>;
+}
+
+function DrawerFrame({ id, tab, children }) {
   const router = useRouter();
   const { data, error, loading, reload } = useCreatorProfile(id);
   const p = profileView(id, data);
@@ -103,7 +123,7 @@ export default function CreatorDrawer({ id, tab, children }) {
             )}
           </aside>
         </div>
-        <style>{`.cdw-state { padding: 40px 0; font-size: 14px; color: var(--ad-muted); }`}</style>
+        <style>{DRAWER_CSS + `.cdw-state { padding: 40px 0; font-size: 14px; color: var(--ad-muted); }`}</style>
       </>
     );
   }
@@ -163,7 +183,9 @@ export default function CreatorDrawer({ id, tab, children }) {
             ))}
           </nav>
 
-          <div className="cdw-body">{typeof children === "function" ? children(p) : children}</div>
+          <div className="cdw-body">
+            <CreatorCtx.Provider value={p}>{children}</CreatorCtx.Provider>
+          </div>
           <p className="cdw-priv">🔒 Private data — this view is recorded in the audit log.</p>
         </aside>
       </div>
@@ -194,7 +216,12 @@ export default function CreatorDrawer({ id, tab, children }) {
       )}
       {toast && <div className="ga-toast" style={{ zIndex: 140 }}>✓ {toast}</div>}
 
-      <style>{`
+      <style>{DRAWER_CSS}</style>
+    </>
+  );
+}
+
+const DRAWER_CSS = `
         .cdw-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(20,33,59,.42); animation: adFade .15s ease; }
         .cdw {
           position: absolute; right: 0; top: 0; bottom: 0; width: min(820px, 100%); overflow-y: auto; padding: 30px 30px 40px;
@@ -237,7 +264,4 @@ export default function CreatorDrawer({ id, tab, children }) {
           .cdw-tabs { margin: 12px -16px 0; padding: 0 16px; }
           .cdw-body { margin-top: 22px; }
         }
-      `}</style>
-    </>
-  );
-}
+      `;

@@ -85,7 +85,7 @@ export default function AdminCreatorCards({ snapshot = false }) {
         </div>
 
         <div className="cc2-row">
-          <input className="ga-input cc2-search" placeholder="Name, @handle, phone, city…" value={q} onChange={(e) => (setQ(e.target.value), setPage(0))} aria-label="Search creators" />
+          <input className="ga-input cc2-search" placeholder="Name, @handle, phone, email, city, category…" value={q} onChange={(e) => (setQ(e.target.value), setPage(0))} aria-label="Search creators" />
           <select className="ga-input cc2-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
             {Object.keys(CARD_SORTS).map((o) => (
               <option key={o}>{o}</option>

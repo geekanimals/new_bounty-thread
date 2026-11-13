@@ -119,7 +119,19 @@ export function errText(e) {
   if (!e) return "";
   const m = String(e.message || e);
   if (/failed to fetch|network/i.test(m)) return "No internet connection — please try again.";
+  // Database ki technical lines user ko seedhi na dikhen
+  if (/invalid input syntax for type uuid/i.test(m)) return "This link isn't valid — we couldn't find that item.";
+  if (/jwt expired|invalid jwt|not authenticated/i.test(m)) return "Your session has ended — please sign in again.";
+  if (/permission denied|row-level security/i.test(m)) return "You don't have access to this.";
+  if (/function .* does not exist|could not find the function/i.test(m)) return "This feature isn't available right now.";
   return m;
+}
+
+/* useRpc ka memory cache (sirf is browser tab mein, refresh par khali) — door|fn|args → data */
+const RPC_CACHE = new Map();
+/** Is door ka cache saaf (logout par — doosre user ko pichla data na dikhe) */
+export function clearRpcCache(door) {
+  for (const k of [...RPC_CACHE.keys()]) if (!door || k.startsWith(door + "|")) RPC_CACHE.delete(k);
 }
 
 /**
@@ -128,18 +140,21 @@ export function errText(e) {
  * args badalte hi dobara load. `skip: true` = abhi mat chalao.
  */
 export function useRpc(door, fn, args = {}, { skip = false, refreshMs = 0 } = {}) {
-  const [st, setSt] = useState({ data: null, error: null, loading: !skip });
   const key = JSON.stringify(args);
+  const ck = `${door}|${fn}|${key}`;
+  // Pichli baar ka data turant dikhao (tab / page wapas khulne par "Loading…" flash nahi), phir chupchaap naya laao
+  const [st, setSt] = useState(() => (!skip && RPC_CACHE.has(ck) ? { data: RPC_CACHE.get(ck), error: null, loading: false } : { data: null, error: null, loading: !skip }));
   const alive = useRef(true);
   const load = useCallback(
     async (quiet = false) => {
       if (skip) return;
-      if (!quiet) setSt((s) => ({ ...s, loading: true }));
+      if (!quiet) setSt((s) => (RPC_CACHE.has(ck) ? { data: RPC_CACHE.get(ck), error: null, loading: false } : { ...s, loading: true }));
       const r = await rpc(door, fn, JSON.parse(key));
+      if (!r.error) RPC_CACHE.set(ck, r.data);
       if (alive.current) setSt({ data: r.data, error: r.error, loading: false });
       return r;
     },
-    [door, fn, key, skip]
+    [door, fn, key, ck, skip]
   );
   useEffect(() => {
     alive.current = true;
@@ -156,6 +171,7 @@ export function useRpc(door, fn, args = {}, { skip = false, refreshMs = 0 } = {}
 
 /** Logout sirf IS door ka, sirf is browser mein (purane jaisa "local") */
 export async function signOutDoor(door) {
+  clearRpcCache(door);
   try {
     await sbFor(door).auth.signOut({ scope: "local" });
   } catch {

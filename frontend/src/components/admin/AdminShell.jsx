@@ -6,9 +6,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext } from "react";
 import { adminCheck, adminSignOut } from "@/lib/adminAuth";
 import { useRpc } from "@/lib/supabase";
+import { matchQ } from "@/components/admin/creator/live";
 import OwnerAgent from "@/components/admin/OwnerAgent";
 
 /* Login kiye admin ki info — kisi bhi page mein: const me = useAdmin(); me.name */
+/* is browser tab mein admin ka login (naam/email) — page badalne par turant dikhe */
+let ME = null;
 const AdminCtx = createContext({ name: "", email: "" });
 export const useAdmin = () => useContext(AdminCtx);
 
@@ -72,17 +75,28 @@ export default function AdminShell({ children, wide = false }) {
 
   // Login check — bina login ke koi admin page nahi khulega, seedha /admin (login) par
   // (Supabase session + is_platform_admin — purane app jaisa)
-  const [me, setMe] = useState(null);
+  // ME: pichle page ka login check yaad — har page badalne par khali screen flash nahi (check peeche chalta rehta hai)
+  const [me, setMe] = useState(() => ME);
   useEffect(() => {
     let alive = true;
     adminCheck()
       .then((r) => {
         if (!alive) return;
-        if (r.ok) setMe({ name: r.name, email: r.email });
-        else router.replace("/admin");
+        if (r.ok) setMe((ME = { name: r.name, email: r.email }));
+        else {
+          ME = null;
+          router.replace("/admin");
+        }
       })
-      .catch(() => alive && router.replace("/admin"));
-    const expired = (e) => e.detail?.door === "admin" && router.replace("/admin");
+      .catch(() => {
+        ME = null;
+        if (alive) router.replace("/admin");
+      });
+    const expired = (e) => {
+      if (e.detail?.door !== "admin") return;
+      ME = null;
+      router.replace("/admin");
+    };
     window.addEventListener("geek-session-expired", expired);
     return () => {
       alive = false;
@@ -134,10 +148,36 @@ export default function AdminShell({ children, wide = false }) {
     };
   }, [panel]);
 
-  const results = useMemo(() => ALL.filter((i) => i.label.toLowerCase().includes(q.toLowerCase())), [q]);
+  // ⌘K: pages + creators (naam / @handle / phone / email / city / category…) + campaigns + brands — sab Supabase se
+  const searchOn = panel === "search" && authed;
+  const sCr = useRpc("admin", "admin_creators", {}, { skip: !searchOn });
+  const sCp = useRpc("admin", "admin_campaigns", { p_status: null }, { skip: !searchOn });
+  const sBr = useRpc("admin", "api.brand_list", { p_q: null }, { skip: !searchOn });
+  const results = useMemo(() => {
+    const t = q.trim();
+    const lc = t.toLowerCase();
+    const pages = ALL.filter((i) => i.label.toLowerCase().includes(lc));
+    if (t.length < 2) return pages;
+    const has = (arr) => arr.filter(Boolean).join(" ").toLowerCase().includes(lc);
+    const cr = (Array.isArray(sCr.data) ? sCr.data : [])
+      .filter((c) => matchQ(c, t))
+      .slice(0, 8)
+      .map((c) => ({ href: `/admin/creators/${c.member_id}/profile`, icon: "👤", label: c.name || (c.ig_username ? "@" + c.ig_username : "Creator"), sub: [c.ig_username && "@" + c.ig_username, c.city, (c.categories || [])[0]].filter(Boolean).join(" · "), kind: "Creator" }));
+    const cp = (Array.isArray(sCp.data) ? sCp.data : [])
+      .filter((c) => has([c.name, c.brand, c.org_name]))
+      .slice(0, 6)
+      .map((c) => ({ href: `/admin/campaigns/${c.id}/overview`, icon: "📣", label: c.name || "Campaign", sub: [c.brand || c.org_name, c.status].filter(Boolean).join(" · "), kind: "Campaign" }));
+    const br = (Array.isArray(sBr.data) ? sBr.data : [])
+      .filter((b) => has([b.name, b.category, b.website, b.instagram]))
+      .slice(0, 5)
+      .map((b) => ({ href: `/admin/brands/${b.brand_id || b.id}/overview`, icon: "🏢", label: b.name || "Brand", sub: b.category || "", kind: "Brand" }));
+    return [...pages, ...cr, ...cp, ...br];
+  }, [q, sCr.data, sCp.data, sBr.data]);
+  const searching = searchOn && q.trim().length >= 2 && (sCr.loading || sCp.loading || sBr.loading);
 
 
   const signOut = async () => {
+    ME = null;
     await adminSignOut();
     router.replace("/admin");
   };
@@ -307,20 +347,23 @@ export default function AdminShell({ children, wide = false }) {
                   e.preventDefault();
                   setQi((i) => Math.max(i - 1, 0));
                 }
-                if (e.key === "Enter" && results[qi]) router.push(results[qi].href);
+                if (e.key === "Enter" && results[qi]) (router.push(results[qi].href), setPanel(null));
               }}
-              placeholder="Jump to a page or search campaigns..."
+              placeholder="Search creators (name, @handle, phone…), campaigns, brands or pages"
               aria-label="Search"
             />
             <ul>
               {results.map((r, i) => (
                 <li key={r.href}>
-                  <Link href={r.href} className={i === qi ? "is-on" : ""} onMouseEnter={() => setQi(i)}>
-                    <span>{r.icon}</span> {r.label}
+                  <Link href={r.href} className={i === qi ? "is-on" : ""} onMouseEnter={() => setQi(i)} onClick={() => setPanel(null)}>
+                    <span>{r.icon}</span> <b className="as-cmd__lbl">{r.label}</b>
+                    {r.sub && <small className="as-cmd__sub">{r.sub}</small>}
+                    {r.kind && <em className="as-cmd__kind">{r.kind}</em>}
                   </Link>
                 </li>
               ))}
-              {!results.length && <li className="as-cmd__none">No page matches “{q}”</li>}
+              {searching && <li className="as-cmd__none">Searching creators, campaigns and brands…</li>}
+              {!results.length && !searching && <li className="as-cmd__none">Nothing matches “{q}”</li>}
             </ul>
           </div>
         </div>
@@ -386,7 +429,7 @@ export default function AdminShell({ children, wide = false }) {
         .as-main { margin-left: 246px; min-height: 100vh; display: flex; flex-direction: column; }
         .as-top {
           position: sticky; top: 0; z-index: 42; display: flex; align-items: center; gap: 14px;
-          height: 76px; padding: 0 36px; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--ad-line);
+          height: 76px; padding: 0 36px; background: #fff; border-bottom: 1px solid var(--ad-line);
         }
                 .as-search {
           display: flex; align-items: center; gap: 10px; width: min(420px, 100%); height: 44px; padding: 0 16px;
@@ -429,6 +472,9 @@ export default function AdminShell({ children, wide = false }) {
         .as-cmd li a { display: flex; align-items: center; gap: 4px; height: 44.6px; padding: 0 14px; border-radius: 10px; font-size: 14px; color: var(--ad-ink); }
         .as-cmd li a span { width: 18px; text-align: center; }
         .as-cmd li a.is-on { background: var(--ad-soft-2); }
+        .as-cmd__lbl { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .as-cmd__sub { flex: 1; min-width: 0; margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ad-muted); }
+        .as-cmd__kind { margin-left: auto; flex-shrink: 0; padding: 2px 8px; border-radius: 20px; background: var(--ad-soft); font-style: normal; font-size: 11px; font-weight: 700; color: var(--ad-muted-2); }
         .as-cmd__none { padding: 16px 14px; font-size: 13px; color: var(--ad-muted); }
 
         /* Owner Agent (right panel) */

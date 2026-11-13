@@ -88,7 +88,7 @@ export default function AdminCreators() {
         <div className="cl-filters">
           <input
             className="ga-input cl-search"
-            placeholder="Search name, handle, niche or city…"
+            placeholder="Search name, @handle, phone, email, city, category…"
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
