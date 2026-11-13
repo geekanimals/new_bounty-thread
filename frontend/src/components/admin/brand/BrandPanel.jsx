@@ -18,7 +18,7 @@ export const STATUS = { active: "Active client", lead: "Lead", paused: "Paused",
 
 /**
  * Brand detail = Brand CRM ke upar right panel (Figma 065–070).
- * Har tab apna route: /admin/brands/[id]/{overview,campaigns,creators,notes,logins,billing}
+ * Har tab apna route: /vault/brands/[id]/{overview,campaigns,creators,notes,logins,billing}
  * children = JSX ya function ({ d, b, reload }) => JSX
  */
 export default function BrandPanel({ children }) {
@@ -28,7 +28,7 @@ export default function BrandPanel({ children }) {
   return typeof children === "function" ? children(ctx) : children;
 }
 
-/** /admin/brands/[id]/layout — shell + brand list + drawer ek hi baar banta hai, tab route badalne par sirf andar ka hissa badalta hai */
+/** /vault/brands/[id]/layout — shell + brand list + drawer ek hi baar banta hai, tab route badalne par sirf andar ka hissa badalta hai */
 export function BrandPanelFrame({ children }) {
   const { id } = useParams();
   return <PanelFrame id={id}>{children}</PanelFrame>;
@@ -41,7 +41,7 @@ function PanelFrame({ id, children }) {
   const T = d?.totals || {};
   const ctx = d ? { d, b, reload } : null;
 
-  const base = `/admin/brands/${id}`;
+  const base = `/vault/brands/${id}`;
   const seg = pathname.split("/")[4] || "overview";
   const n = (k) => (d ? (d[k] || []).length : "…");
   const tabs = [
@@ -59,7 +59,7 @@ function PanelFrame({ id, children }) {
   return (
     <AdminShell>
       <BrandCrm interactive={false} />
-      <Drawer closeHref="/admin/brands" label={`${name} brand`}>
+      <Drawer closeHref="/vault/brands" label={`${name} brand`}>
         <div className="bp-head">
           {b.logo_url ? (
             <img className="bp-av" src={b.logo_url} alt="" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
@@ -72,10 +72,10 @@ function PanelFrame({ id, children }) {
             {d && <span className={`ga-badge ${(b.status || "active") === "active" ? "ga-badge--green" : "ga-badge--orange"}`}>{STATUS[b.status] || "Active client"}</span>}
           </div>
           <div className="bp-head__act">
-            <Link href={`/admin/campaigns/new${b.name ? `?brand=${encodeURIComponent(b.name)}` : ""}`} className="ga-btn ga-btn--ghost">
+            <Link href={`/vault/campaigns/new${b.name ? `?brand=${encodeURIComponent(b.name)}` : ""}`} className="ga-btn ga-btn--ghost">
               ➕ Campaign
             </Link>
-            <Link href={`/admin/creator-upload${id ? `?brand=${id}` : ""}`} className="ga-btn ga-btn--ghost">
+            <Link href={`/vault/creator-upload${id ? `?brand=${id}` : ""}`} className="ga-btn ga-btn--ghost">
               📥 Upload creators
             </Link>
           </div>

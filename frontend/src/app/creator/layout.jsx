@@ -16,7 +16,7 @@ export const metadata = {
  * Yahan sirf colours (CSS variables) aur chhote common classes hain — har page ka
  * baaki CSS uski apni page.jsx mein hai.
  */
-export default function creatorLayout({ children }) {
+export default function CreatorLayout({ children }) {
   return (
     <div className={`bx ${fraunces.variable} ${dmSans.variable} ${jakarta.variable} ${cinzel.variable}`}>
       {children}

@@ -306,7 +306,7 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue ‚
       const r = await saveCampaign(draft.d, { draft: true });
       if (r.id && !draft.d.editId) {
         draft.set("editId", r.id);
-        router.replace(`/admin/campaigns/new/${STEPS[step].k}?edit=${r.id}`);
+        router.replace(`/vault/campaigns/new/${STEPS[step].k}?edit=${r.id}`);
       }
       setToast("‚úì Draft saved");
     } catch (e) {
@@ -326,13 +326,13 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue ‚
   const q = draft && draft.d.editId ? `?edit=${draft.d.editId}` : "";
   const go = async () => {
     if (onNext && (await onNext()) === false) return;
-    if (next) router.push(`/admin/campaigns/new/${next.k}${q}`);
+    if (next) router.push(`/vault/campaigns/new/${next.k}${q}`);
   };
 
   return (
     <AdminShell>
       <PageHead title={draft && draft.d.editId ? "Edit campaign" : "Create a campaign"} sub="A guided, reviewable process that replaces the long scrolling modal.">
-        <Link href="/admin/campaigns" className="ga-btn ga-btn--ghost nc-close">
+        <Link href="/vault/campaigns" className="ga-btn ga-btn--ghost nc-close">
           ‚úï Close
         </Link>
       </PageHead>
@@ -342,7 +342,7 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue ‚
           {STEPS.map((s, i) => (
             <li key={s.k} className={i === step ? "is-on" : i < step ? "is-done" : ""}>
               {i < step ? (
-                <Link href={`/admin/campaigns/new/${s.k}${q}`}>
+                <Link href={`/vault/campaigns/new/${s.k}${q}`}>
                   <span className="nc-dot">‚úì</span>
                   <span className="nc-steplabel">{s.label}</span>
                 </Link>
@@ -361,11 +361,11 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue ‚
 
         <div className="nc-foot">
           {prev ? (
-            <Link href={`/admin/campaigns/new/${prev.k}${q}`} className="ga-btn ga-btn--ghost nc-back">
+            <Link href={`/vault/campaigns/new/${prev.k}${q}`} className="ga-btn ga-btn--ghost nc-back">
               ‚Üê Back
             </Link>
           ) : (
-            <Link href="/admin/campaigns" className="ga-btn ga-btn--ghost nc-back">
+            <Link href="/vault/campaigns" className="ga-btn ga-btn--ghost nc-back">
               Cancel
             </Link>
           )}

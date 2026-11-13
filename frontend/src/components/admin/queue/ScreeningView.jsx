@@ -10,7 +10,7 @@ import QueueRecords from "@/components/admin/queue/QueueRecords";
 import { useRpc } from "@/lib/supabase";
 import { useToast, useReason, campId, typeLabel, StateBox } from "@/components/admin/queue/live";
 
-const BASE = "/admin/applications/screening";
+const BASE = "/vault/applications/screening";
 const TABS = ["Pending screening", "Shortlisted", "Approved"];
 const DECLINED = ["ineligible", "brand_declined", "dropped", "rejected"];
 /* tab → kaunse stage (purane APPLICANT_STAGE jaisa) */
@@ -126,7 +126,7 @@ export default function ScreeningView({ openId }) {
             <div className="sq-empty">
               <strong>{tab === "Approved" ? "No approvals yet" : "Nothing here yet"}</strong>
               <span>{tab === "Approved" ? "Approve creators from the full applications list." : "New applicants show up here."}</span>
-              <Link href="/admin/applications" className="sq-link">
+              <Link href="/vault/applications" className="sq-link">
                 Open all applications →
               </Link>
             </div>
@@ -145,11 +145,11 @@ export default function ScreeningView({ openId }) {
             why={`${open.reason}. Review campaign brief and evidence before making a decision.`}
             actions={
               <>
-                <Link href="/admin/applications" className="ga-btn ga-btn--primary">
+                <Link href="/vault/applications" className="ga-btn ga-btn--primary">
                   Open applications
                 </Link>
                 {open.cid && (
-                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
+                  <Link href={`/vault/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
                     Open campaign
                   </Link>
                 )}

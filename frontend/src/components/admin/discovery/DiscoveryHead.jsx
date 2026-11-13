@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { PageHead } from "@/components/admin/ui";
 
 const TABS = [
-  { href: "/admin/discovery", label: "🔎 Creator search" },
-  { href: "/admin/discovery/brief", label: "🎯 Match to a brief" },
-  { href: "/admin/discovery/hashtag", label: "#️⃣ Hashtag search" },
-  { href: "/admin/discovery/business", label: "📇 Business discovery" },
+  { href: "/vault/discovery", label: "🔎 Creator search" },
+  { href: "/vault/discovery/brief", label: "🎯 Match to a brief" },
+  { href: "/vault/discovery/hashtag", label: "#️⃣ Hashtag search" },
+  { href: "/vault/discovery/business", label: "📇 Business discovery" },
 ];
 
 /* Discovery ka heading + 4 tabs (har tab apna route) */

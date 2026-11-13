@@ -16,7 +16,6 @@ const OLD_PAGES = [
   ["/creater/:path*", "/creator/:path*"],
   ["/creators", "/creator"],
   ["/brand", "/brands"],
-  ["/superadmin", "/admin"],
 ];
 
 const STRICT = process.env.NEXT_CACHE_COMPONENTS === "1";

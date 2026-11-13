@@ -47,19 +47,19 @@ export function useConversations() {
 /** Messages ka header + WhatsApp / Instagram tabs */
 export function InboxHead() {
   const pathname = usePathname() || "";
-  const ig = pathname.startsWith("/admin/inbox/instagram");
+  const ig = pathname.startsWith("/vault/inbox/instagram");
   return (
     <>
       <PageHead title="Messages" sub="WhatsApp chats and Instagram DMs with creators — reply without leaving Geek OS.">
-        <Link href="/admin/inbox/new" className="ga-btn ga-btn--primary ih-new">
+        <Link href="/vault/inbox/new" className="ga-btn ga-btn--primary ih-new">
           + New
         </Link>
       </PageHead>
       <nav className="ih-tabs" aria-label="Inbox">
-        <Link href="/admin/inbox" className={`ga-tab ${!ig ? "is-on" : ""}`}>
+        <Link href="/vault/inbox" className={`ga-tab ${!ig ? "is-on" : ""}`}>
           💬 WhatsApp
         </Link>
-        <Link href="/admin/inbox/instagram" className={`ga-tab ${ig ? "is-on" : ""}`}>
+        <Link href="/vault/inbox/instagram" className={`ga-tab ${ig ? "is-on" : ""}`}>
           📸 Instagram DMs
         </Link>
       </nav>
@@ -76,7 +76,7 @@ export function InboxHead() {
 
 /**
  * WhatsApp inbox — list + chat.
- * Desktop: dono saath. Mobile: /admin/inbox par sirf list, /admin/inbox/chat/[id] par sirf chat (← Chats).
+ * Desktop: dono saath. Mobile: /vault/inbox par sirf list, /vault/inbox/chat/[id] par sirf chat (← Chats).
  */
 export default function Inbox({ chatId }) {
   const { list: all, names, loading, error, reload } = useConversations();
@@ -160,7 +160,7 @@ export default function Inbox({ chatId }) {
           {list.map((c) => {
             const w = whoOf(c, names);
             return (
-              <Link key={c.id} href={`/admin/inbox/chat/${c.id}`} className={`ib-row ${openId === c.id ? "is-on" : ""}`}>
+              <Link key={c.id} href={`/vault/inbox/chat/${c.id}`} className={`ib-row ${openId === c.id ? "is-on" : ""}`}>
                 <span className="ib-av">{/^[+\d\s]+$/.test(String(w.name || "")) ? "💬" : String(w.name).replace(/^[@+]/, "").slice(0, 1).toUpperCase() || "💬"}</span>
                 <span className="ib-row__main">
                   <span className="ib-row__t">
@@ -186,7 +186,7 @@ export default function Inbox({ chatId }) {
       </section>
 
       <section className="ga-card ib-chat">
-        <Link href="/admin/inbox" className="ib-back">
+        <Link href="/vault/inbox" className="ib-back">
           ← Chats
         </Link>
         {open ? (

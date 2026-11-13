@@ -30,7 +30,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" data-scroll-behavior="smooth" className={`${serif.variable} ${sans.variable}`}>
       <body>
-        {/* Suspense: dynamic routes (/kit/x, /admin/.../[id]) ka URL browser mein padha jata hai — build ke liye boundary zaroori */}
+        {/* Suspense: dynamic routes (/kit/x, /vault/.../[id]) ka URL browser mein padha jata hai — build ke liye boundary zaroori */}
         <Suspense fallback={null}>
           <SiteChrome>{children}</SiteChrome>
         </Suspense>

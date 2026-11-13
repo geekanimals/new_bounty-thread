@@ -19,7 +19,7 @@ export const CP_TABS = [
 
 /**
  * Creator profile — Figma mein right side drawer (820px) jo Creators (cards) page ke upar khulta hai.
- * Har tab apna route: /admin/creators/[id]/<tab>. Band karo → wapas cards.
+ * Har tab apna route: /vault/creators/[id]/<tab>. Band karo → wapas cards.
  * Data: admin_creator_profile (purane app ka Creator 360) — id = member id.
  */
 const CreatorCtx = createContext(null);
@@ -34,7 +34,7 @@ export default function CreatorDrawer({ children }) {
   return typeof children === "function" ? children(p) : children;
 }
 
-/** /admin/creators/[id]/layout — drawer frame, tab route badalne par bhi mounted rehta hai */
+/** /vault/creators/[id]/layout — drawer frame, tab route badalne par bhi mounted rehta hai */
 export function CreatorDrawerFrame({ children }) {
   const { id } = useParams();
   const seg = (usePathname() || "").split("/")[4] || "profile";
@@ -55,7 +55,7 @@ function DrawerFrame({ id, tab, children }) {
   const [busy, setBusy] = useState(false);
   const [delErr, setDelErr] = useState("");
   const [toast, setToast] = useState("");
-  const close = () => router.push("/admin/creators/cards");
+  const close = () => router.push("/vault/creators/cards");
 
   useEffect(() => {
     const k = (e) => e.key === "Escape" && !ask && close();
@@ -100,7 +100,7 @@ function DrawerFrame({ id, tab, children }) {
     setBusy(false);
     if (r.error) return setDelErr(errText(r.error));
     setAsk(false);
-    router.push("/admin/creators/cards");
+    router.push("/vault/creators/cards");
   };
 
   if (error || (loading && !data)) {
@@ -164,7 +164,7 @@ function DrawerFrame({ id, tab, children }) {
             <button type="button" className="cdw-txt" onClick={togglePause}>
               {paused ? "▶️ Resume messages" : "⏸️ Pause messages"}
             </button>
-            <Link href={`/admin/creators/${id}/activity`} className="cdw-live">
+            <Link href={`/vault/creators/${id}/activity`} className="cdw-live">
               {act?.last_seen ? "🟢" : "⚪"} {activeLine}
             </Link>
             <button type="button" className="cdw-txt" onClick={() => (setConfirmTxt(""), setDelErr(""), setAsk(true))}>
@@ -174,7 +174,7 @@ function DrawerFrame({ id, tab, children }) {
 
           <nav className="cdw-tabs" data-scroll>
             {CP_TABS.map((t) => (
-              <Link key={t.k} href={`/admin/creators/${id}/${t.k}`} className={`ga-tab ${tab === t.k ? "is-on" : ""}`}>
+              <Link key={t.k} href={`/vault/creators/${id}/${t.k}`} className={`ga-tab ${tab === t.k ? "is-on" : ""}`}>
                 {t.label}
               </Link>
             ))}

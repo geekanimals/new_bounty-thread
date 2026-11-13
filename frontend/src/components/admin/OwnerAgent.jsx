@@ -28,7 +28,7 @@ function answer(text) {
   if (/delete|hata|remove/.test(q))
     return {
       a: T("Campaign kholo → **🗑 Request delete** dabao aur wajah likho. Super Admin approve karega tab campaign delete hoga.", "Open the campaign → tap **🗑 Request delete** and add a reason. It's deleted once the Super Admin approves."),
-      href: "/admin/settings/delete-requests",
+      href: "/vault/settings/delete-requests",
     };
   if (/bulk|sheet|upload|excel|csv/.test(q))
     return {
@@ -36,19 +36,19 @@ function answer(text) {
         "Campaign kholo → **📥 Bulk upload creators**. Wahan sheet ka template aur guide hai — naam, WhatsApp, email, Instagram aur har creator ka **Status** (Invited · Approved · Contract signed · Address confirmed · Courier sent · Courier received), address aur courier bharo.",
         "Open the campaign → **📥 Bulk upload creators**. The sheet template and guide are there — name, WhatsApp, email, Instagram and each creator's **Status** (Invited · Approved · Contract signed · Address confirmed · Courier sent · Courier received), plus address and courier."
       ),
-      href: "/admin/campaigns",
+      href: "/vault/campaigns",
     };
   if (/invite|creator dh|find|discover|search/.test(q))
-    return { a: T("**Discover** mein category / followers se creators dhoondo, ya campaign mein **🎯 Invite creators** dabao.", "Use **Discover** to find creators by category / followers, or tap **🎯 Invite creators** in a campaign."), href: "/admin/discovery" };
+    return { a: T("**Discover** mein category / followers se creators dhoondo, ya campaign mein **🎯 Invite creators** dabao.", "Use **Discover** to find creators by category / followers, or tap **🎯 Invite creators** in a campaign."), href: "/vault/discovery" };
   if (/new campaign|campaign bana|create campaign|naya campaign/.test(q))
-    return { a: T("**Campaigns → New campaign** — brand, product, deliverables, brief aur contract terms bharo. Phir creators jodo.", "**Campaigns → New campaign** — fill brand, product, deliverables, brief and contract terms, then add creators."), href: "/admin/campaigns/new" };
+    return { a: T("**Campaigns → New campaign** — brand, product, deliverables, brief aur contract terms bharo. Phir creators jodo.", "**Campaigns → New campaign** — fill brand, product, deliverables, brief and contract terms, then add creators."), href: "/vault/campaigns/new" };
   if (/whatsapp|message|template|notification/.test(q))
     return {
       a: T(
         "Har step ka update creators ko WhatsApp + email + app pe apne aap jaata hai. Delivery status Super Admin → **WhatsApp & email** mein dikhta hai.",
         "Every step's update reaches creators on WhatsApp + email + the app automatically. Delivery status is in Super Admin → **WhatsApp & email**."
       ),
-      href: "/admin/messaging",
+      href: "/vault/messaging",
     };
   return {
     a: T(

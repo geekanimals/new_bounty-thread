@@ -39,36 +39,36 @@ export const NAV = [
   {
     group: "Operate",
     items: [
-      { label: "Overview", href: "/admin/overview", icon: "▦" },
-      { label: "Action queue", href: "/admin/action-queue", icon: "⚡", count: "approvals" },
-      { label: "Campaigns", href: "/admin/campaigns", icon: "◈", count: "process" },
-      { label: "Applications", href: "/admin/applications", icon: "✓", count: "applicants" },
-      { label: "Logistics", href: "/admin/logistics", icon: "▣", count: "logistics" },
+      { label: "Overview", href: "/vault/overview", icon: "▦" },
+      { label: "Action queue", href: "/vault/action-queue", icon: "⚡", count: "approvals" },
+      { label: "Campaigns", href: "/vault/campaigns", icon: "◈", count: "process" },
+      { label: "Applications", href: "/vault/applications", icon: "✓", count: "applicants" },
+      { label: "Logistics", href: "/vault/logistics", icon: "▣", count: "logistics" },
     ],
   },
   {
     group: "Network",
     items: [
-      { label: "Creators", href: "/admin/creators", icon: "♙" },
-      { label: "Discovery", href: "/admin/discovery", icon: "◎" },
-      { label: "Brands & agencies", href: "/admin/brands", icon: "▤" },
-      { label: "Creator upload", href: "/admin/creator-upload", icon: "⇧" },
+      { label: "Creators", href: "/vault/creators", icon: "♙" },
+      { label: "Discovery", href: "/vault/discovery", icon: "◎" },
+      { label: "Brands & agencies", href: "/vault/brands", icon: "▤" },
+      { label: "Creator upload", href: "/vault/creator-upload", icon: "⇧" },
     ],
   },
   {
     group: "Communicate",
     items: [
-      { label: "Unified inbox", href: "/admin/inbox", icon: "☏" },
-      { label: "Messaging & bot", href: "/admin/messaging", icon: "✉" },
+      { label: "Unified inbox", href: "/vault/inbox", icon: "☏" },
+      { label: "Messaging & bot", href: "/vault/messaging", icon: "✉" },
     ],
   },
   {
     group: "Insights & platform",
     items: [
-      { label: "Reports", href: "/admin/reports", icon: "▥" },
-      { label: "Activity & audit", href: "/admin/activity", icon: "◷" },
-      { label: "All users", href: "/admin/users", icon: "♧" },
-      { label: "Settings", href: "/admin/settings", icon: "⚙" },
+      { label: "Reports", href: "/vault/reports", icon: "▥" },
+      { label: "Activity & audit", href: "/vault/activity", icon: "◷" },
+      { label: "All users", href: "/vault/users", icon: "♧" },
+      { label: "Settings", href: "/vault/settings", icon: "⚙" },
     ],
   },
 ];
@@ -92,7 +92,7 @@ export default function AdminShell({ children, wide = false }) {
 
   const isActive = (href) => pathname === href || pathname.startsWith(href + "/");
 
-  // Login check — bina login ke koi admin page nahi khulega, seedha /admin (login) par
+  // Login check — bina login ke koi admin page nahi khulega, seedha /vault (login) par
   // (Supabase session + is_platform_admin — purane app jaisa)
   // ME: pichle page ka login check yaad — har page badalne par khali screen flash nahi (check peeche chalta rehta hai)
   const [me, setMe] = useState(() => ME);
@@ -114,17 +114,17 @@ export default function AdminShell({ children, wide = false }) {
         }
         else {
           meSave(null);
-          router.replace("/admin");
+          router.replace("/vault");
         }
       })
       .catch(() => {
         meSave(null);
-        if (alive) router.replace("/admin");
+        if (alive) router.replace("/vault");
       });
     const expired = (e) => {
       if (e.detail?.door !== "admin") return;
       meSave(null);
-      router.replace("/admin");
+      router.replace("/vault");
     };
     window.addEventListener("geek-session-expired", expired);
     return () => {
@@ -191,15 +191,15 @@ export default function AdminShell({ children, wide = false }) {
     const cr = (Array.isArray(sCr.data) ? sCr.data : [])
       .filter((c) => matchQ(c, t))
       .slice(0, 8)
-      .map((c) => ({ href: `/admin/creators/${c.member_id}/profile`, icon: "👤", label: c.name || (c.ig_username ? "@" + c.ig_username : "Creator"), sub: [c.ig_username && "@" + c.ig_username, c.city, (c.categories || [])[0]].filter(Boolean).join(" · "), kind: "Creator" }));
+      .map((c) => ({ href: `/vault/creators/${c.member_id}/profile`, icon: "👤", label: c.name || (c.ig_username ? "@" + c.ig_username : "Creator"), sub: [c.ig_username && "@" + c.ig_username, c.city, (c.categories || [])[0]].filter(Boolean).join(" · "), kind: "Creator" }));
     const cp = (Array.isArray(sCp.data) ? sCp.data : [])
       .filter((c) => has([c.name, c.brand, c.org_name]))
       .slice(0, 6)
-      .map((c) => ({ href: `/admin/campaigns/${c.id}/overview`, icon: "📣", label: c.name || "Campaign", sub: [c.brand || c.org_name, c.status].filter(Boolean).join(" · "), kind: "Campaign" }));
+      .map((c) => ({ href: `/vault/campaigns/${c.id}/overview`, icon: "📣", label: c.name || "Campaign", sub: [c.brand || c.org_name, c.status].filter(Boolean).join(" · "), kind: "Campaign" }));
     const br = (Array.isArray(sBr.data) ? sBr.data : [])
       .filter((b) => has([b.name, b.category, b.website, b.instagram]))
       .slice(0, 5)
-      .map((b) => ({ href: `/admin/brands/${b.brand_id || b.id}/overview`, icon: "🏢", label: b.name || "Brand", sub: b.category || "", kind: "Brand" }));
+      .map((b) => ({ href: `/vault/brands/${b.brand_id || b.id}/overview`, icon: "🏢", label: b.name || "Brand", sub: b.category || "", kind: "Brand" }));
     return [...pages, ...cr, ...cp, ...br];
   }, [q, sCr.data, sCp.data, sBr.data]);
   const searching = searchOn && q.trim().length >= 2 && (sCr.loading || sCp.loading || sBr.loading);
@@ -208,7 +208,7 @@ export default function AdminShell({ children, wide = false }) {
   const signOut = async () => {
     meSave(null);
     await adminSignOut();
-    router.replace("/admin");
+    router.replace("/vault");
   };
 
   if (!authed) return <div className="as-wait" aria-busy="true" />;
@@ -218,7 +218,7 @@ export default function AdminShell({ children, wide = false }) {
     <div className="as">
       {/* ---------- Sidebar ---------- */}
       <aside className="as-side" aria-label="Super Admin menu">
-        <Link href="/admin/overview" className="as-logo">
+        <Link href="/vault/overview" className="as-logo">
           <span className="as-logo__mark">geek</span>
           <span className="as-logo__txt">
             <strong>Geek OS</strong>
@@ -240,7 +240,7 @@ export default function AdminShell({ children, wide = false }) {
           ))}
         </nav>
         <div className="as-side__foot">
-          <Link href="/admin/settings/super-admins" className="as-me" title="Super Admin">
+          <Link href="/vault/settings/super-admins" className="as-me" title="Super Admin">
             <span className="as-me__av">{(me.name || "A")[0].toUpperCase()}</span>
             <span className="as-me__txt">
               <strong>Super Admin</strong>
@@ -259,7 +259,7 @@ export default function AdminShell({ children, wide = false }) {
           <button type="button" className="as-burger" onClick={() => setPanel(panel === "menu" ? null : "menu")} aria-label="Open menu" aria-expanded={panel === "menu"}>
             {panel === "menu" ? "✕" : "☰"}
           </button>
-          <Link href="/admin/overview" className="as-mlogo" aria-label="Geek OS">
+          <Link href="/vault/overview" className="as-mlogo" aria-label="Geek OS">
             <span className="as-logo__mark">geek</span>
             <strong>Geek OS</strong>
           </Link>
@@ -275,7 +275,7 @@ export default function AdminShell({ children, wide = false }) {
             <button type="button" className="as-icon" onClick={() => setPanel("agent")} aria-label="AI Assistant" title="AI Assistant">
               ♧
             </button>
-            <Link href="/admin/settings" className="as-icon" aria-label="Settings" title="Settings">
+            <Link href="/vault/settings" className="as-icon" aria-label="Settings" title="Settings">
               ⚙
             </Link>
             <div className="as-prof" ref={profRef}>
@@ -291,16 +291,16 @@ export default function AdminShell({ children, wide = false }) {
                       <small>Super Admin · Geek Creative Agency</small>
                     </span>
                   </div>
-                  <Link href="/admin/overview" className="as-pmenu__link" role="menuitem">
+                  <Link href="/vault/overview" className="as-pmenu__link" role="menuitem">
                     🏠 Dashboard
                   </Link>
-                  <Link href="/admin/settings/super-admins" className="as-pmenu__link" role="menuitem">
+                  <Link href="/vault/settings/super-admins" className="as-pmenu__link" role="menuitem">
                     🛡️ Super Admin
                   </Link>
                   <p className="as-pmenu__label">🔔 Campaign updates</p>
                   <div className="as-pmenu__row">
                     <span>WhatsApp</span>
-                    <Link href="/admin/inbox/new">Link WhatsApp</Link>
+                    <Link href="/vault/inbox/new">Link WhatsApp</Link>
                   </div>
                   <div className="as-pmenu__row">
                     <span>Email</span>
@@ -308,7 +308,7 @@ export default function AdminShell({ children, wide = false }) {
                       {emailOn ? "On" : "Off"}
                     </button>
                   </div>
-                  <Link href="/admin/settings/data-browser" className="as-pmenu__link" role="menuitem">
+                  <Link href="/vault/settings/data-browser" className="as-pmenu__link" role="menuitem">
                     🍪 Cookie settings
                   </Link>
                   <button type="button" className="as-pmenu__link" role="menuitem" onClick={signOut}>

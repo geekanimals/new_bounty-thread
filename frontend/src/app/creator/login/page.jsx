@@ -7,7 +7,7 @@ import OnboardShell from "@/components/creator/OnboardShell";
 import { sendOtp, invitePreview } from "@/services/creator";
 
 /** /creator/login — WhatsApp number (step 1). Code bhejne par → /creator/verify */
-export default function creatorLogin() {
+export default function CreatorLogin() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [alerts, setAlerts] = useState(false);

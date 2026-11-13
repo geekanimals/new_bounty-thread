@@ -9,13 +9,13 @@ import { campTypeLabel, campStatusPick, campInBucket, statusTone, APPLICANT_PEND
 
 /* Campaign list ke tabs — har tab apna route (Back ek step) */
 const TABS = [
-  { k: "all", label: "All", href: "/admin/campaigns", test: () => true },
-  { k: "live", label: "Live", href: "/admin/campaigns/live", test: (c) => c.status === "Live" },
-  { k: "draft", label: "Draft", href: "/admin/campaigns/draft", test: (c) => c.status === "Draft" },
-  { k: "barter", label: "Barter", href: "/admin/campaigns/barter", test: (c) => campInBucket(c.raw, "barter") },
-  { k: "paid", label: "Paid", href: "/admin/campaigns/paid", test: (c) => campInBucket(c.raw, "paid") },
-  { k: "barter_paid", label: "Barter + Paid", href: "/admin/campaigns/barter-paid", test: (c) => campInBucket(c.raw, "barter_paid") },
-  { k: "completed", label: "Completed", href: "/admin/campaigns/completed", test: (c) => c.status === "Completed" },
+  { k: "all", label: "All", href: "/vault/campaigns", test: () => true },
+  { k: "live", label: "Live", href: "/vault/campaigns/live", test: (c) => c.status === "Live" },
+  { k: "draft", label: "Draft", href: "/vault/campaigns/draft", test: (c) => c.status === "Draft" },
+  { k: "barter", label: "Barter", href: "/vault/campaigns/barter", test: (c) => campInBucket(c.raw, "barter") },
+  { k: "paid", label: "Paid", href: "/vault/campaigns/paid", test: (c) => campInBucket(c.raw, "paid") },
+  { k: "barter_paid", label: "Barter + Paid", href: "/vault/campaigns/barter-paid", test: (c) => campInBucket(c.raw, "barter_paid") },
+  { k: "completed", label: "Completed", href: "/vault/campaigns/completed", test: (c) => c.status === "Completed" },
 ];
 
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
@@ -47,7 +47,7 @@ export default function CampaignList({ filter = "all" }) {
   return (
     <AdminShell>
       <PageHead title="Campaigns" sub="A connected view of briefs, people, deliveries, creative and outcomes.">
-        <Link href="/admin/campaigns/new" className="ga-btn ga-btn--primary">
+        <Link href="/vault/campaigns/new" className="ga-btn ga-btn--primary">
           ＋ New campaign
         </Link>
       </PageHead>
@@ -82,7 +82,7 @@ export default function CampaignList({ filter = "all" }) {
               {rows.map((c) => (
                 <tr key={c.id}>
                   <td>
-                    <Link href={`/admin/campaigns/${c.id}/overview`} className="cl-name">
+                    <Link href={`/vault/campaigns/${c.id}/overview`} className="cl-name">
                       {c.name}
                     </Link>
                     <span className="cl-brand">{c.brand}</span>
@@ -105,7 +105,7 @@ export default function CampaignList({ filter = "all" }) {
                   </td>
                   <td>{c.ends}</td>
                   <td>
-                    <Link href={`/admin/campaigns/${c.id}/overview`} className="cl-open">
+                    <Link href={`/vault/campaigns/${c.id}/overview`} className="cl-open">
                       Open workspace →
                     </Link>
                     <span className="cl-risk">{c.risk}</span>
@@ -128,7 +128,7 @@ export default function CampaignList({ filter = "all" }) {
         {/* Mobile: cards */}
         <div className="cl-cards">
           {rows.map((c) => (
-            <Link key={c.id} href={`/admin/campaigns/${c.id}/overview`} className="cl-card">
+            <Link key={c.id} href={`/vault/campaigns/${c.id}/overview`} className="cl-card">
               <div className="cl-card__top">
                 <div>
                   <p className="cl-name">{c.name}</p>

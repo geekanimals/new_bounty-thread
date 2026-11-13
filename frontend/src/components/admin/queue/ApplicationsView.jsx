@@ -140,7 +140,7 @@ export default function ApplicationsView({ openId }) {
 
       <Stats
         items={[
-          { value: cnt("pending"), label: "Pending", note: "Waiting for you", href: "/admin/applications/screening" },
+          { value: cnt("pending"), label: "Pending", note: "Waiting for you", href: "/vault/applications/screening" },
           { value: cnt("approved"), label: "Approved", note: "Selected creators", href: "#approved" },
           { value: cnt("declined"), label: "Declined", note: "Not selected", href: "#declined" },
           { value: base.length, label: "All applications", note: "Everything", href: "#all" },
@@ -201,9 +201,9 @@ export default function ApplicationsView({ openId }) {
               </thead>
               <tbody>
                 {rows.map((a) => (
-                  <tr key={a.key} onClick={() => router.push(`/admin/applications/${encodeURIComponent(a.key)}`)}>
+                  <tr key={a.key} onClick={() => router.push(`/vault/applications/${encodeURIComponent(a.key)}`)}>
                     <td>
-                      <Link href={`/admin/applications/${encodeURIComponent(a.key)}`} className="apl-name" onClick={(e) => e.stopPropagation()}>
+                      <Link href={`/vault/applications/${encodeURIComponent(a.key)}`} className="apl-name" onClick={(e) => e.stopPropagation()}>
                         {a.name}
                       </Link>
                       <span className="apl-handle">{a.handle}</span>
@@ -239,7 +239,7 @@ export default function ApplicationsView({ openId }) {
       </section>
 
       {open && (
-        <Drawer eyebrow="Decision workspace" title={`Screen ${open.name} for ${open.campaign}`} closeHref="/admin/applications">
+        <Drawer eyebrow="Decision workspace" title={`Screen ${open.name} for ${open.campaign}`} closeHref="/vault/applications">
           <DecisionPanel
             meta={[open.campaign, open.type !== "—" ? open.type : "", `Applied ${dayAgo(open.appliedAt).toLowerCase()}`, open.followers !== "—" ? `${open.followers} followers` : ""].filter(Boolean).join(" · ")}
             badges={[
@@ -256,26 +256,26 @@ export default function ApplicationsView({ openId }) {
                 <>
                   <span className={`ga-badge ga-badge--${open.g === "approved" ? "green" : "red"} apl-state`}>{open.g === "approved" ? "✓ Approved" : "Declined"}</span>
                   {open.cid && (
-                    <Link href={`/admin/campaigns/${open.cid}/creators`} className="ga-btn ga-btn--ghost">
+                    <Link href={`/vault/campaigns/${open.cid}/creators`} className="ga-btn ga-btn--ghost">
                       Open campaign
                     </Link>
                   )}
                 </>
               ) : (
                 <>
-                  <button type="button" className="ga-btn ga-btn--primary" disabled={busy === open.key} onClick={() => approve(open, () => router.push("/admin/applications"))}>
+                  <button type="button" className="ga-btn ga-btn--primary" disabled={busy === open.key} onClick={() => approve(open, () => router.push("/vault/applications"))}>
                     {busy === open.key ? "…" : "Approve"}
                   </button>
-                  <button type="button" className="ga-btn ga-btn--ghost" disabled={busy === open.key} onClick={() => decline(open, () => router.push("/admin/applications"))}>
+                  <button type="button" className="ga-btn ga-btn--ghost" disabled={busy === open.key} onClick={() => decline(open, () => router.push("/vault/applications"))}>
                     Decline
                   </button>
                   {open.memberId && (
-                    <Link href={`/admin/creators/${open.memberId}/profile`} className="ga-btn ga-btn--ghost">
+                    <Link href={`/vault/creators/${open.memberId}/profile`} className="ga-btn ga-btn--ghost">
                       View 360°
                     </Link>
                   )}
                   {open.cid && (
-                    <Link href={`/admin/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
+                    <Link href={`/vault/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
                       Open campaign
                     </Link>
                   )}
@@ -286,7 +286,7 @@ export default function ApplicationsView({ openId }) {
         </Drawer>
       )}
       {openId && !open && !loading && (
-        <Drawer eyebrow="Decision workspace" title="Application not found" closeHref="/admin/applications">
+        <Drawer eyebrow="Decision workspace" title="Application not found" closeHref="/vault/applications">
           <p className="apl-empty">This application isn’t in the list any more.</p>
         </Drawer>
       )}

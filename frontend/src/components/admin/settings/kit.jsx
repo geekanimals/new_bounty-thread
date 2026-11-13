@@ -26,8 +26,8 @@ export const SETTINGS_TABS = [
 ];
 
 export const REPORT_TABS = [
-  { href: "/admin/reports", label: "Campaign performance" },
-  { href: "/admin/reports/traits", label: "🧩 Creator traits" },
+  { href: "/vault/reports", label: "Campaign performance" },
+  { href: "/vault/reports/traits", label: "🧩 Creator traits" },
 ];
 
 export function LinkTabs({ tabs }) {
@@ -61,9 +61,9 @@ export function SettingsTabs() {
   return (
     <LinkTabs
       tabs={SETTINGS_TABS.map((t) => ({
-        href: `/admin/settings/${t.k}`,
+        href: `/vault/settings/${t.k}`,
         label: t.label,
-        match: (p) => p === `/admin/settings/${t.k}` || (t.k === "team" && p === "/admin/settings"),
+        match: (p) => p === `/vault/settings/${t.k}` || (t.k === "team" && p === "/vault/settings"),
       }))}
     />
   );

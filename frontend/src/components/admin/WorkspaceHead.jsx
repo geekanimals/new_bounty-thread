@@ -39,11 +39,11 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
       >
         {actions || (
           <>
-            <Link href="/admin/campaigns" className="ga-btn ga-btn--ghost wh-back">
+            <Link href="/vault/campaigns" className="ga-btn ga-btn--ghost wh-back">
               ← All campaigns
             </Link>
             {(!row || row.id) && (
-              <Link href={`/admin/campaigns/new/basics?edit=${row?.id || id}`} className="ga-btn ga-btn--primary">
+              <Link href={`/vault/campaigns/new/basics?edit=${row?.id || id}`} className="ga-btn ga-btn--primary">
                 Edit brief
               </Link>
             )}
@@ -52,7 +52,7 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
       </PageHead>
       <nav className="wh-tabs" aria-label="Campaign workspace" data-scroll>
         {WS_TABS.map((t) => (
-          <Link key={t.k} href={`/admin/campaigns/${c.id}/${t.k}`} className={`ga-tab ${active === t.k ? "is-on" : ""}`}>
+          <Link key={t.k} href={`/vault/campaigns/${c.id}/${t.k}`} className={`ga-tab ${active === t.k ? "is-on" : ""}`}>
             {t.label}
           </Link>
         ))}

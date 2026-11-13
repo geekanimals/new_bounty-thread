@@ -460,7 +460,7 @@ export async function runAction(key, row, ctx) {
       return call("api.bp_log_call", { p_participation: P, p_note: v.note.trim() }, "📝 Call noted");
     }
     case "bppay":
-      if (ctx.router) ctx.router.push(`/admin/campaigns/${campaignId}/payments`);
+      if (ctx.router) ctx.router.push(`/vault/campaigns/${campaignId}/payments`);
       return;
     case "bpremove": {
       if (!window.confirm(`Delete ${who} from this campaign? Their contract, courier, video, posts and every message about this campaign go too. This can't be undone.`)) return;

@@ -35,7 +35,7 @@ export default function UploadStart({ id, mode = "upload" }) {
   const [sheetUrl, setSheetUrl] = useState("");
   const [paste, setPaste] = useState("");
   const [busy, setBusy] = useState("");
-  const base = `/admin/campaigns/${id}/upload`;
+  const base = `/vault/campaigns/${id}/upload`;
   const steps = statusesFor(kind);
   const guide = steps.map((s, i) => [`${i + 1} ${s[1]}`, s[2], s[4] || "—", s[3] === "no message" ? "—" : `✉️ ${s[3]}`]);
 
@@ -226,7 +226,7 @@ export default function UploadStart({ id, mode = "upload" }) {
           <button type="button" className="ga-btn ga-btn--ghost" onClick={loadLink} disabled={busy === "link"}>
             {busy === "link" ? "Loading…" : "Load sheet"}
           </button>
-          <Link href={`/admin/campaigns/${id}/find`} className="ga-btn ga-btn--ghost">
+          <Link href={`/vault/campaigns/${id}/find`} className="ga-btn ga-btn--ghost">
             🎯 Pick from Geek OS instead
           </Link>
         </div>

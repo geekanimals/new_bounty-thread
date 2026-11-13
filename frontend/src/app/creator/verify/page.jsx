@@ -9,7 +9,7 @@ import { sendOtp, verifyOtp, afterLoginRoute } from "@/services/creator";
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
 /** /creator/verify — WhatsApp OTP (step 2). Back → /creator/login */
-export default function creatorVerify() {
+export default function CreatorVerify() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [alerts, setAlerts] = useState(false);

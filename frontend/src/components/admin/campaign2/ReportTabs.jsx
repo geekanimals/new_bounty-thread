@@ -8,9 +8,9 @@ export default function ReportTabs({ id, active }) {
     <SubTabs
       active={active}
       items={[
-        { k: "report", label: "📈 Campaign report", href: `/admin/campaigns/${id}/report` },
-        { k: "list", label: "📋 List for the brand", href: `/admin/campaigns/${id}/list` },
-        { k: "traits", label: "🧩 Creator traits", href: `/admin/campaigns/${id}/traits` },
+        { k: "report", label: "📈 Campaign report", href: `/vault/campaigns/${id}/report` },
+        { k: "list", label: "📋 List for the brand", href: `/vault/campaigns/${id}/list` },
+        { k: "traits", label: "🧩 Creator traits", href: `/vault/campaigns/${id}/traits` },
       ]}
     />
   );

@@ -11,7 +11,7 @@ import QueueRecords from "@/components/admin/queue/QueueRecords";
 import { FILTERS, FILTER_LABEL } from "@/components/admin/queue/queueData";
 import { useApprovals, buildQueue, useToast, useReason, act, errText, StateBox } from "@/components/admin/queue/live";
 
-const base = (f) => (f === "all" ? "/admin/action-queue" : `/admin/action-queue/${f}`);
+const base = (f) => (f === "all" ? "/vault/action-queue" : `/vault/action-queue/${f}`);
 
 /**
  * Action queue (Figma 007, 009–017) — asli data: api.approvals_inbox + api.process_inbox (har 20 sec).
@@ -28,7 +28,7 @@ export default function ActionQueueView({ filter = "all", openId }) {
   const items = filter === "all" ? all : all.filter((q) => q.f === filter);
   const open = openId ? all.find((q) => q.id === openId) : null;
   const closeHref = base(filter);
-  const itemHref = (q) => `${filter === "all" ? "/admin/action-queue/all" : closeHref}/${q.id}`;
+  const itemHref = (q) => `${filter === "all" ? "/vault/action-queue/all" : closeHref}/${q.id}`;
 
   const kindN = (...k) => proc.filter((x) => k.includes(x.kind)).length;
   const apps = (inbox.applicants || []).length + (inbox.marketplace || []).length;
@@ -63,11 +63,11 @@ export default function ActionQueueView({ filter = "all", openId }) {
 
       <Stats
         items={[
-          { value: apps, label: "Creator decisions", note: "Pending screening", href: "/admin/action-queue/applications" },
-          { value: kindN("review"), label: "Video reviews", note: "Submitted content", href: "/admin/action-queue/content" },
-          { value: kindN("contract", "unsigned"), label: "Contracts to send", note: "Ready for verification", href: "/admin/action-queue/contracts" },
-          { value: kindN("ship", "deliver", "blocked"), label: "Logistics actions", note: "To send + in transit", href: "/admin/action-queue/logistics" },
-          { value: total, label: "Priority items", note: "Everything waiting on you", href: "/admin/action-queue" },
+          { value: apps, label: "Creator decisions", note: "Pending screening", href: "/vault/action-queue/applications" },
+          { value: kindN("review"), label: "Video reviews", note: "Submitted content", href: "/vault/action-queue/content" },
+          { value: kindN("contract", "unsigned"), label: "Contracts to send", note: "Ready for verification", href: "/vault/action-queue/contracts" },
+          { value: kindN("ship", "deliver", "blocked"), label: "Logistics actions", note: "To send + in transit", href: "/vault/action-queue/logistics" },
+          { value: total, label: "Priority items", note: "Everything waiting on you", href: "/vault/action-queue" },
         ]}
       />
 
@@ -163,20 +163,20 @@ export default function ActionQueueView({ filter = "all", openId }) {
                     </button>
                   </>
                 ) : open.f === "applications" ? (
-                  <Link href="/admin/applications" className="ga-btn ga-btn--primary">
+                  <Link href="/vault/applications" className="ga-btn ga-btn--primary">
                     Open applications
                   </Link>
                 ) : open.f === "logistics" ? (
-                  <Link href="/admin/logistics" className="ga-btn ga-btn--primary">
+                  <Link href="/vault/logistics" className="ga-btn ga-btn--primary">
                     Open logistics
                   </Link>
                 ) : null}
                 {open.cid ? (
-                  <Link href={`/admin/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
+                  <Link href={`/vault/campaigns/${open.cid}/overview`} className="ga-btn ga-btn--ghost">
                     Open campaign
                   </Link>
                 ) : (
-                  <Link href="/admin/users" className="ga-btn ga-btn--ghost">
+                  <Link href="/vault/users" className="ga-btn ga-btn--ghost">
                     Open all users
                   </Link>
                 )}

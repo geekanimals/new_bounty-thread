@@ -13,7 +13,7 @@ import { SIDEKICKS } from "@/components/creator/data";
  * (wahan left side mein welcome already dikhta hai).
  * Har step alag route: /creator → /creator/login → /creator/verify (Back ek-ek step).
  */
-export default function creatorWelcome() {
+export default function CreatorWelcome() {
   const router = useRouter();
   const pathname = usePathname() || "/creator";
   const [video, setVideo] = useState(false);

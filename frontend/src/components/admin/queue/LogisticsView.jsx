@@ -142,7 +142,7 @@ export default function LogisticsView({ openId }) {
                   const status = statusOf(s);
                   const last = s.delivered_at || s.shipped_at;
                   return (
-                    <tr key={s.shipment_id} onClick={() => router.push(`/admin/logistics/${s.shipment_id}`)}>
+                    <tr key={s.shipment_id} onClick={() => router.push(`/vault/logistics/${s.shipment_id}`)}>
                       <td>{who(s.creator)}</td>
                       <td>{s.campaign || "—"}</td>
                       <td>{s.product || "—"}</td>
@@ -152,7 +152,7 @@ export default function LogisticsView({ openId }) {
                       <td>{s.courier ? `${s.courier}${s.tracking_ref ? ` · ${s.tracking_ref}` : ""}` : "—"}</td>
                       <td>{last ? ago(last) : status === "No address" ? "Needs verification" : "Awaiting pickup"}</td>
                       <td>
-                        <Link href={`/admin/logistics/${s.shipment_id}`} className="lg-more" onClick={(e) => e.stopPropagation()}>
+                        <Link href={`/vault/logistics/${s.shipment_id}`} className="lg-more" onClick={(e) => e.stopPropagation()}>
                           Details →
                         </Link>
                       </td>
@@ -167,7 +167,7 @@ export default function LogisticsView({ openId }) {
       </section>
 
       {open && (
-        <Drawer eyebrow="Shipment" title="Fulfilment record" closeHref="/admin/logistics">
+        <Drawer eyebrow="Shipment" title="Fulfilment record" closeHref="/vault/logistics">
           <h3 className="lg-h">Shipment timeline</h3>
           <ol className="lg-steps">
             {SHIP_STEPS.map((s, i) => (
@@ -211,7 +211,7 @@ export default function LogisticsView({ openId }) {
             </button>
           )}
           {open.campaign_id && (
-            <Link href={`/admin/campaigns/${open.campaign_id}/fulfilment`} className="ga-btn ga-btn--ghost lg-update lg-camp">
+            <Link href={`/vault/campaigns/${open.campaign_id}/fulfilment`} className="ga-btn ga-btn--ghost lg-update lg-camp">
               Open campaign
             </Link>
           )}
@@ -240,7 +240,7 @@ export default function LogisticsView({ openId }) {
         </Drawer>
       )}
       {openId && !open && data && (
-        <Drawer eyebrow="Shipment" title="Shipment not found" closeHref="/admin/logistics">
+        <Drawer eyebrow="Shipment" title="Shipment not found" closeHref="/vault/logistics">
           <p className="lg-empty">This shipment isn’t on the board any more.</p>
         </Drawer>
       )}

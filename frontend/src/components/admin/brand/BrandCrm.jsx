@@ -9,7 +9,7 @@ import { rpc, useRpc, errText } from "@/lib/supabase";
 import { num, useToast } from "@/components/admin/brand/util";
 
 /**
- * Brand CRM ka main view (Figma 056). /admin/brands par aur brand panel ke peeche dono jagah.
+ * Brand CRM ka main view (Figma 056). /vault/brands par aur brand panel ke peeche dono jagah.
  * Data: api.brand_list (purane app jaisa). Add brand → api.brand_save.
  * interactive=false → sirf peeche dikhane ke liye (panel khula ho tab).
  */
@@ -41,13 +41,13 @@ export default function BrandCrm({ interactive = true }) {
     setAdding(false);
     say(`${name} added to the CRM`);
     reload(true);
-    if (r.data?.brand_id) router.push(`/admin/brands/${r.data.brand_id}/overview`);
+    if (r.data?.brand_id) router.push(`/vault/brands/${r.data.brand_id}/overview`);
   };
 
   return (
     <div className="bc" aria-hidden={!interactive || undefined}>
       <PageHead title="Brand CRM" sub="Relationship history, campaigns, creator activity and workspace access.">
-        <Link href="/admin/brands/deleted" className="bc-del" tabIndex={interactive ? 0 : -1}>
+        <Link href="/vault/brands/deleted" className="bc-del" tabIndex={interactive ? 0 : -1}>
           🗑️ Deleted brands
         </Link>
         <button type="button" className="ga-btn ga-btn--primary" onClick={() => setAdding(!adding)} tabIndex={interactive ? 0 : -1}>
@@ -58,10 +58,10 @@ export default function BrandCrm({ interactive = true }) {
       <Stats
         items={[
           { value: loading ? "—" : list.length, label: "Brands in CRM", note: `${withLogin} with a brand login` },
-          { value: loading ? "—" : sum("campaigns"), label: "All brand campaigns", href: "/admin/campaigns" },
-          { value: loading ? "—" : sum("active"), label: "Live now", note: "Running promotions", href: "/admin/campaigns/live" },
-          { value: loading ? "—" : sum("creators"), label: "Creators approved", note: "Cross-campaign", href: "/admin/creators" },
-          { value: loading ? "—" : sum("posted"), label: "Posts live", note: "Publishing history", href: "/admin/reports" },
+          { value: loading ? "—" : sum("campaigns"), label: "All brand campaigns", href: "/vault/campaigns" },
+          { value: loading ? "—" : sum("active"), label: "Live now", note: "Running promotions", href: "/vault/campaigns/live" },
+          { value: loading ? "—" : sum("creators"), label: "Creators approved", note: "Cross-campaign", href: "/vault/creators" },
+          { value: loading ? "—" : sum("posted"), label: "Posts live", note: "Publishing history", href: "/vault/reports" },
         ]}
       />
 
@@ -134,7 +134,7 @@ export default function BrandCrm({ interactive = true }) {
             <span key="a" className={`ga-badge ${Number(b.logins) > 0 ? "ga-badge--green" : ""}`}>
               {Number(b.logins) > 0 ? (Number(b.logins) > 1 ? `${b.logins} brand logins` : "Brand login") : "No login"}
             </span>,
-            <Link key="o" href={`/admin/brands/${b.brand_id}/overview`} className="pt-link" tabIndex={interactive ? 0 : -1}>
+            <Link key="o" href={`/vault/brands/${b.brand_id}/overview`} className="pt-link" tabIndex={interactive ? 0 : -1}>
               Open →
             </Link>,
           ])}

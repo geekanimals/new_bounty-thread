@@ -24,13 +24,13 @@ const GO = {
     discover: "/brands/discovery", saved: "/brands/saved", creators: "/brands/saved", settings: "/brands/settings", alerts: "/brands/notifications", facebook: "/brands/facebook", instagram: "/brands/instagram",
   },
   admin: {
-    overview: "/admin/overview", dashboard: "/admin/overview", alerts: "/admin/overview", approvals: "/admin/action-queue", signups: "/admin/action-queue/signups",
-    applications: "/admin/applications", campaigns: "/admin/campaigns", campaignops: "/admin/campaigns", logistics: "/admin/logistics", creators: "/admin/creators",
-    discover: "/admin/discovery", discovery: "/admin/discovery", brands: "/admin/brands", upload: "/admin/creator-upload", inbox: "/admin/inbox",
-    messaging: "/admin/messaging", reports: "/admin/reports", activity: "/admin/activity", users: "/admin/users", settings: "/admin/settings", links: "/admin/settings/link-shortener",
+    overview: "/vault/overview", dashboard: "/vault/overview", alerts: "/vault/overview", approvals: "/vault/action-queue", signups: "/vault/action-queue/signups",
+    applications: "/vault/applications", campaigns: "/vault/campaigns", campaignops: "/vault/campaigns", logistics: "/vault/logistics", creators: "/vault/creators",
+    discover: "/vault/discovery", discovery: "/vault/discovery", brands: "/vault/brands", upload: "/vault/creator-upload", inbox: "/vault/inbox",
+    messaging: "/vault/messaging", reports: "/vault/reports", activity: "/vault/activity", users: "/vault/users", settings: "/vault/settings", links: "/vault/settings/link-shortener",
   },
 };
-const HOME = { creator: "/creator", brand: "/brands", admin: "/admin", owner: "/" };
+const HOME = { creator: "/creator", brand: "/brands", admin: "/vault", owner: "/" };
 
 export default function LegacyRouter() {
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function LegacyRouter() {
     if (go) {
       if (/^admin:/.test(go)) {
         door = "admin";
-        to = GO.admin[go.split(":")[1]] || "/admin/overview";
+        to = GO.admin[go.split(":")[1]] || "/vault/overview";
       } else to = GO[door]?.[go] || HOME[door];
     }
     // campaign invite (WhatsApp / email): creator signup + campaign

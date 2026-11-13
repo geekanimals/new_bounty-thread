@@ -6,11 +6,11 @@ import { PageHead } from "@/components/admin/ui";
 
 /* Messaging & bot ke tabs (Figma 074–081) — har tab apna route */
 const TABS = [
-  { href: "/admin/messaging", label: "📨 Delivery" },
-  { href: "/admin/messaging/doctor", label: "🩺 Delivery doctor" },
-  { href: "/admin/messaging/opted-out", label: "🚫 Opted out" },
-  { href: "/admin/messaging/auto", label: "📝 Auto messages" },
-  { href: "/admin/messaging/bot", label: "🤖 WhatsApp bot" },
+  { href: "/vault/messaging", label: "📨 Delivery" },
+  { href: "/vault/messaging/doctor", label: "🩺 Delivery doctor" },
+  { href: "/vault/messaging/opted-out", label: "🚫 Opted out" },
+  { href: "/vault/messaging/auto", label: "📝 Auto messages" },
+  { href: "/vault/messaging/bot", label: "🤖 WhatsApp bot" },
 ];
 
 export default function MsgHead() {
