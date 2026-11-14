@@ -23,9 +23,23 @@ export default function PickSidekick() {
   }, [me.ready, me.prefs?.kid]);
 
   // Chuna hua sidekick login par save (purana bxKid.save) → Instagram step
+  const [busy, setBusy] = useState(false);
   const go = async (save) => {
-    if (save) await savePrefs({ kid: pick });
-    setKidSeen(save ? pick : "later");
+    if (busy) return;
+    setBusy(true);
+    // server par save 2 sec se zyada ruke to bhi aage badho (device par copy turant save ho jaati hai)
+    if (save) {
+      try {
+        await Promise.race([savePrefs({ kid: pick }), new Promise((r) => setTimeout(r, 2000))]);
+      } catch {
+        /* device copy kaafi hai */
+      }
+    }
+    try {
+      setKidSeen(save ? pick : "later");
+    } catch {
+      /* ignore */
+    }
     router.push("/creator/onboarding/instagram");
   };
 
@@ -56,7 +70,7 @@ export default function PickSidekick() {
             </button>
           ))}
         </div>
-        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block sk-cta" onClick={() => go(true)}>
+        <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block sk-cta" disabled={busy} onClick={() => go(true)}>
           Continue with {getSidekick(pick).name} →
         </button>
         <button type="button" className="sk-later" onClick={() => go(false)}>

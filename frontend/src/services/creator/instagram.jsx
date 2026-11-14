@@ -82,6 +82,16 @@ export function finishInstagram(code, st) {
 /** Login purana / user delete ho chuka → saaf logout, WhatsApp se dobara login */
 const NOT_AUTH = /not authenticated|jwt|invalid claim|user.*not.*(exist|found)|unauthori[sz]ed/i;
 
+/** Edge function call — request server tak na pahunche (network / page change) to ek baar dobara */
+async function callOnce(name, body) {
+  let r = await fn(name, body);
+  if (r.error && /failed to send a request|fetch/i.test(r.error.message || "")) {
+    await new Promise((ok) => setTimeout(ok, 900));
+    r = await fn(name, body);
+  }
+  return r;
+}
+
 async function doFinishInstagram(code, st) {
   const expected = ls.get(K.oauthState);
   const ticket = (String(st).split(":")[2] || "").trim();
@@ -92,11 +102,11 @@ async function doFinishInstagram(code, st) {
     data: { session },
   } = await sb().auth.getSession();
   if (session) {
-    let r = await fn("instagram-auth", { code, redirect_uri });
+    let r = await callOnce("instagram-auth", { code, redirect_uri });
     if (r.error && NOT_AUTH.test(r.error.message || "")) {
       // token purana ho sakta hai → ek baar refresh karke dobara
       const ref = await sb().auth.refreshSession();
-      if (!ref.error && ref.data?.session) r = await fn("instagram-auth", { code, redirect_uri });
+      if (!ref.error && ref.data?.session) r = await callOnce("instagram-auth", { code, redirect_uri });
       if (r.error && NOT_AUTH.test(r.error.message || "")) {
         await signOut();
         throw new Error("Your login has expired — please sign in with WhatsApp again, then connect Instagram.");
@@ -106,7 +116,7 @@ async function doFinishInstagram(code, st) {
     ls.set(K.igConnected, "1");
   } else {
     const body = ticket ? { code, redirect_uri, ticket } : { code, redirect_uri };
-    const r = await fn("instagram-login", body);
+    const r = await callOnce("instagram-login", body);
     if (r.error) throw new Error(r.error.message);
     ls.set(K.igConnected, "1");
     if (r.data && r.data.token_hash) {
