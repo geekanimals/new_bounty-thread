@@ -336,11 +336,18 @@ export function needsIgStep(c = state) {
  *  mode "member" — onboarding steps: login zaroori
  *  mode "app"    — app pages: login + Instagram step (ya "baad mein") + ek baar profile setup
  */
+/** Kaam wala page (WhatsApp template ka link): campaign ke steps (agreement, address, draft, post…),
+ *  profile finish, Instagram connect. Yahan login ke baad seedha pahunchao — onboarding / Instagram step
+ *  ke screens beech mein nahi. Wo baad mein (drip messages 02 / 04 se). */
+const ACTION_RE = /^\/creator\/(my-campaigns\/[^/?#]+|profile|onboarding\/meta)(\/|\?|#|$)/;
+export const isActionPath = (p) => ACTION_RE.test(String(p || "")) && !String(p).includes("//");
+
 export function gateRoute(c, mode, pathname = "") {
   if (!c.ready) return null;
   if (mode === "guest") return c.loggedIn ? afterLoginRoute(c) : null;
   if (!c.loggedIn) return "/creator/login";
   if (mode === "member") return null;
+  if (isActionPath(pathname)) return null;
   if (needsIgStep(c)) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
   if (needsOnboarding(c) && !/^\/creator\/media-kit/.test(pathname)) return "/creator/onboarding/content";
   return null;
@@ -359,18 +366,29 @@ function takeAfterLogin() {
   } catch {
     v = null;
   }
-  if (!v || !v.p || Date.now() - (v.t || 0) > 86400000 || !/^\/creator\/[a-z]/.test(v.p) || v.p.includes("//")) {
+  if (!v || !v.p || Date.now() - (v.t || 0) > 86400000 || !/^\/creator\/[a-z]/.test(v.p) || v.p.includes("//") || (v.u && Date.now() - v.u > 15000)) {
     ls.del(K.afterLogin);
     return null;
   }
   return v.p;
 }
+/** Kaam wala page de diya — 15 sec tak wahi lautao (verify page + gate dono ek saath redirect karte hain) */
+function holdAfterLogin(p) {
+  let v = null;
+  try {
+    v = JSON.parse(ls.get(K.afterLogin) || "null");
+  } catch {
+    v = null;
+  }
+  ls.set(K.afterLogin, JSON.stringify({ p, t: (v && v.t) || Date.now(), u: (v && v.u) || Date.now() }));
+}
 
 export function afterLoginRoute(c = state) {
   const wanted = takeAfterLogin();
-  // "Connect Instagram" / "Reconnect" link → seedha Instagram connect
-  if (wanted && /^\/creator\/onboarding\/meta\b/.test(wanted)) {
-    ls.del(K.afterLogin);
+  // WhatsApp link wala kaam (agreement sign, address confirm / edit, profile, Instagram connect…) →
+  // login ke turant baad seedha wahi page. Naya ho ya purana creator — onboarding baad mein.
+  if (wanted && isActionPath(wanted)) {
+    holdAfterLogin(wanted);
     return wanted;
   }
   if (needsIgStep(c)) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
