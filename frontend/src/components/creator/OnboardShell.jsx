@@ -52,9 +52,10 @@ export function VideoModal({ open, onClose, onFind }) {
         {playing ? (
           <div className={`vm-video vm-video--${isPhone ? "short" : "long"}`}>
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${isPhone ? GUIDE_SHORT : GUIDE_LONG}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+              src={`https://www.youtube.com/embed/${isPhone ? GUIDE_SHORT : GUIDE_LONG}?autoplay=1&rel=0&playsinline=1&origin=https://bounty.geekcreativeagency.com`}
               title="How Bounty works"
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
             />
           </div>
