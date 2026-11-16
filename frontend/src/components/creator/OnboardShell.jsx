@@ -263,7 +263,6 @@ export default function OnboardShell({ children, tone = "dark", step, stepText, 
         .os-say::after { content: ""; position: absolute; left: 50%; bottom: -7px; width: 12px; height: 12px; margin-left: -6px; background: #fffdf6; border-right: 1px solid #d8c9a3; border-bottom: 1px solid #d8c9a3; transform: rotate(45deg); }
         .os-say b { font-style: normal; font-weight: 700; color: #b8452f; }
         /* Desktop: page wala alag Rumi bubble chhupa — lineup bolta hai */
-        @media (min-width: 768px) { .os .rt-page { display: none !important; } }
         .os-left__foot { position: absolute; left: 0; right: 0; bottom: 30px; margin: 0; font-size: 14px; font-weight: 500; color: #f4eedf; }
 
         .os-right { position: relative; display: flex; justify-content: center; padding: 44px 40px 0; }
@@ -292,12 +291,13 @@ export default function OnboardShell({ children, tone = "dark", step, stepText, 
           .os-left h1 { font-size: 36px; line-height: 42px; }
           .os-right { padding: 44px 28px 0; }
         }
-        /* Mobile (390): sirf right panel, Figma mobile frames jaisa */
-        @media (max-width: 767px) {
+        /* Har screen (mobile + desktop): ek hi step poori screen par — mobile frames jaisa.
+           Desktop par bhi left wala bada hissa nahi, content beech mein (max 440px). */
+        @media all {
           .os { display: block; }
           .os-left { display: none; }
           .os-right { min-height: 100vh; min-height: 100dvh; padding: 36px 24px 0; }
-          .os-right__in { max-width: none; min-height: calc(100dvh - 36px); }
+          .os-right__in { max-width: 440px; margin: 0 auto; min-height: calc(100dvh - 36px); }
           .os-mtop { position: relative; display: flex; justify-content: center; align-items: center; height: 26px; margin-bottom: 10px; }
           .os-av { position: absolute; right: -6px; top: -20px; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--bx-gold); object-fit: cover; }
           .os-body { padding-top: 29px; }
