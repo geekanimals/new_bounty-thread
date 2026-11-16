@@ -209,7 +209,7 @@ export default function BrandAssistant() {
         .as-typing i:nth-child(3) { animation-delay: .3s; }
         @keyframes asDot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
 
-        .as-chips { display: flex; gap: 8px; padding: 0 22px 12px; overflow-x: auto; scrollbar-width: none; }
+        .as-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 22px 12px; }
         .as-chips::-webkit-scrollbar { display: none; }
         .as-chips button { flex-shrink: 0; height: 30px; padding: 0 12px; border: 1px solid var(--br-border); border-radius: 999px; background: #fff; font-size: 12px; font-weight: 600; color: var(--br-text); white-space: nowrap; }
         .as-chips button:hover { border-color: var(--br-primary); color: var(--br-primary); }

@@ -404,7 +404,9 @@ export default function NewCampaignRequest() {
         .br-input.is-err { border-color: var(--br-red); }
         .nr-err { margin: 6px 0 0; font-size: 12px; color: var(--br-red); }
         .nr-hint { margin: 6px 0 0; font-size: 11.5px; color: var(--br-faint); }
-        .nr-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .nr-dates { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+        .nr-dates .br-input { min-width: 0; width: 100%; }
+        @media (max-width: 360px) { .nr-dates { grid-template-columns: minmax(0, 1fr); } }
         .nr-dates .br-input { padding-right: 6px; font-size: 13px; }
 
         .nr-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }

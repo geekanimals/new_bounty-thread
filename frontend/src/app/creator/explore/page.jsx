@@ -127,7 +127,7 @@ export default function GuestExplore() {
         .gx-nav a, .gx-nav button { font-family: var(--bx-sans); font-weight: 500 !important; }
         .gx-filters .bx-pill { font-family: var(--bx-sans); font-size: 13.5px; font-weight: 600; }
         .gx-sub { margin: 8px 0 18px; text-align: center; font-family: var(--bx-sans); font-size: 14px; font-weight: 400; color: #3e4b52; }
-        .gx-filters { display: flex; justify-content: center; gap: 8px; margin-bottom: 22px; overflow-x: auto; scrollbar-width: none; }
+        .gx-filters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 22px; }
         .gx-filters::-webkit-scrollbar { display: none; }
         .gx-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
         .gx-empty { text-align: center; padding: 30px; font-size: 14px; color: var(--bx-text); }

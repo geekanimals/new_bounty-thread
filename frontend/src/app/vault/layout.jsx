@@ -158,6 +158,21 @@ export default function AdminLayout({ children }) {
         .ga-modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 22px; background: #fff; box-shadow: 0 30px 80px -30px rgba(20,33,59,.5); animation: adPop .18s ease; }
         @keyframes adPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 
+        /* ---------- Responsive safety (QA) ----------
+           1) Tab / chip rows: chhupne (side-scroll) ki jagah next line par wrap
+           2) Tables: aakhri (actions) column hamesha dikhe — right side par chipka rehta hai
+           3) Table ka actions cell kabhi na kate */
+        .ga-tabs, .wh-tabs, .cl-tabs, .dh-tabs, .mh-tabs, .bp-tabs, .aq-tabs, .sk-tabs, .cdw-tabs, .c2-sub, .au-filters, .ac-sorts, .py-filters {
+          flex-wrap: wrap !important; overflow-x: visible !important; margin-right: 0 !important;
+        }
+        :is(.ga-table-wrap, .ds-table, .db-table, .cl-table, .cpa-wrap, .cpc-wrap, .cu2-table, .wf-wrap, .fm-table, .cl-wrap, .pt-wrap, .apl-wrap, .lg-wrap, .sk-tw, .c2-tw, .us-gtw, .cuu-wrap)
+          table tr > :is(td, th):last-child:not([colspan]) {
+          position: sticky; right: 0; z-index: 1; background-color: #fff; box-shadow: -1px 0 0 var(--ad-line);
+        }
+        .ga-table tr > th:last-child { background-color: var(--ad-soft-2) !important; }
+        :is(.ga-table-wrap, .ds-table, .db-table, .cl-table, .cpa-wrap, .cpc-wrap, .cu2-table, .wf-wrap, .fm-table, .cl-wrap, .pt-wrap, .apl-wrap, .lg-wrap, .sk-tw, .c2-tw, .us-gtw, .cuu-wrap) table tr > td:last-child { overflow: visible !important; }
+        :is(.ga-table-wrap, .ds-table, .db-table, .cl-table, .cpa-wrap, .cpc-wrap, .cu2-table, .wf-wrap, .fm-table, .cl-wrap, .pt-wrap, .apl-wrap, .lg-wrap, .sk-tw, .c2-tw, .us-gtw, .cuu-wrap) table tr > td:last-child > :is(span, div) { flex-wrap: wrap; row-gap: 4px; }
+
         @media (max-width: 640px) {
           :where(.ga-h1) { font-size: 25px; letter-spacing: -0.8px; }
           .ga-overlay { place-items: end center; padding: 0; }

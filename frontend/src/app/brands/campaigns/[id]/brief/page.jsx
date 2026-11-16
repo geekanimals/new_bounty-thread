@@ -30,7 +30,8 @@ export default function CampaignBrief() {
         .cb-dont p { color: var(--br-red); }
         .cb-dd ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 12.5px; color: var(--br-text); }
         .cb-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-        .cb-tags .br-badge { height: 26px; font-size: 12px; }
+        .cb-tags .br-badge { max-width: 100%; height: auto; min-height: 24px; padding-top: 3px; padding-bottom: 3px; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+        .cb-tags .br-badge { min-height: 26px; font-size: 12px; }
         .cb-hash { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--br-primary); word-break: break-word; }
         .cb-hash span { color: var(--br-faint); margin: 0 4px; }
 
@@ -53,12 +54,13 @@ export default function CampaignBrief() {
         .cb-dates dd { margin: 0; font-weight: 800; }
 
         @media (max-width: 1023px) {
-          .cb { grid-template-columns: 1fr; }
-          .cb-side { grid-template-columns: 1fr 1fr; }
+          .cb { grid-template-columns: minmax(0, 1fr); }
+          .cb > * { min-width: 0; }
+          .cb-side { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
         }
         @media (max-width: 640px) {
           .cb-brief { padding: 18px; }
-          .cb-dd, .cb-side { grid-template-columns: 1fr; }
+          .cb-dd, .cb-side { grid-template-columns: minmax(0, 1fr); }
         }
               .cb-none { margin: 0; font-size: 13px; color: var(--br-muted); }
         .cb-note { display: flex; align-items: center; gap: 7px; margin: 20px 0 0; padding-top: 14px; border-top: 1px solid var(--br-border); font-size: 12.5px; color: var(--br-muted); }

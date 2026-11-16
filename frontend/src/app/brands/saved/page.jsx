@@ -232,7 +232,7 @@ export default function SavedCreators() {
 
       <style>{`
         .sv-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-        .sv-lists { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+        .sv-lists { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding: 2px; }
         .sv-lists::-webkit-scrollbar { display: none; }
         .sv-pill {
           flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;

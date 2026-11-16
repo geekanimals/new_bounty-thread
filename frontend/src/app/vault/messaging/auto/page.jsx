@@ -114,7 +114,7 @@ function AutoMessages() {
         .ma-sub { margin: 9px 0 20px; font-size: 12px; color: var(--ad-muted); }
         .ma-state { padding: 14px 11px; font-size: 13px; color: var(--ad-red); }
         .ma-state button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
-        .ma-step { border: 0; background: none; padding: 0; font-size: 13px; font-weight: 700; color: var(--ad-ink); text-align: left; }
+        .ma-step { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: none; padding: 0; font-size: 13px; font-weight: 700; color: var(--ad-ink); text-align: left; }
         .ma-step.is-pick { color: var(--ad-primary-2); }
         .ma-tg { width: 38px; height: 22px; background: #d3d7e4; }
         .ma-tg:not(.is-on)::after { opacity: 0; } /* Figma: off = saada grey pill */

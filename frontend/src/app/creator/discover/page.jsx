@@ -126,7 +126,7 @@ export default function Discover() {
         /* Desktop (Figma: 2 · Discover campaigns) */
         .dc-title { margin: 12px 0 0; text-align: center; font-family: var(--bx-serif); font-size: 34px; font-weight: 600; letter-spacing: -0.3px; line-height: 1.2; color: #14231a; }
         .dc-sub { margin: 4px 0 0; text-align: center; font-size: 14px; color: #3e4b52; }
-        .dc-filters { display: flex; justify-content: center; gap: 8px; margin: 22px 0 22px; overflow-x: auto; scrollbar-width: none; }
+        .dc-filters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 22px 0 22px; }
         .dc-filters::-webkit-scrollbar { display: none; }
         .dc-pill { flex-shrink: 0; height: 38px; padding: 0 18px; border-radius: 999px; border: 1px solid #e2d3b0; background: #fffaf0; font-size: 15px; font-weight: 500; color: #14231a; }
         .dc-pill.is-on { background: #123524; border-color: #123524; color: #fbf3e2; }

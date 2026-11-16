@@ -250,13 +250,8 @@ function PageHero({ eyebrow, title, sub, active }) {
         @media (max-width: 640px) {
           .ph-wrap { padding: 48px 20px 40px; }
           .ph-sub { font-size: 14px; }
-          .ph-tabs {
-            flex-wrap: nowrap;
-            overflow-x: auto;
-            margin-right: -20px;
-            padding-right: 20px;
-            scrollbar-width: none;
-          }
+          .ph-tabs { gap: 6px; }
+          .ph-tab { padding: 7px 12px; font-size: 12.5px; }
           .ph-tabs::-webkit-scrollbar { display: none; }
         }
       `}</style>

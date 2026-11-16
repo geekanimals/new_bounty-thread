@@ -187,7 +187,7 @@ export default function MyCampaigns() {
         .mc-head { margin-top: 2px; padding: 18px 16px 16px; border-radius: 14px; background: #fbf1dc; border: 1px solid #e6d5ae; }
         .mc-head h1 { font-family: var(--bx-serif); font-size: 15px; font-weight: 600; color: #14231a; }
         .mc-head p { margin: 6px 0 0; font-size: 13px; color: #7a6a4a; }
-        .mc-filters { display: flex; justify-content: center; gap: 6px; margin: 22px 0 20px; overflow-x: auto; scrollbar-width: none; }
+        .mc-filters { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 22px 0 20px; }
         .mc-filters::-webkit-scrollbar { display: none; }
         .mc-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #e2d3b0; background: #fffaf0; font-size: 12px; font-weight: 600; color: #14231a; white-space: nowrap; }
         .mc-pill em { font-style: normal; font-weight: 700; color: #b8452f; }

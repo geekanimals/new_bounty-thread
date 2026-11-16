@@ -236,8 +236,7 @@ export default function BrandsLayout({ children }) {
           gap: 4px;
           margin-bottom: 20px;
           border-bottom: 1px solid var(--br-border);
-          overflow-x: auto;
-          scrollbar-width: none;
+          flex-wrap: wrap;
         }
         .br-tabs::-webkit-scrollbar { display: none; }
         .br-tabs a, .br-tabs button {
@@ -280,8 +279,7 @@ export default function BrandsLayout({ children }) {
           border-radius: 11px;
           background: #eceef5;
           max-width: 100%;
-          overflow-x: auto;
-          scrollbar-width: none;
+          flex-wrap: wrap;
         }
         .br-seg::-webkit-scrollbar { display: none; }
         .br-seg button {
@@ -374,6 +372,9 @@ export default function BrandsLayout({ children }) {
 
         /* Table — mobile par side scroll */
         .br-table-wrap { overflow-x: auto; border: 1px solid var(--br-border); border-radius: var(--br-radius); background: #fff; }
+        /* actions (aakhri) column hamesha dikhe — table side-scroll ho tab bhi */
+        .br-table-wrap table tr > :is(td, th):last-child:not([colspan]) { position: sticky; right: 0; z-index: 1; background-color: #fff; box-shadow: -1px 0 0 var(--br-border); }
+        .br-table-wrap table tr > th:last-child { background-color: #fafafd; }
         .br-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .br-table th {
           padding: 12px 14px;

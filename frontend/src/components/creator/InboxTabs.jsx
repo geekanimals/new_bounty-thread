@@ -25,7 +25,7 @@ export default function InboxTabs() {
       </nav>
       <style>{`
         .ibt .bx-title { margin-top: 6px; }
-        .ibt-tabs { display: flex; justify-content: center; gap: 8px; margin: 14px 0 20px; overflow-x: auto; scrollbar-width: none; }
+        .ibt-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0 20px; }
         .ibt-tabs::-webkit-scrollbar { display: none; }
         .ibt-tabs a { flex-shrink: 0; height: 36px; padding: 0 16px; font-size: 13.5px; font-weight: 700; }
         @media (max-width: 767px) {
