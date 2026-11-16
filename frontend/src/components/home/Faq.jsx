@@ -42,8 +42,8 @@ export default function Faq() {
             Good to <em>know.</em>
           </h2>
           <p className="fq-sub">The things creators and brands ask us most. Anything else — write to us.</p>
-          <a href="mailto:givebacktogurugram@gmail.com" className="fq-mail">
-            <Send size={14} /> givebacktogurugram@gmail.com
+          <a href="mailto:mayank@geekcreativeagency.com" className="fq-mail">
+            <Send size={14} /> mayank@geekcreativeagency.com
           </a>
         </div>
 

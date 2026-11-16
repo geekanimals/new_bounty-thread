@@ -186,7 +186,7 @@ const OPTIONS = [
     text: "Can’t sign in? We’ll do it for you.",
     steps: [
       <>
-        Email <a href="mailto:givebacktogurugram@gmail.com?subject=Delete%20my%20data">givebacktogurugram@gmail.com</a>{" "}
+        Email <a href="mailto:mayank@geekcreativeagency.com?subject=Delete%20my%20data">mayank@geekcreativeagency.com</a>{" "}
         from your account email.
       </>,
       "Subject: “Delete my data”, with your Instagram username.",

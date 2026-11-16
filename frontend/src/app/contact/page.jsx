@@ -186,7 +186,7 @@ function PageHero({ eyebrow, title, sub, active }) {
   );
 }
 
-const EMAIL = "givebacktogurugram@gmail.com";
+const EMAIL = "mayank@geekcreativeagency.com";
 // WhatsApp number aane par yahan lagao, jaise "https://wa.me/919999999999"
 const WHATSAPP_URL = "#";
 
@@ -313,7 +313,7 @@ const CARDS = [
     title: "Brands",
     text: "A new campaign, a quote, a bill or a payment — or use “Request a campaign” in your dashboard.",
     link: "Email the brand team",
-    href: "mailto:givebacktogurugram@gmail.com?subject=Brand%20enquiry",
+    href: "mailto:mayank@geekcreativeagency.com?subject=Brand%20enquiry",
   },
   {
     icon: Star,

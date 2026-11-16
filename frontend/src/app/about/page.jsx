@@ -511,7 +511,7 @@ function WorkWithUs() {
             <h2 className="ww-title">Work with us.</h2>
             <p className="ww-text">
               Brands, creators and agencies — write to{" "}
-              <a href="mailto:givebacktogurugram@gmail.com">givebacktogurugram@gmail.com</a>
+              <a href="mailto:mayank@geekcreativeagency.com">mayank@geekcreativeagency.com</a>
             </p>
           </div>
           <Link href="/contact" className="ww-btn">

@@ -75,7 +75,7 @@ export default function RefundPage() {
 
         <LegalSection id="request" title="6. How to request">
           <p>
-            Email <a href="mailto:givebacktogurugram@gmail.com">givebacktogurugram@gmail.com</a> with your brand name, bill
+            Email <a href="mailto:mayank@geekcreativeagency.com">mayank@geekcreativeagency.com</a> with your brand name, bill
             number and payment reference. We reply within 48 hours.
           </p>
         </LegalSection>
@@ -292,7 +292,7 @@ function LegalBody({ toc, inShort, children }) {
             </ul>
             <div className="lg-help">
               <p className="lg-help__title">Questions?</p>
-              <a href="mailto:givebacktogurugram@gmail.com">givebacktogurugram@gmail.com</a>
+              <a href="mailto:mayank@geekcreativeagency.com">mayank@geekcreativeagency.com</a>
               <span>Mon–Sat · 10 am – 7 pm IST</span>
             </div>
           </div>
@@ -537,7 +537,7 @@ function CompanyCard() {
       <div>
         <p className="cc-name">Geek Online Ventures Pvt Ltd</p>
         <p className="cc-meta">
-          <a href="mailto:givebacktogurugram@gmail.com">givebacktogurugram@gmail.com</a> · Monday to Saturday, 10:00 am –
+          <a href="mailto:mayank@geekcreativeagency.com">mayank@geekcreativeagency.com</a> · Monday to Saturday, 10:00 am –
           7:00 pm IST
         </p>
       </div>

@@ -35,7 +35,7 @@ const COLUMNS = [
 const SOCIALS = [
   { icon: Instagram, label: "Instagram", href: "#" },
   { icon: Chat, label: "WhatsApp", href: "#" },
-  { icon: Send, label: "Email", href: "mailto:givebacktogurugram@gmail.com" },
+  { icon: Send, label: "Email", href: "mailto:mayank@geekcreativeagency.com" },
 ];
 
 export default function Footer() {

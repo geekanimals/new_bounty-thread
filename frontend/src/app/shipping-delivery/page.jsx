@@ -51,7 +51,7 @@ export default function ShippingPage() {
 
         <LegalSection id="questions" title="3. Questions">
           <p>
-            Write to <a href="mailto:givebacktogurugram@gmail.com">givebacktogurugram@gmail.com</a> about any campaign or
+            Write to <a href="mailto:mayank@geekcreativeagency.com">mayank@geekcreativeagency.com</a> about any campaign or
             product delivery.
           </p>
         </LegalSection>
@@ -268,7 +268,7 @@ function LegalBody({ toc, inShort, children }) {
             </ul>
             <div className="lg-help">
               <p className="lg-help__title">Questions?</p>
-              <a href="mailto:givebacktogurugram@gmail.com">givebacktogurugram@gmail.com</a>
+              <a href="mailto:mayank@geekcreativeagency.com">mayank@geekcreativeagency.com</a>
               <span>Mon–Sat · 10 am – 7 pm IST</span>
             </div>
           </div>
@@ -513,7 +513,7 @@ function CompanyCard() {
       <div>
         <p className="cc-name">Geek Online Ventures Pvt Ltd</p>
         <p className="cc-meta">
-          <a href="mailto:givebacktogurugram@gmail.com">givebacktogurugram@gmail.com</a> · Monday to Saturday, 10:00 am –
+          <a href="mailto:mayank@geekcreativeagency.com">mayank@geekcreativeagency.com</a> · Monday to Saturday, 10:00 am –
           7:00 pm IST
         </p>
       </div>
