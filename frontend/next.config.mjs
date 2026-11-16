@@ -18,9 +18,42 @@ const OLD_PAGES = [
   ["/brand", "/brands"],
 ];
 
+
+// ---------- Security headers (har page par) ----------
+// CSP: sirf apni site, Supabase, aur zaroori Google/YouTube/jsDelivr hi load ho sakte hain.
+const SUPABASE = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://edibibytqfrrxfztukpm.supabase.co").replace(/\/+$/, "");
+const SUPABASE_WS = SUPABASE.replace(/^https:/, "wss:");
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "media-src 'self' blob: https:",
+  `connect-src 'self' ${SUPABASE} ${SUPABASE_WS} https://docs.google.com https://*.googleusercontent.com`,
+  "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://docs.google.com https://drive.google.com",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "upgrade-insecure-requests",
+].join("; ");
+
+// X-Frame-Options / X-Content-Type-Options / Referrer-Policy server (nginx) pehle se bhejta hai — dobara nahi.
+const SECURITY_HEADERS = [
+  { key: "Content-Security-Policy", value: CSP },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(self), payment=(), usb=(), interest-cohort=()" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+  { key: "X-DNS-Prefetch-Control", value: "on" },
+];
+
 const STRICT = process.env.NEXT_CACHE_COMPONENTS === "1";
 
 const nextConfig = {
+  // "X-Powered-By: Next.js" header band (kaunsa framework hai, ye bahar na dikhe)
+  poweredByHeader: false,
   experimental: {
     agentFeedback: true,
   },
@@ -30,6 +63,10 @@ const nextConfig = {
   // Explicit false zaroori hai: value na likho to Vercel ka build env ise apne aap chalu kar deta hai.
   cacheComponents: STRICT,
   partialPrefetching: STRICT,
+
+  async headers() {
+    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+  },
 
   async redirects() {
     return [
