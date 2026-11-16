@@ -13,6 +13,8 @@ import { rpc, useRpc, errText } from "@/lib/supabase";
 export default function SettingsAutoMessages() {
   const sw = useRpc("admin", "admin_messaging_switches");
   const au = useRpc("admin", "api.ops_auto_messages");
+  const dr = useRpc("admin", "api.ops_snapto_drips"); // Snapto drips — apna alag button
+  const dripOn = !(dr.data && dr.data.on === false);
   const [busy, setBusy] = useState("");
   const [ask, setAsk] = useState(null); // auto ON/OFF confirm
   const [toast, say] = useToast();
@@ -24,6 +26,7 @@ export default function SettingsAutoMessages() {
         { k: "auto", name: "🤖 Automatic messages (every step)", on: autoOn, held: 0, sub: autoOn ? "Invites, step updates, reminders and bot replies go by themselves" : "Only what the team sends by hand goes" },
         { k: "wa", name: "💬 WhatsApp", on: d.wa_on !== false, held: d.wa_on === false ? d.held_wa || 0 : 0 },
         { k: "email", name: "✉️ Email", on: d.email_on !== false, held: d.email_on === false ? d.held_email || 0 : 0 },
+        { k: "drip", name: "🔁 Snapto drips (WhatsApp reminders)", on: dripOn, held: 0, sub: dripOn ? "Reminder sequences in Snapto start once per step (separate from the switches above)" : "No new drip starts · running drips still stop when the creator finishes the task" },
       ]
     : [];
 
@@ -38,6 +41,14 @@ export default function SettingsAutoMessages() {
   };
   const flip = async (c) => {
     if (c.k === "auto") return setAsk({ on: !c.on });
+    if (c.k === "drip") {
+      setBusy("drip");
+      const { error } = await rpc("admin", "api.ops_set_snapto_drips", { p_on: !c.on });
+      setBusy("");
+      if (error) return say(errText(error), true);
+      say(!c.on ? "🔁 Snapto drips ON" : "⏸ Snapto drips OFF — no new drip starts");
+      return dr.reload();
+    }
     const channel = c.k === "wa" ? "whatsapp" : "email";
     const on = !c.on;
     setBusy(c.k);
