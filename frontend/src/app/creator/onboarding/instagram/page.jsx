@@ -132,7 +132,6 @@ export default function ConnectInstagram() {
           .ci-bubble { left: 6px; width: 212px; }
           .ci-rumi { left: -4px; top: 66px; width: 151px; height: 125px; }
           .ci-kit { right: -4px; top: 50px; width: 197px; }
-          .ci-out { display: none; }
         }
       `}</style>
     </OnboardShell>

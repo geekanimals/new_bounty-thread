@@ -165,8 +165,8 @@ export default function CreatorHome() {
         </>
       )}
 
-      {/* Mobile: dream brand board */}
-      <div className="hm-m">
+      {/* Dream brand board (mobile + desktop dono) */}
+      <div className="hm-m hm-m--all">
         <p className="hm-label">— Your dream brand board —</p>
         <div className="hm-mbox hm-dream">
           {dreams.length ? (
@@ -244,7 +244,18 @@ export default function CreatorHome() {
         .hm-rumi b { font-style: normal; font-weight: 700; color: #b8452f; }
 
         /* Mobile-only pieces */
-        .hm-m, .hm-mcamp, .hm-quote { display: none; }
+        .hm-m, .hm-mcamp { display: none; }
+        /* Mobile jaisa: dream board + quote desktop par bhi */
+        .hm-m--all { display: block; margin-top: 30px; }
+        .hm-m--all .hm-label { margin-bottom: 12px; }
+        .hm-m--all .hm-mbox { padding: 16px 18px; border-radius: 16px; background: #fbf1dc; border: 1px solid #e6d5ae; }
+        .hm-dream { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .hm-dream p { margin: 0; font-size: 14px; color: #14231a; }
+        .hm-dream__row { display: flex; gap: 8px; }
+        .hm-dream__row img { width: 64px; height: 40px; border-radius: 8px; object-fit: cover; }
+        .hm-dream__name { display: inline-grid; place-items: center; min-width: 48px; height: 40px; padding: 0 10px; border-radius: 10px; background: #f3e6c6; color: #14231a; font-size: 12px; font-weight: 700; }
+        .hm-dream__link { flex-shrink: 0; font-family: var(--bx-jak); font-size: 13.5px; font-weight: 700; color: #2e9c94; }
+        .hm-quote { margin: 30px 0 6px; text-align: center; font-family: var(--bx-serif); font-style: italic; font-size: 20px; line-height: 1.37; color: #7a6a4a; }
 
         @media (max-width: 1100px) { .hm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 900px) { .hm-top, .hm-bottom { grid-template-columns: minmax(0, 1fr); } }
@@ -294,6 +305,9 @@ export default function CreatorHome() {
           .hm-kit p { margin: 10px 0 0; font-size: 14px; color: #fbf3e2; }
           .hm-kit__btn { display: inline-flex; height: 32px; margin-top: 12px; padding: 0 14px; font-size: 12px; }
           .hm-rumi { display: none; }
+          .hm-m--all { margin-top: 20px; }
+          .hm-m--all .hm-label { margin-bottom: 10px; }
+          .hm-m--all .hm-mbox { padding: 14px 15px; border-radius: 14px; background: rgba(10,34,25,.6); border: 1px solid rgba(232,176,74,.45); }
           .hm-quote { display: block; margin: 22px 0 6px; text-align: center; font-family: var(--bx-serif); font-style: italic; font-size: 19px; line-height: 1.37; color: #f6d98b; }
         }
       `}</style>

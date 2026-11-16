@@ -9,8 +9,8 @@ import BootLoader from "@/components/creator/BootLoader";
 import { SIDEKICKS } from "@/components/creator/data";
 
 /**
- * /creator — Welcome screen (mobile). Desktop par seedha /creator/login
- * (wahan left side mein welcome already dikhta hai).
+ * /creator — Welcome screen. Mobile aur desktop dono par pehli screen yahi (mobile jaisa hi flow):
+ * desktop par left side mein heading + sidekicks, right side mein mobile wale buttons.
  * Har step alag route: /creator → /creator/login → /creator/verify (Back ek-ek step).
  */
 export default function CreatorWelcome() {
@@ -28,7 +28,6 @@ export default function CreatorWelcome() {
       return;
     }
     captureInvite(); // ?cinv= / ?apply= rakh lo — login ke baad campaign khulega
-    if (window.matchMedia("(min-width: 768px)").matches) router.replace("/creator/login");
   }, [router]);
 
   // Login ho chuka hai to seedha app / agla step (purane app jaisa)
@@ -78,10 +77,24 @@ export default function CreatorWelcome() {
         </div>
       </section>
 
-      {/* Desktop: redirect hone tak sirf frame */}
+      {/* Desktop: wahi welcome screen (left = heading + sidekicks, right = mobile wale buttons) */}
       <div className="si-desk">
-        <OnboardShell tone="dark" step={1}>
-          <span />
+        <OnboardShell tone="dark">
+          <div className="si-dw">
+            <h2 className="si-dw__h">Let&apos;s find your next collab.</h2>
+            <button type="button" className="si-dw__go" onClick={() => router.push("/creator/login")}>
+              Find my collaborations →
+            </button>
+            <button type="button" className="si-dw__link" onClick={() => setVideo(true)}>
+              See how it works
+            </button>
+            <p className="si-welcome__line si-dw__line">
+              <i />
+              <b />
+              <i />
+            </p>
+            <p className="si-dw__foot">Real brands • Clear briefs • Your choice</p>
+          </div>
         </OnboardShell>
       </div>
 
@@ -96,6 +109,18 @@ export default function CreatorWelcome() {
 
       <style>{`
         .si-welcome { display: none; }
+        /* Desktop welcome (right panel) */
+        .si-dw { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; padding: 30px 0 40px; font-family: var(--bx-jak); color: #fbf3e2; }
+        .si-dw__eye { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: #e8b04a; }
+        .si-dw__h { margin: 12px 0 0; font-family: var(--bx-serif); font-size: 34px; font-weight: 600; line-height: 1.15; color: #fbf3e2; }
+        .si-dw__sub { margin: 14px 0 0; font-size: 15px; line-height: 1.5; color: #e9e1cd; }
+        .si-dw__go { width: 100%; height: 57px; margin-top: 30px; border: 0; border-radius: 28.7px; background: #f6ebd3; color: #14231a; font-family: var(--bx-jak); font-size: 17px; font-weight: 800; box-shadow: 0 10px 22px -10px rgba(0,0,0,.6); cursor: pointer; }
+        .si-dw__go:hover { background: #fff6e3; }
+        .si-dw__link { margin: 20px auto 0; border: 0; background: none; padding: 0; font-family: var(--bx-jak); font-size: 15px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; color: #fbf3e2; cursor: pointer; }
+        .si-dw__line { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 26px 0 0; }
+        .si-dw__line i { width: 88px; height: 1px; background: rgba(232,176,74,.6); }
+        .si-dw__line b { width: 11px; height: 11px; background: #e8b04a; }
+        .si-dw__foot { margin: 10px 0 0; font-size: 13px; font-weight: 500; color: #f4eedf; }
         @media (max-width: 767px) {
           .si-desk { display: none; }
           /* Poori screen mein fit — scroll nahi (Figma 390×844) */
