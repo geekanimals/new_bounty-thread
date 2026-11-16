@@ -5,7 +5,7 @@ import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
 import { useRpc, errText } from "@/lib/supabase";
-import { campTypeLabel, campStatusPick, campInBucket, statusTone, APPLICANT_PENDING, REPORT_APPROVED, fmtDate } from "@/components/admin/campaign/live";
+import { campTypeLabel, campStatusPick, campInBucket, statusTone, APPLICANT_PENDING, REPORT_APPROVED, BP_FAIL, inviteStepRank, fmtDate } from "@/components/admin/campaign/live";
 
 /* Campaign list ke tabs — har tab apna route (Back ek step) */
 const TABS = [
@@ -22,11 +22,14 @@ const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
 const sum = (o, pred) => Object.entries(o || {}).reduce((n, [k, v]) => n + (pred(k) ? Number(v) || 0 : 0), 0);
 
 /* admin_campaigns ki ek row → list ki row (purane adminCampaigns jaisa hisaab) */
-function toRow(c) {
+// Same rules as the campaign workspace (Overview + Creators boxes): creators in the campaign (not dropped / declined)
+// + bulk-upload invites that have not joined yet; Approved and Done count both too.
+function toRow(c, inv = {}) {
   const pc = c.pipeline_stage_counts || {};
-  const applied = (Number(c.applied) || 0) + sum(pc, () => true);
-  const approved = (Number(c.approved) || 0) + sum(pc, REPORT_APPROVED);
-  const done = sum(pc, (k) => k === "published" || k === "completed");
+  const iv = inv || {};
+  const applied = (Number(c.applied) || 0) + sum(pc, (k) => !BP_FAIL.includes(k)) + sum(iv, () => true);
+  const approved = (Number(c.approved) || 0) + sum(pc, REPORT_APPROVED) + sum(iv, (k) => inviteStepRank(k) >= 3);
+  const done = sum(pc, (k) => k === "published" || k === "completed") + sum(iv, (k) => k === "posted");
   const pending = sum(pc, (k) => APPLICANT_PENDING.includes(k)) + Math.max(0, (Number(c.applied) || 0) - (Number(c.approved) || 0) - (Number(c.declined) || 0));
   const status = campStatusPick(c.status);
   const risk =
@@ -40,7 +43,8 @@ export default function CampaignList({ filter = "all" }) {
   const tab = TABS.find((t) => t.k === filter) || TABS[0];
   // purana app: admin_campaigns (har 30 sec refresh)
   const { data, error, loading, reload } = useRpc("admin", "admin_campaigns", { p_status: null }, { refreshMs: 30000 });
-  const all = useMemo(() => (Array.isArray(data) ? data.map(toRow) : []), [data]);
+  const invc = useRpc("admin", "api.admin_campaign_invite_counts", {}, { refreshMs: 30000 });
+  const all = useMemo(() => (Array.isArray(data) ? data.map((c) => toRow(c, (invc.data || {})[c.id])) : []), [data, invc.data]);
   const rows = all.filter(tab.test).filter((c) => `${c.name} ${c.brand}`.toLowerCase().includes(q.trim().toLowerCase()));
   const emptyMsg = error ? null : loading ? "Loading campaigns…" : q.trim() ? `No campaigns match “${q}”.` : "No campaigns here yet.";
 
@@ -71,7 +75,7 @@ export default function CampaignList({ filter = "all" }) {
                 <th>Campaign / Brand</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Applied</th>
+                <th>Creators</th>
                 <th>Approved</th>
                 <th>Completed</th>
                 <th>Ends</th>
@@ -140,7 +144,7 @@ export default function CampaignList({ filter = "all" }) {
               </div>
               <div className="cl-card__nums">
                 <span>
-                  <b>{c.applied}</b> applied
+                  <b>{c.applied}</b> creators
                 </span>
                 <span>
                   <b>{c.approved}</b> approved

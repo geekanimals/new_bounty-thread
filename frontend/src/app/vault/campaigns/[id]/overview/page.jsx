@@ -6,7 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
-import { useCampaign, useToast, campStatusOptions, delivChips, fmtMoney, fmtDate, daysLeft, REPORT_APPROVED, inviteStepRank } from "@/components/admin/campaign/live";
+import { useCampaign, useToast, campStatusOptions, delivChips, fmtMoney, fmtDate, daysLeft } from "@/components/admin/campaign/live";
+import { buildRows } from "@/components/admin/campaign/journey";
 
 /* Ideal creator profile → ek line (purane idealProfileHtml ka chhota roop) */
 function eligLine(ip) {
@@ -25,6 +26,7 @@ export default function WorkspaceOverview() {
   const auto = useRpc("admin", "api.ops_auto_messages", {}, {});
   const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !id || id === "sample" });
   const prog = useRpc("admin", "api.campaign_deliverable_progress", { p_campaign: id }, { skip: !id || id === "sample" });
+  const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !id || id === "sample" });
   const [ask, setAsk] = useState(false);
   const [confirm, setConfirm] = useState("");
   const [note, setNote] = useState("");
@@ -83,13 +85,12 @@ export default function WorkspaceOverview() {
   const chanSub = (ch) => (ch.global === false ? "OFF — paused for all campaigns" : ch.on ? "ON — sending step updates" : ch.held ? `OFF · ${ch.held} stopped while OFF — never sent` : "OFF — for this campaign");
 
   /* Creator journey (campaign_people + campaign_deliverable_progress) */
-  const P = people.data?.participants || [];
-  const I = people.data?.invites || [];
-  const total = P.length + I.length;
-  const approved = P.filter((x) => REPORT_APPROVED(x.stage)).length + I.filter((x) => inviteStepRank(x.status) >= 3).length;
-  const pg = prog.data && typeof prog.data === "object" ? Object.values(prog.data) : [];
-  const done = pg.filter((v) => v && v.all_done).length + I.filter((x) => x.status === "posted").length;
-  const jn = (n) => (people.loading ? "…" : people.error ? "—" : n);
+  // same rows + same rules as the Creators tab boxes, so both pages always show the same numbers
+  const rowsAll = buildRows({ tracker: bt.data, people: people.data, progress: prog.data || {}, kind: row?.campaign_type || "barter" });
+  const total = rowsAll.filter((c) => !c.failed).length;
+  const approved = rowsAll.filter((c) => c.approved).length;
+  const done = rowsAll.filter((c) => c.posted).length;
+  const jn = (n) => (people.loading || bt.loading ? "…" : people.error ? "—" : n);
 
   /* Delete (admin_delete_campaign — naam type karke confirm) */
   const del = async () => {
