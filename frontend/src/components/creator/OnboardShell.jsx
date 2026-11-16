@@ -14,8 +14,24 @@ import { Play, Close } from "@/components/ui/Icons";
 const KID_ROW = ["pip", "rumi", "mochi", "sprout", "dot", "pebble"];
 
 /* ---------- "How Bounty works" video popup ---------- */
+// Geek Influencer guide on YouTube — desktop: long video, phone: the Short (vertical)
+const GUIDE_LONG = "4E_G2F3as0U";
+const GUIDE_SHORT = "cAnIjgCMdbo";
 export function VideoModal({ open, onClose, onFind }) {
   const [playing, setPlaying] = useState(false);
+  const [isPhone, setIsPhone] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const on = () => setIsPhone(mq.matches);
+    on();
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  // band karne par video ruk jaye
+  useEffect(() => {
+    if (!open) setPlaying(false);
+  }, [open]);
   // Escape se popup band
   useEffect(() => {
     if (!open) return undefined;
@@ -33,18 +49,28 @@ export function VideoModal({ open, onClose, onFind }) {
             <Close size={15} />
           </button>
         </div>
-        <button type="button" className="vm-video" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause" : "Play"}>
-          <span className="vm-kids">
-            {SIDEKICKS.map((s) => (
-              <img key={s.id} src={s.img} alt="" />
-            ))}
-          </span>
-          <span className={`vm-play ${playing ? "is-on" : ""}`}>{playing ? <span className="vm-pause" /> : <Play size={18} />}</span>
-          <span className="vm-time">{playing ? "0:12" : "0:00"} / 3:44</span>
-          <span className="vm-bar">
-            <i style={{ width: playing ? "6%" : "0%" }} />
-          </span>
-        </button>
+        {playing ? (
+          <div className={`vm-video vm-video--${isPhone ? "short" : "long"}`}>
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${isPhone ? GUIDE_SHORT : GUIDE_LONG}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+              title="How Bounty works"
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+            />
+          </div>
+        ) : (
+          <button type="button" className="vm-video" onClick={() => setPlaying(true)} aria-label="Play">
+            <span className="vm-kids">
+              {SIDEKICKS.map((s) => (
+                <img key={s.id} src={s.img} alt="" />
+              ))}
+            </span>
+            <span className="vm-play">
+              <Play size={18} />
+            </span>
+            <span className="vm-time">{isPhone ? "Quick guide" : "Full guide"}</span>
+          </button>
+        )}
         <ol className="vm-steps">
           <li>
             <b>1</b>
@@ -83,8 +109,9 @@ export function VideoModal({ open, onClose, onFind }) {
         .vm-play { position: absolute; left: 50%; top: 32%; transform: translate(-50%,-50%); width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.92); color: var(--bx-ink); display: grid; place-items: center; }
         .vm-pause { width: 14px; height: 16px; border-left: 4px solid var(--bx-ink); border-right: 4px solid var(--bx-ink); }
         .vm-time { position: absolute; left: 10px; bottom: 14px; font-family: var(--bx-sans); font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
-        .vm-bar { position: absolute; left: 10px; right: 10px; bottom: 8px; height: 3px; border-radius: 3px; background: rgba(255,255,255,.3); }
-        .vm-bar i { display: block; height: 100%; border-radius: inherit; background: var(--bx-gold); transition: width .4s; }
+        .vm-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        .vm-video--long { background: #000; }
+        .vm-video--short { aspect-ratio: 9 / 16; height: min(62vh, 560px); width: auto; max-width: 100%; margin: 0 auto; background: #000; }
         .vm-steps { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; }
         .vm-steps li { display: flex; gap: 12px; align-items: flex-start; }
         .vm-steps b { width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: var(--bx-gold); color: #14231a; display: grid; place-items: center; font-family: var(--bx-serif); font-size: 15px; font-weight: 700; }
