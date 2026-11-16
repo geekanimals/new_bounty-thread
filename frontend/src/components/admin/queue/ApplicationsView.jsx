@@ -335,7 +335,7 @@ export default function ApplicationsView({ openId }) {
         .apl-state { height: 40px; padding: 0 14px; font-size: 13px; }
 
         @media (max-width: 1023px) {
-          .apl-select, .apl-search { flex: 1 1 200px; width: auto; margin-left: 0; }
+          .apl-select, .apl-search { flex: 1 1 200px; width: auto; min-width: 0; max-width: 100%; margin-left: 0; }
         }
         @media (max-width: 640px) {
           .apl { padding: 18px 16px; }

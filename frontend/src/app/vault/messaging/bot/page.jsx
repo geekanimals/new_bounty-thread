@@ -252,7 +252,7 @@ export default function WhatsAppBot() {
         .mb-pause .ga-btn { flex-shrink: 0; }
         .mb-paused { margin-top: 14px; font-size: 12px; color: var(--ad-orange); }
         .mb-sees { margin: -14px 0 18px; padding: 12px 14px; border-radius: 12px; background: var(--ad-soft-2); font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.6; color: var(--ad-text); white-space: pre-wrap; }
-        .mb-side .pt-wrap { overflow-x: hidden; }
+        .mb-side .pt-wrap { overflow-x: auto; }
         .mb-side .pt { min-width: 0 !important; }
         @media (max-width: 1180px) { .mb-grid { grid-template-columns: 1fr; } }
         @media (max-width: 640px) {

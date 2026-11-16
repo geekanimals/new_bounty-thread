@@ -270,7 +270,7 @@ export default function AdminOverview() {
         .ov-q__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 700; color: var(--ad-ink); }
         .ov-q__title .ga-count { min-width: 30px; height: 24px; border-radius: 12px; }
         .ov-q__sub { margin-top: 6px; font-size: 12px; line-height: 1.33; color: #8791a7; }
-        .ov-q__side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .ov-q__side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; max-width: 100%; }
         .ov-when { font-size: 12px; color: var(--ad-muted); }
         .ov-review { height: 42px; padding: 0 15px; border-color: var(--ad-line-2); color: var(--ad-primary-ink); }
         .ov-tabs { margin-top: 26px; }

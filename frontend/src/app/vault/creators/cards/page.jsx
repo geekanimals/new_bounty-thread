@@ -217,7 +217,8 @@ export default function AdminCreatorCards({ snapshot = false }) {
           .cc2-filters { grid-template-columns: 1fr 1fr; }
           .cc2-f { flex-direction: column; align-items: stretch; gap: 4px; }
           .cc2-f select { width: 100%; }
-          .cc2-grid { grid-template-columns: 1fr; }
+          .cc2-grid { grid-template-columns: minmax(0, 1fr); }
+          .cc2-c { min-width: 0; }
         }
       `}</style>
     </AdminShell>
