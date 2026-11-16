@@ -46,8 +46,11 @@ export async function startInstagramConnect({ after } = {}) {
     /* ignore */
   }
   const p = new URLSearchParams({ client_id: INSTAGRAM_APP_ID, redirect_uri: igRedirect(), response_type: "code", scope: IG_SCOPES, state: st });
-  // "#weblink" + trailing slash: phone par Instagram app mein nahi, browser mein hi login + Allow (purana note)
-  window.location.href = "https://www.instagram.com/oauth/authorize/?" + p.toString() + "#weblink";
+  // Phone par "#weblink" nahi: Instagram app khulta hai (wahan pehle se login) → sirf "Allow".
+  // Desktop par browser hi — jis browser mein Instagram login hai wahan bhi sirf "Allow".
+  // Wapsi kisi doosre browser mein ho to ticket se isi account se judta hai (finishInstagram).
+  const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  window.location.href = "https://www.instagram.com/oauth/authorize/?" + p.toString() + (phone ? "" : "#weblink");
 }
 
 /** URL mein Instagram ka ?code&state hai? (wapsi) → { code, state, error } | null */

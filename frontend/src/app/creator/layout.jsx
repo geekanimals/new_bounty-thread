@@ -1,3 +1,4 @@
+import OpenInBrowser from "@/components/creator/OpenInBrowser";
 import { Fraunces, DM_Sans, Plus_Jakarta_Sans, Cinzel } from "next/font/google";
 
 // Bounty creator ke fonts (Figma: Fraunces headings, DM Sans text, Jakarta onboarding, Cinzel logo)
@@ -19,6 +20,7 @@ export const metadata = {
 export default function CreatorLayout({ children }) {
   return (
     <div className={`bx ${fraunces.variable} ${dmSans.variable} ${jakarta.variable} ${cinzel.variable}`}>
+      <OpenInBrowser />
       {children}
 
       <style>{`
