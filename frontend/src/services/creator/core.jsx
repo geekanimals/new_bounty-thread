@@ -75,6 +75,8 @@ export const K = {
   afterIg: "geekos_after_ig",
   igConnected: "geekos_conn_instagram",
   uiFlags: "bounty_creator_ui",
+  // WhatsApp / email link se aaye aur login nahi tha → login ke baad wahi page kholna hai
+  afterLogin: "bounty_after_login",
 };
 
 /** localStorage — private mode / SSR mein chupchaap fail */

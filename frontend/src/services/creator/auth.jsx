@@ -340,9 +340,40 @@ export function gateRoute(c, mode, pathname = "") {
   return null;
 }
 /** Login ke turant baad kahan (purana bootOS) */
+/** Link wala page yaad rakho (login ke baad wahi khulega) — sirf /creator/... ke andar, 1 din tak */
+export function rememberAfterLogin(path) {
+  const p = String(path || "");
+  if (!/^\/creator\/[a-z]/.test(p) || /^\/creator\/(login|verify)\b/.test(p) || p.includes("//")) return;
+  ls.set(K.afterLogin, JSON.stringify({ p, t: Date.now() }));
+}
+function takeAfterLogin() {
+  let v = null;
+  try {
+    v = JSON.parse(ls.get(K.afterLogin) || "null");
+  } catch {
+    v = null;
+  }
+  if (!v || !v.p || Date.now() - (v.t || 0) > 86400000 || !/^\/creator\/[a-z]/.test(v.p) || v.p.includes("//")) {
+    ls.del(K.afterLogin);
+    return null;
+  }
+  return v.p;
+}
+
 export function afterLoginRoute(c = state) {
+  const wanted = takeAfterLogin();
+  // "Connect Instagram" / "Reconnect" link → seedha Instagram connect
+  if (wanted && /^\/creator\/onboarding\/meta\b/.test(wanted)) {
+    ls.del(K.afterLogin);
+    return wanted;
+  }
   if (!c.hasIg && !c.igLater) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
   if (needsOnboarding(c)) return "/creator/onboarding/content";
+  // WhatsApp link wala page (agreement, address, profile…) — onboarding ke baad seedha wahi
+  if (wanted) {
+    ls.del(K.afterLogin);
+    return wanted;
+  }
   // campaign invite se aaye: pehle profile (locked ho to), warna My campaigns
   if (c.inviteGo) return c.locked ? "/creator/profile" : "/creator/my-campaigns";
   const apply = ls.get(K.apply);
@@ -359,6 +390,10 @@ export function useCreatorGate(mode, router, pathname) {
   useEffect(() => {
     if (!mode) return;
     const to = gateRoute(c, mode, pathname);
+    // login nahi hai → jis page ka link khola tha use yaad rakho
+    if (to === "/creator/login" && mode !== "guest" && typeof window !== "undefined") {
+      rememberAfterLogin(window.location.pathname + window.location.search);
+    }
     if (to && to !== pathname) router.replace(to);
   }, [c, mode, router, pathname]);
   return c;

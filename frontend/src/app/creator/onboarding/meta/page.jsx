@@ -36,7 +36,7 @@ export default function MetaConnect() {
   const cancel = () => (window.history.length > 1 ? router.back() : router.push("/creator/onboarding/instagram"));
 
   return (
-    <OnboardShell tone="light" step={4} onBack={cancel}>
+    <OnboardShell tone="light" step={4} onBack={cancel} gate="member">
       <title>Connect Instagram — Bounty</title>
       <div className="mt">
         <span className="mt-ig" aria-hidden="true" />
