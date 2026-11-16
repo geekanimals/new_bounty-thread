@@ -324,6 +324,12 @@ export function needsManualDetails(c = state) {
 }
 
 /* ---------- Gates ---------- */
+/** Instagram step dikhana hai? Bulk upload wale creators (team ne chuna) ke liye Instagram zaroori nahi —
+ *  backend (my_join_status) "Connect Instagram" nahi maangta to step skip, seedha app / campaign. */
+export function needsIgStep(c = state) {
+  if (c.hasIg || c.igLater) return false;
+  return (c.joinNeeds || []).some((x) => /instagram/i.test(x));
+}
 /**
  * Is page par rehna hai ya kahin aur jaana hai? (null = theek hai)
  *  mode "guest"  — welcome / login / verify: login hai to aage bhejo
@@ -335,7 +341,7 @@ export function gateRoute(c, mode, pathname = "") {
   if (mode === "guest") return c.loggedIn ? afterLoginRoute(c) : null;
   if (!c.loggedIn) return "/creator/login";
   if (mode === "member") return null;
-  if (!c.hasIg && !c.igLater) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
+  if (needsIgStep(c)) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
   if (needsOnboarding(c) && !/^\/creator\/media-kit/.test(pathname)) return "/creator/onboarding/content";
   return null;
 }
@@ -367,7 +373,7 @@ export function afterLoginRoute(c = state) {
     ls.del(K.afterLogin);
     return wanted;
   }
-  if (!c.hasIg && !c.igLater) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
+  if (needsIgStep(c)) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
   if (needsOnboarding(c)) return "/creator/onboarding/content";
   // WhatsApp link wala page (agreement, address, profile…) — onboarding ke baad seedha wahi
   if (wanted) {
