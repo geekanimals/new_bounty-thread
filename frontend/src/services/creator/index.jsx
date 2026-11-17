@@ -36,3 +36,4 @@ export * from "./messages";
 export * from "./payments";
 export * from "./mediaKit";
 export * from "./helpers";
+export * from "./sidekick";

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/creator/Logo";
-import { useSession, signOut as creatorSignOut, useCreatorGate, gateRoute, fmtFollowers, needsMe, profileProgress, STAGE_SHORT, hrefOf, iconOf, when, useMyCampaigns, useOpenCampaigns, groupOf, noteOf, engagement, useMyCampaignRows, useNotifications, markAllRead, setAvailability, getConsent, saveConsent } from "@/services/creator";
+import { useSession, signOut as creatorSignOut, useCreatorGate, gateRoute, fmtFollowers, needsMe, profileProgress, STAGE_SHORT, hrefOf, iconOf, when, useMyCampaigns, useOpenCampaigns, groupOf, noteOf, engagement, useMyCampaignRows, useNotifications, markAllRead, setAvailability, getConsent, saveConsent, askSidekick, sidekickApply, sidekickNext, isHi } from "@/services/creator";
 import { useRumiTip } from "@/components/creator/rumiBus";
 import { getSidekick } from "@/components/creator/data";
 import BootLoader from "@/components/creator/BootLoader";
@@ -68,19 +68,6 @@ const DRAWER = [
   NAV[1],
   { group: "Create & grow", items: [...NAV[2].items, { label: "Dream brand board", href: "/creator/profile/dream-brands", icon: "💙" }] },
 ];
-
-/* Ask Rumi ke jawab — sirf rasta batate hain (koi nakli campaign / amount nahi); asli data us page par */
-const RUMI_ANSWERS = [
-  { k: ["attention", "need", "pending", "todo"], a: "Anything waiting on you shows up under “Action needed” in My campaigns — sign, confirm your address, send your draft or post.", href: "/creator/my-campaigns" },
-  { k: ["brief", "help"], a: "Open any campaign → “Read full creative brief”. Tip: the deadline starts after delivery, not after selection.", href: "/creator/discover" },
-  { k: ["campaign", "find", "match"], a: "Discover shows every open campaign — the ones you're eligible for are marked, and paid ones fill fast!", href: "/creator/discover" },
-  { k: ["media", "kit", "improve"], a: "Add 1–2 showcase posts and your city — brands open kits with a clear bio far more often.", href: "/creator/media-kit" },
-  { k: ["pay", "money", "upi"], a: "Payments shows every fee, what's paid and what's pending — add your UPI or bank once your agreement is signed.", href: "/creator/payments" },
-];
-const answerFor = (q) => {
-  const t = q.toLowerCase();
-  return RUMI_ANSWERS.find((r) => r.k.some((k) => t.includes(k))) || { a: "I can help with campaigns, briefs, your media kit and payments — try one of the quick buttons above 🌿" };
-};
 
 /* ---------- Connect Instagram sheet (Apply se, locked mode) ---------- */
 export function ConnectInstagramSheet({ open, onClose }) {
@@ -156,8 +143,18 @@ export default function BountyShell({ children, tone = "paper" }) {
   const [tip, setTip] = useState(false); // generic tip (pehli baar)
   const [tipHidden, setTipHidden] = useState(false); // is page par × dabaya
   const pageTip = useRumiTip(); // page ki baat — yahi sidekick (footer / sidebar) bolega
-  const [chat, setChat] = useState([]);
+  const [chat, setChat] = useState(() => {
+    try {
+      return JSON.parse(window.sessionStorage.getItem("bounty_sidekick_chat") || "[]");
+    } catch {
+      return [];
+    }
+  });
   const [ask, setAsk] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const [skNext, setSkNext] = useState(null);
+  const [confirmApply, setConfirmApply] = useState(null); // card id
+  const chatEnd = useRef(null);
   const [cookieOpen, setCookieOpen] = useState(false);
   const notifRef = useRef(null);
   const cmdInput = useRef(null);
@@ -327,13 +324,63 @@ export default function BountyShell({ children, tone = "paper" }) {
     setCookieOpen(false);
     saveConsent(v);
   };
-  const sendAsk = (q) => {
+  // Sidekick chat — askSidekick (creator ka asli data + backend campaign helper)
+  const pushChat = (items) =>
+    setChat((c) => {
+      const n = [...c, ...items].slice(-40);
+      try {
+        window.sessionStorage.setItem("bounty_sidekick_chat", JSON.stringify(n));
+      } catch {
+        /* ignore */
+      }
+      return n;
+    });
+  const sendAsk = async (q) => {
     const text = (q ?? ask).trim();
-    if (!text) return;
-    const ans = answerFor(text);
-    setChat((c) => [...c, { me: true, text }, { me: false, text: ans.a, href: ans.href }]);
+    if (!text || thinking) return;
+    const history = chat;
+    pushChat([{ me: true, text }]);
     setAsk("");
+    setThinking(true);
+    const ans = await askSidekick(text, { history });
+    setThinking(false);
+    pushChat([{ me: false, text: ans.text, links: ans.links || [], cards: ans.cards || [], suggest: ans.suggest || [], hi: isHi(text) }]);
   };
+  const doApply = async (card, hi) => {
+    setConfirmApply(null);
+    setThinking(true);
+    const r = await sidekickApply(card, hi);
+    setThinking(false);
+    pushChat([{ me: false, text: r.text, links: r.href ? [{ label: r.ok ? "My campaigns" : "Open campaign", href: r.href }] : [], applied: r.ok ? card.id : null }]);
+  };
+  const clearChat = () => {
+    setChat([]);
+    try {
+      window.sessionStorage.removeItem("bounty_sidekick_chat");
+    } catch {
+      /* ignore */
+    }
+  };
+  useEffect(() => {
+    if (panel !== "rumi") return;
+    let alive = true;
+    sidekickNext().then((n) => alive && setSkNext(n));
+    return () => {
+      alive = false;
+    };
+  }, [panel]);
+  useEffect(() => {
+    if (panel === "rumi") chatEnd.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [chat, thinking, panel]);
+  const appliedIds = new Set(chat.filter((m) => m.applied).map((m) => m.applied));
+  const md = (t) =>
+    String(t || "")
+      .split("\n")
+      .map((ln, i) => (
+        <span key={i} className="bs-chat__ln">
+          {ln.split(/(\*\*[^*]+\*\*)/g).map((p, j) => (/^\*\*[^*]+\*\*$/.test(p) ? <b key={j}>{p.slice(2, -2)}</b> : p))}
+        </span>
+      ));
 
   const navItem = (it) => (
     <Link key={it.href} href={it.href} className={`bs-nav__item ${isActive(it.href) ? "is-active" : ""}`} title={it.label}>
@@ -789,26 +836,89 @@ export default function BountyShell({ children, tone = "paper" }) {
                   </button>
                 ))}
               </div>
-              <div className="bs-sheet__next">
-                <small>✦ Next up</small>
-                <strong>{locked ? "Connect Instagram" : "Sign the Nykaa agreement"}</strong>
-                <p>{locked ? "Campaigns unlock once brands can see your real reach." : "Nykaa picked you — sign to lock your spot."}</p>
-                <Link href={locked ? "/creator/onboarding/meta" : "/creator/my-campaigns/nykaa-glow/agreement"}>{locked ? "Connect now ›" : "Open campaign ›"}</Link>
-              </div>
-              {chat.length > 0 && (
-                <div className="bs-chat">
-                  {chat.map((m, i) => (
-                    <p key={i} className={m.me ? "is-me" : ""}>
-                      {m.text}
-                      {m.href && (
-                        <Link href={m.href}>
-                          Open <ArrowRight size={11} />
-                        </Link>
-                      )}
-                    </p>
-                  ))}
+              {skNext && (
+                <div className="bs-sheet__next">
+                  <small>✦ Next up</small>
+                  <strong>{skNext.title}</strong>
+                  <p>{skNext.sub}</p>
+                  <Link href={skNext.href}>{skNext.label} ›</Link>
                 </div>
               )}
+              {chat.length > 0 && (
+                <div className="bs-chat">
+                  <button type="button" className="bs-chat__clear" onClick={clearChat}>
+                    Clear chat
+                  </button>
+                  {chat.map((m, i) =>
+                    m.me ? (
+                      <p key={i} className="is-me">
+                        {m.text}
+                      </p>
+                    ) : (
+                      <div key={i} className="bs-chat__bot">
+                        {m.text && <p>{md(m.text)}</p>}
+                        {(m.cards || []).map((cd) => (
+                          <div key={cd.id} className="bs-chat__card">
+                            <strong>{cd.title}</strong>
+                            <small>
+                              {[cd.brand, cd.reward, cd.deliver].filter(Boolean).join(" · ")}
+                              {cd.till ? ` · till ${cd.till}` : ""}
+                            </small>
+                            {cd.notEligible && <em>Not eligible{cd.why ? ` — ${cd.why}` : ""}</em>}
+                            <div className="bs-chat__cardbtns">
+                              <Link href={`/creator/discover/${cd.id}`}>View</Link>
+                              {appliedIds.has(cd.id) || cd.myStage ? (
+                                <span className="is-done">Applied ✓</span>
+                              ) : cd.closed || cd.notEligible ? null : confirmApply === cd.id ? (
+                                <>
+                                  <button type="button" className="is-go" disabled={thinking} onClick={() => doApply(cd, m.hi)}>
+                                    Yes, apply
+                                  </button>
+                                  <button type="button" onClick={() => setConfirmApply(null)}>
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button type="button" className="is-go" onClick={() => setConfirmApply(cd.id)}>
+                                  Apply
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {(m.links || []).length > 0 && (
+                          <div className="bs-chat__links">
+                            {m.links.map((l) => (
+                              <Link key={l.href + l.label} href={l.href}>
+                                {l.label} <ArrowRight size={11} />
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                        {i === chat.length - 1 && (m.suggest || []).length > 0 && (
+                          <div className="bs-chat__sug">
+                            {m.suggest.map((sg) => (
+                              <button key={sg} type="button" onClick={() => sendAsk(sg)}>
+                                {sg}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+              {thinking && (
+                <div className="bs-chat">
+                  <p className="bs-chat__typing">
+                    <i />
+                    <i />
+                    <i />
+                  </p>
+                </div>
+              )}
+              <div ref={chatEnd} />
             </div>
             <form
               className="bs-sheet__ask"
@@ -821,7 +931,7 @@ export default function BountyShell({ children, tone = "paper" }) {
               <span className="bs-sheet__mic" aria-hidden="true">
                 <Mic />
               </span>
-              <button type="submit" aria-label="Send" disabled={!ask.trim()}>
+              <button type="submit" aria-label="Send" disabled={!ask.trim() || thinking}>
                 <Send size={15} />
               </button>
             </form>
@@ -1059,6 +1169,27 @@ export default function BountyShell({ children, tone = "paper" }) {
         .bs-chat { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
         .bs-chat p { margin: 0; max-width: 88%; padding: 9px 12px; border-radius: 14px; background: rgba(255,255,255,.1); font-size: 13px; line-height: 1.45; }
         .bs-chat p.is-me { align-self: flex-end; background: var(--bx-gold); color: var(--bx-ink); font-weight: 600; }
+        .bs-chat__bot { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; max-width: 92%; }
+        .bs-chat__bot > p { max-width: 100%; }
+        .bs-chat__ln { display: block; }
+        .bs-chat__clear { align-self: center; border: 0; background: none; color: #d9cdb2; font-size: 11px; text-decoration: underline; cursor: pointer; }
+        .bs-chat__card { width: 100%; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.14); display: flex; flex-direction: column; gap: 3px; }
+        .bs-chat__card strong { font-size: 13.5px; }
+        .bs-chat__card small { font-size: 11.5px; color: #e6dcc6; line-height: 1.35; }
+        .bs-chat__card em { font-size: 11.5px; color: #f3b4a2; font-style: normal; }
+        .bs-chat__cardbtns { display: flex; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
+        .bs-chat__cardbtns a, .bs-chat__cardbtns button { margin: 0 !important; height: 30px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); background: none; color: #fbf3e2 !important; font-size: 12px; font-weight: 700; text-decoration: none !important; display: inline-flex; align-items: center; cursor: pointer; }
+        .bs-chat__cardbtns .is-go { background: var(--bx-gold); border-color: var(--bx-gold); color: var(--bx-ink) !important; }
+        .bs-chat__cardbtns .is-done { font-size: 12px; font-weight: 700; color: #b9e3c6; }
+        .bs-chat__links { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+        .bs-chat__links a { margin-left: 0 !important; }
+        .bs-chat__sug { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+        .bs-chat__sug button { border: 1px solid rgba(232,176,74,.6); background: none; color: #f6d98b; border-radius: 999px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
+        .bs-chat__typing { display: inline-flex !important; gap: 4px; }
+        .bs-chat__typing i { width: 6px; height: 6px; border-radius: 50%; background: #e6dcc6; animation: bsdot 1s infinite ease-in-out; }
+        .bs-chat__typing i:nth-child(2) { animation-delay: .15s; }
+        .bs-chat__typing i:nth-child(3) { animation-delay: .3s; }
+        @keyframes bsdot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
         .bs-chat a { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-weight: 700; color: var(--bx-gold-2); text-decoration: underline; }
         .bs-sheet__ask { display: flex; align-items: center; gap: 8px; margin: 0 14px 14px 25px; height: 44px; padding: 0 5px 0 16px; border-radius: 999px; background: #f7e8c8; color: #2a1e14; }
         .bs-sheet__ask input { flex: 1; min-width: 0; height: 34px; border: 0; outline: none; background: none; font-family: var(--bx-serif); font-style: italic; font-size: 13.5px; color: #2a1e14; }
