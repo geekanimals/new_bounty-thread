@@ -521,7 +521,8 @@ export default function CampaignPayments() {
         .py-ck { width: 40px; }
         .py-ck input, .py-all input { width: 15px; height: 15px; margin: 0; accent-color: #5f6577; }
         .py-act { height: 40px; padding: 0 15px; font-size: 13px; }
-        .py-acts { display: inline-flex; gap: 6px; }
+        .py-acts { display: inline-flex; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
+        .py-t td:last-child { white-space: nowrap; }
         .py-more { width: 40px; padding: 0; font-size: 18px; line-height: 1; }
         .py-name { padding: 0; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
         .py-name:hover b { text-decoration: underline; }
