@@ -143,6 +143,28 @@ export default function AdminShell({ children, wide = false }) {
 
   useEffect(() => setPanel(null), [pathname]);
 
+  // Naye deploy ke baad purana khula page purani JS files maangta hai — woh nahi milti aur
+  // tab/link click chupchap fail ho jaata hai. Aisa ho to page ek baar khud refresh kar do.
+  useEffect(() => {
+    const stale = (m) => /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(String(m || ""));
+    const fix = () => {
+      try {
+        const last = Number(sessionStorage.getItem("ga_chunk_reload") || 0);
+        if (Date.now() - last < 30000) return; // ek hi baar, loop nahi
+        sessionStorage.setItem("ga_chunk_reload", String(Date.now()));
+      } catch {}
+      window.location.reload();
+    };
+    const onErr = (e) => stale(e?.message || e?.error?.name || e?.error?.message) && fix();
+    const onRej = (e) => stale(e?.reason?.name || e?.reason?.message || e?.reason) && fix();
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
+    return () => {
+      window.removeEventListener("error", onErr);
+      window.removeEventListener("unhandledrejection", onRej);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
