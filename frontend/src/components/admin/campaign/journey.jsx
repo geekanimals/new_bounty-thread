@@ -171,11 +171,13 @@ export function buildRows({ tracker, people, progress, kind }) {
     const st = i.status === "invited" ? "registered" : i.status || "registered";
     const miss = i.needs || [];
     const reg = !!i.registered;
-    const step = !reg ? 0 : miss.length || !i.ig_connected ? (i.ig_connected ? 2 : 1) : INV_STEP[st] ?? 3;
+    // bulk creators ko Instagram zaroori nahi — sirf jab server (needs) kuch maange tabhi atka hua maano
+    const waitIg = miss.some((m) => /instagram/i.test(m));
+    const step = !reg ? 0 : miss.length ? (waitIg ? 1 : 2) : INV_STEP[st] ?? 3;
     const posted = st === "posted";
-    const nx = posted ? { turn: "done", title: "Done ✓" } : !reg ? { turn: "creator", title: "Not registered" } : miss.length || !i.ig_connected ? { turn: "creator", title: "Instagram not connected" } : { turn: "creator", title: "Joining the campaign…" };
+    const nx = posted ? { turn: "done", title: "Done ✓" } : !reg ? { turn: "creator", title: "Not registered" } : miss.length ? { turn: "creator", title: waitIg ? "Instagram not connected" : "Profile not complete" } : { turn: "creator", title: "Joining the campaign…" };
     const days = ageDays(i.created_at);
-    const act = !reg ? { key: "resend", label: "↻ Resend invite" } : (miss.length || !i.ig_connected) && i.phone ? { key: "connectig", label: "📸 Connect Instagram" } : posted ? null : { key: "resend", label: "↻ Resend invite" };
+    const act = !reg ? { key: "resend", label: "↻ Resend invite" } : waitIg && i.phone ? { key: "connectig", label: "📸 Connect Instagram" } : posted ? null : { key: "resend", label: "↻ Resend invite" };
     return {
       id: "i-" + i.invite_id,
       kind: "i",
@@ -185,12 +187,13 @@ export function buildRows({ tracker, people, progress, kind }) {
       name: i.name || (i.handle ? "@" + i.handle : i.phone || i.email || "Creator"),
       handle: i.handle ? "@" + i.handle : "",
       pic: null,
-      tags: [[`via ${i.source && i.source !== "upload" ? i.source : "upload"} · ${fmtDate(i.created_at)}`, "violet"], [reg ? (i.ig_connected ? "On Geek" : "On Geek · connect Instagram") : "Not yet on Geek", reg ? "orange" : ""]],
+      tags: [[`via ${i.source && i.source !== "upload" ? i.source : "upload"} · ${fmtDate(i.created_at)}`, "violet"], [reg ? (waitIg ? "On Geek · connect Instagram" : "On Geek") : "Not yet on Geek", reg ? "orange" : ""]],
       phone: maskPhone(i.phone),
       followersN: Number(i.followers) || 0,
       followers: i.followers != null ? fmtNum(i.followers) : "—",
       city: i.city || "—",
       step,
+      sheet: INV_STEP[st] ?? 3, // sheet ka status — upar ke boxes isi se ginte hain (purane app jaisa)
       stepNote: !reg ? `Sheet: ${invLabel(st)} · joins once registered` : step <= 2 ? `${JOURNEY_STEPS[step]} · sheet: ${invLabel(st)}` : invLabel(st),
       turnWho: nx.turn,
       turn: `${TURN_TXT[nx.turn]} · ${nx.title}${days != null && !posted ? ` · ${days} day${days === 1 ? "" : "s"}` : ""}${waTxt(i.last_wa)}${i.last_wa ? " · automatic" : ""}`,

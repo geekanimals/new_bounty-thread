@@ -13,6 +13,43 @@ import { UploadCard, MsgOff, saveUpload, buildUpload, readUploadFile, readPasted
 const SH_COLS = [["Name", "name"], ["Instagram", "instagram"], ["WhatsApp", "whatsapp"], ["Email", "email"], ["City", "city"], ["Status", "status"], ["Address", "address"], ["State", "state"], ["PIN code", "pincode"], ["Courier", "courier"], ["Tracking", "tracking"], ["Video link", "video_link"], ["Post link", "post_link"]];
 const SHIP = ["Address", "State", "PIN code", "Courier", "Tracking"];
 // Paid / Barter + Paid: payment ke columns bhi (bulk upload inhe padhta hai — fee, advance, bank / UPI). Barter mein nahi.
+// Khaali template (purane "⬇ Excel template / CSV template / Copy for Google Sheets" jaisa) — columns + example rows
+const TPL_COLS = [
+  ["Name", "Creator's name — their profile is made with it", "Asha Rao", "optional"],
+  ["Instagram", "@handle, handle or profile link", "@asha.creates", "one of these 3"],
+  ["WhatsApp", "10-digit number (India) or +country code — every update goes here", "9876543210", "one of these 3"],
+  ["Email", "Their email", "asha@example.com", "one of these 3"],
+  ["City", "City", "Mumbai", "optional"],
+  ["Status", "The exact step name (see Statuses). Blank = Applied", "Address confirmed", "optional"],
+  ["Address", "Delivery address — for Address confirmed / Courier sent / Courier delivered", "Flat 4B, Lake View, Koregaon Park", "for those 3", "ship"],
+  ["State", "State of the address", "Maharashtra", "for those 3", "ship"],
+  ["PIN code", "6-digit PIN", "411001", "for those 3", "ship"],
+  ["Courier", "Courier name — for Courier sent / delivered", "DTDC", "for those 2", "ship"],
+  ["Tracking", "Tracking ID or link", "D12345678", "for those 2", "ship"],
+  ["Video link", "Drive / video link — for Video submitted / Client approved", "https://drive.google.com/…", "for those 2"],
+  ["Post link", "Link of every post — for Posted / Done", "https://www.instagram.com/reel/…", "for Posted"],
+  ["Fee (₹)", "This creator's total fee — goes into their contract only", "15000", "optional", "pay"],
+  ["Advance %", "Paid once they sign", "50", "optional", "pay"],
+  ["Pay days", "The rest — days after every post is live", "7", "optional", "pay"],
+  ["Terms", "Anything else agreed", "includes 1 story repost", "optional", "pay"],
+  ["UPI ID", "Where to pay (creator's own)", "asha@okhdfcbank", "optional", "pay"],
+  ["Account no", "Bank account number", "50100123456789", "optional", "pay"],
+  ["IFSC", "Bank IFSC code", "HDFC0001234", "with Account no", "pay"],
+  ["Account holder", "Name on the bank account / UPI (must be the creator's)", "Asha Rao", "with UPI / Account no", "pay"],
+];
+const TPL_EX = [
+  { Name: "Asha Rao", Instagram: "@asha.creates", WhatsApp: "9876543210", Email: "asha@example.com", City: "Mumbai", Status: "Approved", "Fee (₹)": "15000", "Advance %": "50", "Pay days": "7", Terms: "includes 1 story repost", "UPI ID": "asha@okhdfcbank", "Account holder": "Asha Rao" },
+  { Name: "Rohan Mehta", Instagram: "rohan.eats", WhatsApp: "+91 98111 22233", Email: "rohan@example.com", City: "Delhi" },
+  { Name: "Meera Shah", Instagram: "meera.styles", WhatsApp: "9000011111", City: "Pune", Status: "Address confirmed", Address: "Flat 4B, Lake View, Koregaon Park", State: "Maharashtra", "PIN code": "411001", "Fee (₹)": "8000", "Advance %": "0", "Pay days": "5", "Account no": "50100123456789", IFSC: "HDFC0001234", "Account holder": "Meera Shah" },
+  { Name: "Kabir Sen", Instagram: "@kabir.cooks", WhatsApp: "9830012345", Email: "kabir@example.com", City: "Kolkata", Status: "Courier sent", Address: "12 Park St", State: "West Bengal", "PIN code": "700016", Courier: "DTDC", Tracking: "D12345678" },
+  { Name: "Nisha Jain", Instagram: "nisha.home", WhatsApp: "9123456780", City: "Jaipur", Status: "Video submitted", "Video link": "https://drive.google.com/file/d/example" },
+];
+const tplCols = (kind) => TPL_COLS.filter((c) => !(c[4] === "pay" && kind === "barter") && !(c[4] === "ship" && kind === "paid"));
+const tplRows = (kind) => {
+  const cols = tplCols(kind);
+  return [cols.map((c) => c[0]), ...TPL_EX.map((r) => cols.map((c) => (kind === "paid" && ["Address confirmed", "Courier sent"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
+};
+
 const PAY_COLS = [["Fee (₹)", "fee"], ["Advance %", "advance_pct"], ["Pay days", "pay_days"], ["Terms", "pay_terms"], ["UPI ID", "upi"], ["Account no", "account_no"], ["IFSC", "ifsc"], ["Account holder", "account_name"]];
 
 /**
@@ -98,6 +135,27 @@ export default function UploadStart({ id, mode = "upload" }) {
       show(errText(e));
     }
   };
+  const tplName = `bulk-template-${kind}`;
+  const tplDownload = async (fmt) => {
+    try {
+      if (fmt === "csv") downloadFile(tplName + ".csv", tplRows(kind));
+      else await downloadXlsx(tplName + ".xlsx", tplRows(kind), "Creators");
+      show(`⬇ ${KIND_LABEL[kind]} template downloaded — 5 example rows, replace them with your creators`);
+    } catch (er) {
+      show(errText(er));
+    }
+  };
+  const tplCopy = async () => {
+    const tsv = tplRows(kind)
+      .map((r) => r.join("\t"))
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(tsv);
+      show("📋 Copied — open a new Google Sheet, click cell A1 and paste");
+    } catch {
+      show("Couldn't copy — download the Excel template instead");
+    }
+  };
   const linkSheet = async (e) => {
     e.preventDefault();
     const u = gval.trim();
@@ -161,6 +219,20 @@ export default function UploadStart({ id, mode = "upload" }) {
               </button>
             </form>
           </div>
+          <div className="us-row">
+            <span className="us-lab">🧾 Template</span>
+            <div className="us-ctl">
+              <button type="button" className="ga-btn ga-btn--ghost us-b" onClick={() => tplDownload("xlsx")}>
+                ⬇️ Excel template
+              </button>
+              <button type="button" className="ga-btn ga-btn--ghost us-b" onClick={() => tplDownload("csv")}>
+                ⬇️ CSV template
+              </button>
+              <button type="button" className="c2-tbtn" onClick={tplCopy}>
+                📋 Copy for Google Sheets
+              </button>
+            </div>
+          </div>
           {saved && saved.sheet_url && <p className="us-sync">{saved.last_pull_at ? `✅ Last updated ${when(saved.last_pull_at)} · ${saved.pulls || 0} update${(saved.pulls || 0) !== 1 ? "s" : ""}` : "⏳ Not updated yet — add the Geek OS script in the sheet once"}</p>}
         </div>
 
@@ -168,7 +240,7 @@ export default function UploadStart({ id, mode = "upload" }) {
           <>
             <MsgOff id={id} />
             <p className="us-desc">
-              Google Sheet link, Excel / CSV, or a Word file (table or a simple list). Give every creator a <b>Status</b>— the exact step they are on. They get <b>one message for that step</b>: Approved → the invite; a later step → only that step’s message. Creators already on Geek OS go on that step now; new ones register, connect Instagram and complete their profile (pre-filled from your sheet) and then land on their step.
+              Google Sheet link, Excel / CSV, or a Word file (table or a simple list). Give every creator a <b>Status</b>— the exact step they are on. They get <b>one message for that step</b>: Approved → the invite; a later step → only that step’s message. Creators already on Geek OS go on that step now; new ones register from the WhatsApp invite (Instagram is optional for bulk creators) and land right on their step. Every message goes once, on WhatsApp through the new Utility templates.
             </p>
           </>
         )}
@@ -252,9 +324,20 @@ export default function UploadStart({ id, mode = "upload" }) {
             <p className="us-gsub">{KIND_LABEL[kind]} template · one creator per row · keep the first row as column names</p>
             <h3>📝 Step by step</h3>
             <p className="us-gtxt">
-              1. Download the campaign sheet (Excel or CSV) or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it can’t go on that step until you add it.
+              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it can’t go on that step until you add it.
               {kind !== "barter" ? " 6. Fee, Advance %, Pay days, UPI / Account no + IFSC columns set each creator’s payment as they land." : ""}
             </p>
+            <div className="us-gbtns">
+              <button type="button" className="ga-btn ga-btn--primary us-b" onClick={() => tplDownload("xlsx")}>
+                ⬇️ Excel template (.xlsx)
+              </button>
+              <button type="button" className="ga-btn ga-btn--ghost us-b" onClick={() => tplDownload("csv")}>
+                ⬇️ CSV template
+              </button>
+              <button type="button" className="ga-btn ga-btn--ghost us-b" onClick={tplCopy}>
+                📋 Copy for Google Sheets
+              </button>
+            </div>
             <hr />
             <h3>🏷 Statuses — write exactly this in the Status column</h3>
             <div className="us-gtw">
@@ -278,6 +361,57 @@ export default function UploadStart({ id, mode = "upload" }) {
                 </tbody>
               </table>
             </div>
+            <hr />
+            <h3>🧾 Columns — what to put in each one</h3>
+            <p className="us-gtxt">Column names don&apos;t have to match exactly — we match them and you can fix them in the next step.</p>
+            <div className="us-gtw">
+              <table className="c2-t us-gt">
+                <thead>
+                  <tr>
+                    <th>Column</th>
+                    <th>What to put</th>
+                    <th>Example</th>
+                    <th>Needed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tplCols(kind).map((c) => (
+                    <tr key={c[0]}>
+                      <td>
+                        <b>{c[0]}</b>
+                      </td>
+                      <td>{c[1]}</td>
+                      <td>{c[2]}</td>
+                      <td>{c[3]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <hr />
+            <h3>👀 Example — how your sheet should look</h3>
+            <div className="us-gtw">
+              <table className="c2-t us-gt us-ex">
+                <thead>
+                  <tr>
+                    {tplRows(kind)[0].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tplRows(kind)
+                    .slice(1)
+                    .map((r, i) => (
+                      <tr key={i}>
+                        {r.map((v, j) => (
+                          <td key={j}>{v || "—"}</td>
+                        ))}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           </aside>
         </div>
       )}
@@ -285,6 +419,8 @@ export default function UploadStart({ id, mode = "upload" }) {
 
       <style>{`
 
+        .us-gbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .us-ex td, .us-ex th { white-space: nowrap; }
         .us-sheet { padding: 22px 20px 34px; border: 1px solid var(--ad-line); border-radius: 14px; }
         .us-sheet__t { font-size: 12px; line-height: 1.4; color: var(--ad-muted); }
         .us-sheet__t b { font-size: 14px; font-weight: 700; color: var(--ad-ink); }

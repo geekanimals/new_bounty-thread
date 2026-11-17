@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
@@ -20,6 +20,13 @@ const tm = (t) => {
 const STAGE_TO_ST = { applied: "registered", eligible: "screened", sent_to_brand: "sent_to_brand", brand_confirmed: "approved", accepted: "approved", contract_sent: "contract_sent", contract_signed: "contract_signed", address_confirmed: "address_confirmed", product_sent: "courier_sent", product_delivered: "courier_delivered", content_created: "video_brief_sent", content_submitted: "video_submitted", changes_requested: "video_submitted", content_approved: "client_approved", published: "posted", completed: "posted" };
 
 /* Figma: Campaign workspace — creator opened (chat + details + actions) — campaign_creator_hub / invite_messages */
+// chat mein din ka divider (purane app jaisa "12 Oct 2026")
+const dayOf = (at) => {
+  if (!at) return "";
+  const d = new Date(at);
+  return isNaN(d) ? "" : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
 export default function WorkspaceCreator() {
   const { id, cid = "" } = useParams();
   const router = useRouter();
@@ -223,7 +230,9 @@ export default function WorkspaceCreator() {
               {hub.error && <p className="wcc-note">Messages: {errText(hub.error)}</p>}
               {!hub.loading && !hub.error && !msgs.length && <p className="wcc-note">No WhatsApp messages yet.</p>}
               {msgs.map((m, i) => (
-                <div key={i} className={`wcc-msg ${m.dir === "out" ? "is-me" : ""}`}>
+                <Fragment key={i}>
+                  {dayOf(m.at) !== dayOf(msgs[i - 1]?.at) && <p className="wcc-day">{dayOf(m.at)}</p>}
+                <div className={`wcc-msg ${m.dir === "out" ? "is-me" : ""}`}>
                   <p>{m.text || (m.key ? `📨 ${m.key.replace(/_/g, " ")}` : "")}</p>
                   <small>
                     {tm(m.at)}
@@ -231,6 +240,7 @@ export default function WorkspaceCreator() {
                     {m.auto ? " · automatic" : ""}
                   </small>
                 </div>
+                </Fragment>
               ))}
               <span ref={endRef} />
             </div>
@@ -348,6 +358,7 @@ export default function WorkspaceCreator() {
         .wcc-chat__head b { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .wcc-open { flex-shrink: 0; height: 41px; display: inline-flex; align-items: center; padding: 0 15px; border-radius: 10px; background: #fff; font-size: 14px; font-weight: 800; color: var(--ad-primary-ink); }
         .wcc-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; padding: 13px 14px 14px; background: #f3f0e8; }
+        .wcc-day { align-self: center; margin: 10px auto 2px; padding: 3px 10px; border-radius: 999px; background: rgba(127,127,127,.14); font-size: 11px; color: var(--ga-muted, #8a8f9c); }
         .wcc-msg { align-self: flex-start; width: min(447px, 88%); padding: 10px 12px 8px; border-radius: 9px; background: #fff; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
         .wcc-msg p { white-space: pre-line; font-size: 13px; line-height: 1.33; color: var(--ad-ink); }
         .wcc-msg small { display: block; margin-top: 4px; text-align: right; font-size: 12px; color: var(--ad-muted); }

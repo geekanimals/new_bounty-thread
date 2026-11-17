@@ -48,13 +48,13 @@ const BASE_ST = [
   ["registered", "Applied", "Added, waiting for screening", "no message", ""],
   ["screened", "Screened", "Checked against the brand’s criteria", "no message", ""],
   ["sent_to_brand", "Sent to brand", "On the brand’s final list", "no message", ""],
-  ["approved", "Approved", "Brand said yes → the contract goes out", "Invite (geek_campaign_access)", ""],
-  ["contract_sent", "Contract sent", "Creator signs in the app", "Sign your contract", ""],
+  ["approved", "Approved", "Brand said yes → the contract goes out", "Campaign invite (only creators not on Geek yet)", ""],
+  ["contract_sent", "Contract sent", "Creator signs in the app", "Contract ready", ""],
   ["contract_signed", "Contract signed", "Next: the creator confirms the address", "Confirm your address", ""],
   ["address_confirmed", "Address confirmed", "Reads the video brief · you add courier", "no message", "Address, City, State, PIN"],
   ["courier_sent", "Courier sent", "Creator can track it", "Product shipped", "Courier, Tracking"],
-  ["courier_delivered", "Courier delivered", "Video deadline starts", "Video brief", "Courier, Tracking"],
-  ["video_brief_sent", "Video brief sent", "Creator shoots", "Video brief", "Courier, Tracking"],
+  ["courier_delivered", "Courier delivered", "Video deadline starts", "Product delivered + video brief", "Courier, Tracking"],
+  ["video_brief_sent", "Video brief sent", "Creator shoots", "Product delivered + video brief", "Courier, Tracking"],
   ["video_submitted", "Video submitted", "Waiting for client approval", "no message", "Video link"],
   ["client_approved", "Client approved", "Creator can post", "Video approved — post it", "Video link"],
   ["posted", "Posted / Done", "Post is live · insights start", "Campaign complete", "Post link"],
@@ -67,9 +67,9 @@ export function statusesFor(kind) {
       s[0] === "approved"
         ? [s[0], s[1], "Brand said yes → the contract goes out as soon as their fee is set", s[3], fee]
         : s[0] === "contract_signed"
-          ? [s[0], s[1], "Signed → the video brief goes out at once · they add bank / UPI", "Video brief + add payment details", ""]
+          ? [s[0], s[1], "Signed → the video brief goes out at once · they add bank / UPI", "no message", ""]
           : s[0] === "video_brief_sent"
-            ? [s[0], s[1], "The video deadline starts today", "Video brief", ""]
+            ? [s[0], s[1], "The video deadline starts today", "no message", ""]
             : s
     );
   if (kind === "barter_paid") return BASE_ST.map((s) => (s[0] === "approved" ? [s[0], s[1], "Brand said yes → the contract goes out as soon as their fee is set", s[3], fee] : s[0] === "contract_signed" ? [s[0], s[1], "Next: the creator confirms the address and adds bank / UPI", s[3], ""] : s));

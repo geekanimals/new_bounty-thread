@@ -18,13 +18,13 @@ const BOXES = [
   { l: "Instagram", s: "media kit connected", f: (c) => c.ig },
   { l: "Applied", s: "waiting", f: (c) => c.applied && c.registered && !c.failed },
   { l: "Approved", s: "brand said yes", f: (c) => c.approved },
-  { l: "Contract signed", f: (c) => c.step >= 5 },
-  { l: "Address confirmed", s: "brief sent", f: (c) => c.step >= 6 },
-  { l: "Courier sent", f: (c) => c.step >= 7 },
-  { l: "Delivered", f: (c) => c.step >= 9 },
-  { l: "Video submitted", f: (c) => c.step >= 11 },
-  { l: "No video yet", s: "got product", f: (c) => c.step >= 9 && c.step < 11 },
-  { l: "Client approved", f: (c) => c.step >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage)) },
+  { l: "Contract signed", f: (c) => (c.sheet ?? c.step) >= 5 },
+  { l: "Address confirmed", s: "brief sent", f: (c) => (c.sheet ?? c.step) >= 6 },
+  { l: "Courier sent", f: (c) => (c.sheet ?? c.step) >= 7 },
+  { l: "Delivered", f: (c) => (c.sheet ?? c.step) >= 9 },
+  { l: "Video submitted", f: (c) => (c.sheet ?? c.step) >= 11 },
+  { l: "No video yet", s: "got product", f: (c) => (c.sheet ?? c.step) >= 9 && (c.sheet ?? c.step) < 11 },
+  { l: "Client approved", f: (c) => (c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage)) },
   { l: "Done", s: "every post up", f: (c) => c.posted },
 ];
 
@@ -300,8 +300,9 @@ export default function WorkspaceCreators() {
         .wcr-bulk { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; margin-top: 16px; }
         .wcr-all { position: relative; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ad-ink); cursor: pointer; }
         .wcr-all input { position: absolute; opacity: 0; }
-        .wcr-allbox { width: 270px; height: 11px; margin-left: 4px; border-radius: 2px; border: 2px solid #4b4f5c; background: #fff; }
+        .wcr-allbox { width: 18px; height: 18px; margin-right: 4px; flex-shrink: 0; display: inline-grid; place-items: center; border-radius: 5px; border: 2px solid #4b4f5c; background: #fff; }
         .wcr-all input:checked + .wcr-allbox { background: var(--ad-primary); border-color: var(--ad-primary); }
+        .wcr-all input:checked + .wcr-allbox::after { content: "✓"; font-size: 12px; font-weight: 800; line-height: 1; color: #fff; }
         .wcr-all input:focus-visible + .wcr-allbox { box-shadow: 0 0 0 3px rgba(103,87,245,.25); }
         .wcr-wa { height: 41px; margin-left: -8px; padding: 0 15px; }
         .wcr-wa:disabled { opacity: 1; cursor: default; }
@@ -312,7 +313,6 @@ export default function WorkspaceCreators() {
         .wcr-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
         .wcr-empty { padding: 24px; text-align: center; font-size: 13px; color: var(--ad-muted); }
 
-        @media (max-width: 1180px) { .wcr-allbox { width: 120px; } }
         @media (max-width: 1023px) { .wcr-boxes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (max-width: 640px) {
           .wcr-card { padding: 18px 16px; }
@@ -324,7 +324,6 @@ export default function WorkspaceCreators() {
           .wcr-box span { margin-top: 6px; }
           .wcr-search { width: 100%; }
           .wcr-sel { flex: 1 1 45%; }
-          .wcr-allbox { width: 18px; height: 18px; }
           .wcr-wa { margin-left: 0; width: 100%; }
         }
       `}</style>
