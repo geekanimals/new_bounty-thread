@@ -8,7 +8,7 @@
  *
  * askSidekick(text, ctx) → { text, links:[{label,href}], cards:[campaign card], suggest:[string] }
  * Apply chat se: card par "Apply" → confirm → applyTo() (wahi RPC jo Discover page use karta hai).
- * Hinglish mein pucho to Hinglish mein jawab.
+ * Jawab hamesha English mein (sawal Hinglish / Hindi mein bhi ho to samajh leta hai).
  */
 import { api, apiCreator, fn } from "./core";
 import { getCreator } from "./auth";
@@ -20,8 +20,8 @@ import {
 const SUPPORT = "mayank@geekcreativeagency.com";
 
 /* ---------- Language ---------- */
-const HI_WORDS = /\b(kya|kaise|kab|kaha|kahan|kyu|kyun|mera|meri|mere|mujhe|muje|karna|karo|kar|hai|hain|nahi|nhi|bhai|batao|btao|chahiye|kitna|kitne|paisa|paise|kaun|konsa|kon|wala|wali|abhi|hoga|milega|bhejo|dikhao|samjhao|aur|ya|ki|ka|ke)\b/i;
-export const isHi = (q) => /[ऀ-ॿ]/.test(String(q || "")) || HI_WORDS.test(String(q || ""));
+/** Sidekick hamesha English mein jawab deta hai (Hinglish / Hindi sawal bhi samajhta hai, jawab English). */
+export const isHi = () => false;
 const T = (hi, en, h) => (h ? hi : en);
 
 /* ---------- Data (ek chat ke liye 60 sec cache) ---------- */
@@ -192,7 +192,7 @@ async function answerFind(q, h, { limit = 3 } = {}) {
     };
   }
   return {
-    text: T(`Ye ${Math.min(limit, pick.length)} campaign aapke liye sahi lagte hain — **Apply** dabao, main yahin se apply kar dunga:`, `These ${Math.min(limit, pick.length)} campaign${pick.length > 1 ? "s look" : " looks"} right for you — tap **Apply** and I'll apply for you right here:`, h),
+    text: T(`Ye ${Math.min(limit, pick.length)} campaign aapke liye sahi lagte hain — **Apply** dabao, main yahin se apply kar dunga:`, Math.min(limit, pick.length) === 1 ? "This campaign looks right for you — tap **Apply** and I'll apply for you right here:" : `These ${Math.min(limit, pick.length)} campaigns look right for you — tap **Apply** and I'll apply for you right here:`, h),
     cards: pick.slice(0, limit).map(chatCard),
     links: pick.length > limit ? [{ label: T(`Saare ${pick.length} dekho`, `See all ${pick.length}`, h), href: "/creator/discover" }] : [],
   };
@@ -278,7 +278,7 @@ async function answerPay(h) {
 /** Ek campaign ke andar ka sawal → backend (brief, contract, deadline, tracking padh ke) */
 async function answerFromBackend(q, history) {
   const msgs = [...(history || []).slice(-6).map((m) => ({ role: m.me ? "user" : "assistant", content: m.text })), { role: "user", content: q }];
-  const r = await fn("ai-chat", { messages: msgs, context: { role: "creator" } });
+  const r = await fn("ai-chat", { messages: msgs, context: { role: "creator" }, lang: "en" });
   if (r.error || !r.data || !r.data.reply) return null;
   return { text: String(r.data.reply), suggest: (r.data.suggestions || []).slice(0, 3) };
 }
