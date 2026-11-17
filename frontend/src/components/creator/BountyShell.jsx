@@ -342,7 +342,7 @@ export default function BountyShell({ children, tone = "paper" }) {
     pushChat([{ me: true, text }]);
     setAsk("");
     setThinking(true);
-    const ans = await askSidekick(text, { history });
+    const ans = await askSidekick(text, { history, name: sk.name });
     setThinking(false);
     pushChat([{ me: false, text: ans.text, links: ans.links || [], cards: ans.cards || [], suggest: ans.suggest || [], hi: isHi(text) }]);
   };

@@ -305,7 +305,7 @@ const MENU = (h) => [T("Mujhe kya karna hai?", "What needs my attention?", h), T
 /**
  * Main: sawal → jawab. history = pichhle chat messages ({me, text}).
  */
-export async function askSidekick(text, { history = [] } = {}) {
+export async function askSidekick(text, { history = [], name = "" } = {}) {
   const raw = String(text || "").trim();
   const q = " " + raw.toLowerCase() + " ";
   const h = isHi(raw);
@@ -315,9 +315,9 @@ export async function askSidekick(text, { history = [] } = {}) {
   try {
     if (!raw) return { text: "", suggest: MENU(h) };
     if (it.includes("hello") && raw.split(/\s+/).length <= 3)
-      return { text: T(`Hey ${first || "dost"}! 👋 Main aapka sidekick hoon — campaign dhundna, apply karna, status, brief, payment, profile — kuch bhi pucho.`, `Hey ${first || "there"}! 👋 I'm your sidekick — finding and applying to campaigns, status, briefs, payments, your profile — ask me anything.`, h), suggest: MENU(h) };
+      return { text: T(`Hey ${first || "dost"}! 👋 Main ${name || "aapka sidekick"} hoon — campaign dhundna, apply karna, status, brief, payment, profile — kuch bhi pucho.`, `Hey ${first || "there"}! 👋 I'm ${name ? name + ", your sidekick" : "your sidekick"} — finding and applying to campaigns, status, briefs, payments, your profile — ask me anything.`, h), suggest: MENU(h) };
     if (it.includes("thanks") && raw.split(/\s+/).length <= 4) return { text: T("Koi baat nahi! 🌿 Aur kuch?", "Anytime! 🌿 Anything else?", h), suggest: MENU(h) };
-    if (it.includes("who")) return { text: T("Main aapka Bounty sidekick hoon. Main aapke asli campaigns aur profile dekh ke batata hoon: kya karna baaki hai, kaunse campaign aapke liye sahi hain (yahin se apply bhi), har campaign ka status, brief, deadline, courier, payment aur profile kaise poora karna hai.", "I'm your Bounty sidekick. I look at your real campaigns and profile and tell you what's left to do, which campaigns fit you (and apply right here), each campaign's status, brief, deadline, courier, payment and how to finish your profile.", h), suggest: MENU(h) };
+    if (it.includes("who")) return { text: T(`Main ${name || "aapka Bounty sidekick"} hoon. Main aapke asli campaigns aur profile dekh ke batata hoon: kya karna baaki hai, kaunse campaign aapke liye sahi hain (yahin se apply bhi), har campaign ka status, brief, deadline, courier, payment aur profile kaise poora karna hai.`, `I'm ${name ? name + ", your Bounty sidekick" : "your Bounty sidekick"}. I look at your real campaigns and profile and tell you what's left to do, which campaigns fit you (and apply right here), each campaign's status, brief, deadline, courier, payment and how to finish your profile.`, h), suggest: MENU(h) };
 
     if (it.includes("apply") && !it.includes("eligible")) return await answerApply(q, h);
     if (it.includes("find")) return await answerFind(q, h);
