@@ -92,7 +92,7 @@ export function chatCard(x) {
     till: x.ends_on ? fdate(x.ends_on) : "",
     eligible: el.eligible === true,
     notEligible: el.eligible === false,
-    why: el.eligible === false ? ((el.criteria || []).filter((c) => c.ok === false).map((c) => c.need).filter(Boolean)[0] || "") : "",
+    why: el.eligible === false ? (el.criteria || []).filter((c) => c.ok === false).map((c) => c.need).filter(Boolean).slice(0, 3).join("; ") : "",
     myStage: x.my_stage || null,
     closed: !!x.applications_closed,
     kind: kindOf(x),
@@ -181,6 +181,16 @@ async function answerFind(q, h, { limit = 3 } = {}) {
     const nn = norm(named.category);
     const byCat = pick.filter((x) => norm(x.category) === nn || (x.cities || []).some((ct) => norm(q).includes(norm(ct))) || x.campaign_id === named.campaign_id);
     if (byCat.length) pick = byCat;
+  }
+  if (!pick.length && fresh.length) {
+    // koi match nahi → sabse kareeb wale (sabse kam shartein baaki) + kya kami hai
+    const miss = (x) => ((x.eligibility || {}).criteria || []).filter((cr) => cr.ok === false).length;
+    const near = [...fresh].sort((a, b) => miss(a) - miss(b)).slice(0, 3);
+    return {
+      text: "None of the open campaigns match your profile yet. These are the closest — each card shows what it still needs. If your profile or Instagram is out of date, update it and eligibility refreshes on its own.",
+      cards: near.map(chatCard),
+      links: [{ label: "Update profile", href: "/creator/profile" }, { label: "Discover", href: "/creator/discover" }],
+    };
   }
   if (!pick.length) {
     const applied = open.filter((x) => x.my_stage).length;
