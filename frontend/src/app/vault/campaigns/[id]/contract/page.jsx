@@ -86,12 +86,17 @@ export default function WorkspaceContract() {
     bt.reload(true);
   };
 
-  const F = ({ label, v, set, field }) => (
-    <div className="wc-f">
+  // long = video brief ka lamba text — poori chaudai ka text box, kata hua nahi
+  const F = ({ label, v, set, field, long }) => (
+    <div className={`wc-f ${long ? "wc-f--long" : ""}`}>
       <label className="wc-l" htmlFor={`wc-${field}`}>
         {label}
       </label>
-      <input id={`wc-${field}`} className="ga-input wc-in" value={v[field]} onChange={(e) => set((p) => ({ ...p, [field]: e.target.value }))} />
+      {long ? (
+        <textarea id={`wc-${field}`} className="ga-input wc-in wc-ta" rows={3} value={v[field] || ""} onChange={(e) => set((p) => ({ ...p, [field]: e.target.value }))} />
+      ) : (
+        <input id={`wc-${field}`} className="ga-input wc-in" value={v[field]} onChange={(e) => set((p) => ({ ...p, [field]: e.target.value }))} />
+      )}
     </div>
   );
 
@@ -141,11 +146,11 @@ export default function WorkspaceContract() {
           <h2 className="ga-h2">🎬 Video brief</h2>
           <p className="wc-sub">Goes out automatically when the product is delivered.</p>
           <div className="wc-two wc-two--b">
-            {F({ label: "What to shoot", v: b, set: setB, field: "shoot" })}
-            {F({ label: "Key messages", v: b, set: setB, field: "keys" })}
-            {F({ label: "Hashtags & mentions", v: b, set: setB, field: "tags" })}
-            {F({ label: "Do’s", v: b, set: setB, field: "dos" })}
-            {F({ label: "Don’ts", v: b, set: setB, field: "donts" })}
+            {F({ label: "What to shoot", v: b, set: setB, field: "shoot", long: true })}
+            {F({ label: "Key messages", v: b, set: setB, field: "keys", long: true })}
+            {F({ label: "Hashtags & mentions", v: b, set: setB, field: "tags", long: true })}
+            {F({ label: "Do’s", v: b, set: setB, field: "dos", long: true })}
+            {F({ label: "Don’ts", v: b, set: setB, field: "donts", long: true })}
           </div>
           <button type="button" className="ga-btn ga-btn--primary wc-save wc-save--b" disabled={!!busy || bt.loading} onClick={() => save("b")}>
             {busy === "b" ? "Saving…" : "Save brief"}
@@ -161,10 +166,11 @@ export default function WorkspaceContract() {
         .wc-card { padding: 22px 22px 22px; min-width: 0; }
         .wc-head { display: flex; justify-content: space-between; gap: 24px; }
         .wc-sub { margin-top: 8px; font-size: 12px; line-height: 1.33; color: var(--ad-muted); }
-        .wc-resend { flex-shrink: 0; width: 86px; margin: 12px 28px 0 0; padding: 0; border: 0; background: none; font-size: 14px; font-weight: 800; line-height: 1.33; color: #6657e9; }
+        .wc-resend { flex-shrink: 0; height: 38px; margin: 4px 0 0; padding: 0 14px !important; border: 1px solid var(--ad-line-2) !important; border-radius: 10px; white-space: nowrap; background: #fff; font-size: 13px; font-weight: 800; line-height: 1.33; color: #6657e9; }
         .wc-resend:hover { color: var(--ad-primary-2); }
         .wc-two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; margin-top: 20px; }
-        .wc-two--b { margin-top: 18px; gap: 0 16px; }
+        .wc-two--b { margin-top: 18px; gap: 0 16px; grid-template-columns: 1fr; }
+        .wc-ta { height: auto; min-height: 74px; padding: 10px 12px; line-height: 1.45; font-weight: 600; resize: vertical; white-space: pre-wrap; }
         .wc-f { margin-bottom: 13px; min-width: 0; }
         .wc-l { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 800; color: #60708c; }
         .wc-in { height: 41px; padding: 0 12px; border-color: #dfe2ee; font-size: 12px; font-weight: 800; color: #1d2943; text-overflow: ellipsis; }

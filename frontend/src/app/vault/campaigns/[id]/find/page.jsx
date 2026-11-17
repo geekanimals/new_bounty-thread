@@ -221,9 +221,12 @@ export default function FindMatching() {
         .fm-sel { width: 137px; height: 45px; margin-left: 3px; padding: 0 12px; font-size: 14px; color: #293652; }
         .fm-all { height: 41px; padding: 0 16px; }
         .fm-q { margin-top: 14px; }
-        .fm-table { margin: 18px -30px 0 0; overflow-x: auto; border-bottom: 1px solid var(--ad-line); padding-bottom: 14px; }
+        .fm-table { margin: 18px 0 0; overflow-x: auto; border-bottom: 1px solid var(--ad-line); padding-bottom: 14px; }
         .fm-table .ga-table th { background: none; padding: 14px 11px; }
-        .fm-table .ga-table td { height: 70px; padding: 10px 11px; }
+        .fm-table .ga-table td { height: 64px; padding: 10px 11px; }
+        .fm-table .ga-table td:nth-child(1) { white-space: normal; min-width: 220px; line-height: 1.35; }
+        .fm-table .ga-table td:nth-child(4) { white-space: normal; max-width: 150px; line-height: 1.35; }
+        .fm-table .ga-table td:last-child { text-align: right; white-space: nowrap; padding-right: 4px; }
         .fm-name { font-weight: 700; }
         .fm-inv { height: 39px; padding: 0 16px; font-size: 13px; }
         .fm-done { font-size: 12px; font-weight: 800; color: var(--ad-green); }
@@ -235,7 +238,7 @@ export default function FindMatching() {
           .fm-stats { grid-template-columns: 1fr 1fr; }
           .fm-bar { padding-bottom: 18px; }
           .fm-sel, .fm-all { flex: 1 1 45%; }
-          .fm-table { margin-right: -16px; }
+          .fm-table { margin-right: 0; }
         }
       `}</style>
     </>

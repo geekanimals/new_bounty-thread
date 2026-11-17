@@ -92,7 +92,6 @@ export default function WorkspaceFulfilment() {
             <thead>
               <tr>
                 <th>Creator</th>
-                <th>Campaign</th>
                 <th>Product</th>
                 <th>Status</th>
                 <th>Courier</th>
@@ -104,7 +103,6 @@ export default function WorkspaceFulfilment() {
               {rows.map((s) => (
                 <tr key={s.id}>
                   <td>{s.who}</td>
-                  <td>{s.camp}</td>
                   <td>{s.product}</td>
                   <td>
                     <span className={`ga-badge ga-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
@@ -128,9 +126,7 @@ export default function WorkspaceFulfilment() {
                 <b>{s.who}</b>
                 <span className={`ga-badge ga-badge--${s.status === "To send" ? "orange" : s.status === "No address" ? "red" : s.status === "Received" ? "green" : "violet"}`}>{s.status}</span>
               </div>
-              <span>
-                {s.camp} · {s.product}
-              </span>
+              <span>{s.product}</span>
               <span>
                 {s.courier} · {s.at}
               </span>
@@ -153,7 +149,9 @@ export default function WorkspaceFulfilment() {
         .wf-wrap { overflow-x: auto; margin-top: 8px; }
         .wf-table th { background: none; padding: 14px 11px 13px; }
         .wf-table td { height: 57.5px; padding: 8px 11px; }
-        .wf-det { font-size: 13px; font-weight: 800; color: #6151ea; }
+        .wf-det { font-size: 13px; font-weight: 800; color: #6151ea; white-space: nowrap; }
+        .wf-table td:nth-child(3), .wf-table td:nth-child(5) { white-space: nowrap; }
+        .wf-table td:nth-child(4) { min-width: 160px; }
         .wf-cards { display: none; }
         .wf-empty { padding: 24px; text-align: center; font-size: 13px; color: var(--ad-muted); }
         @media (max-width: 640px) {

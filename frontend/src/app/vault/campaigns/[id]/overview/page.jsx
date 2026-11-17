@@ -273,17 +273,17 @@ export default function WorkspaceOverview() {
         .wo-card { padding: 22px 22px 22px; }
         .wo-sub { margin-top: 8px; font-size: 12px; color: var(--ad-muted); }
         .wo-status { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-        .wo-select { width: 319px; height: 45px; padding: 0 32px 0 12px; font-size: 14px; color: #293652; appearance: none; background: #fff; }
+        .wo-select { width: min(319px, 100%); height: 45px; padding: 0 32px 0 12px; font-size: 14px; color: #293652; appearance: none; background: #fff; }
         .wo-alert { display: flex; gap: 8px; margin-top: 18px; padding: 13px 16px 12px; border-radius: 12px; background: #ffeef0; border: 1px solid #f7cdd4; font-size: 12px; line-height: 1.33; color: #b64455; }
         .wo-alert b { font-weight: 700; }
         .wo-alert a { text-decoration: none; color: inherit; }
         .wo-alert a:hover { text-decoration: underline; }
         .wo-chan { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
-        .wo-ch { display: flex; align-items: center; gap: 12px; padding: 18px 15px 16px; border-radius: 14px; background: var(--ad-soft-2); }
-        .wo-tg { width: 38px; height: 22px; }
+        .wo-ch { display: flex; align-items: center; gap: 14px; padding: 16px 16px; border-radius: 14px; background: var(--ad-soft-2); }
+        .wo-tg { width: 42px; height: 24px; flex-shrink: 0; }
         .wo-tg:not(.is-on) { background: #dfe2ec; }
         .wo-tg:not(.is-on)::after { box-shadow: none; background: #dfe2ec; }
-        .wo-ch__t { font-family: var(--ad-head); font-size: 23px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.1; color: var(--ad-ink); }
+        .wo-ch__t { font-family: var(--ad-head); font-size: 16px; font-weight: 800; letter-spacing: -0.2px; line-height: 1.2; color: var(--ad-ink); }
         .wo-ch__s { margin-top: 6px; font-size: 12px; color: var(--ad-muted); }
 
         .wo-dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
@@ -294,11 +294,11 @@ export default function WorkspaceOverview() {
         .wo-d p { font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--ad-muted); }
         .wo-d b { display: block; margin-top: 6px; font-size: 14px; font-weight: 700; line-height: 1.33; color: var(--ad-ink); }
 
-        .wo-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 10px; margin-top: 18px; }
-        .wo-tool { display: grid; place-items: center; min-height: 59px; padding: 8px 18px; border-radius: 12px; border: 1px solid var(--ad-line-2); text-align: center; font-size: 14px; font-weight: 800; line-height: 1.33; color: var(--ad-primary-ink); transition: border-color .15s, background .15s; }
-        .wo-tool--s { min-height: 41px; }
+        .wo-tools { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 10px; margin-top: 18px; }
+        .wo-tool { display: flex; align-items: center; justify-content: center; min-height: 56px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--ad-line-2); text-align: center; font-size: 14px; font-weight: 800; line-height: 1.33; color: var(--ad-primary-ink); transition: border-color .15s, background .15s; }
+        .wo-tool--s { min-height: 56px; }
         .wo-tool:hover { border-color: var(--ad-primary); background: var(--ad-soft-2); }
-        .wo-del { margin: 20px 0 6px 8px; padding: 0; border: 0; background: none; font-size: 14px; font-weight: 800; color: #6657e9; }
+        .wo-del { display: block; margin: 16px 0 2px auto; padding: 0; border: 0; background: none; font-size: 14px; font-weight: 800; color: #6657e9; }
         .wo-del:hover { color: var(--ad-red); }
 
         .wo-journey { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; margin: 20px 0 22px; }
@@ -321,7 +321,7 @@ export default function WorkspaceOverview() {
           .wo-select { width: 100%; }
           .wo-chan, .wo-details { grid-template-columns: 1fr; }
           .wo-d, .wo-d:nth-child(n+5) { min-height: 0; padding: 14px 16px; }
-          .wo-ch__t { font-size: 20px; }
+          .wo-ch__t { font-size: 15px; }
           .wo-journey { gap: 8px; }
           .wo-journey a { min-height: 0; padding: 16px 12px; }
           .wo-journey strong { font-size: 24px; }

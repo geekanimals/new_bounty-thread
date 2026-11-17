@@ -82,10 +82,8 @@ export default function CampaignBrandList() {
                 return (
                   <tr key={x.participation_id}>
                     <td>
-                      <b>
-                        {cr.name || "—"}
-                        {cr.username ? ` · @${cr.username}` : ""}
-                      </b>
+                      <b className="bl-name">{cr.name || (cr.username ? "@" + cr.username : "—")}</b>
+                      {cr.username && cr.name ? <small className="bl-h">@{cr.username}</small> : null}
                     </td>
                     <td>{cr.followers != null ? fmtNum(cr.followers) : "—"}</td>
                     <td>{cr.engagement != null ? `${cr.engagement}%` : "—"}</td>
@@ -113,6 +111,10 @@ export default function CampaignBrandList() {
       <style>{`
         .bl-t { margin-top: -6px; }
         .bl-t td { height: 57px; padding-top: 8px; padding-bottom: 8px; }
+        .bl-t td:nth-child(1) { white-space: normal; min-width: 200px; max-width: 280px; }
+        .bl-t td:nth-child(5) { white-space: normal; min-width: 130px; max-width: 200px; line-height: 1.35; }
+        .bl-name { display: block; line-height: 1.3; }
+        .bl-h { display: block; margin-top: 2px; font-size: 12px; color: var(--ad-muted); }
         .bl-t .ga-badge { height: 25px; }
         .bl-send { border: 0; cursor: pointer; }
         .bl-send:hover { background: var(--ad-lilac); color: #6857ec; }

@@ -117,6 +117,7 @@ export default function CampaignOutreach() {
       <style>{`
         .or-grid { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }
         .or-form { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 16px; margin-top: -2px; }
+        .or-field:nth-last-child(2):nth-child(odd) { grid-column: 1 / -1; }
         .or-field span { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 800; color: #60708c; }
         .or-field .ga-input { height: 42px; font-size: 12px; font-weight: 800; }
         .or-field .ga-input::placeholder { color: #757575; }

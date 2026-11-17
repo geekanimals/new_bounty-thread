@@ -34,14 +34,16 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
   return (
     <>
       <PageHead
+        eyebrow={
+          <Link href="/vault/campaigns" className="wh-back">
+            ← All campaigns
+          </Link>
+        }
         title={title || `${c.name}${c.name.includes("·") || !c.type ? "" : ` · ${c.type}`}`}
         sub={sub || [c.brand, c.type, c.status].filter(Boolean).join(" · ") || "\u00a0"}
       >
         {actions || (
           <>
-            <Link href="/vault/campaigns" className="ga-btn ga-btn--ghost wh-back">
-              ← All campaigns
-            </Link>
             {(!row || row.id) && (
               <Link href={`/vault/campaigns/new/basics?edit=${row?.id || id}`} className="ga-btn ga-btn--primary">
                 Edit brief
@@ -58,7 +60,8 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
         ))}
       </nav>
       <style>{`
-        @media (min-width: 1181px) { .wh-back { margin-right: 200px; } }
+        .wh-back { display: inline-flex; align-items: center; gap: 4px; color: #5b5fe8; font-weight: 700; letter-spacing: .02em; text-decoration: none; }
+        .wh-back:hover { text-decoration: underline; }
         .wh-tabs { display: flex; gap: 8px; margin: -4px 0 26px; overflow-x: auto; scrollbar-width: none; }
         .wh-tabs::-webkit-scrollbar { display: none; }
         .wh-tabs .ga-tab { height: 37px; flex-shrink: 0; }

@@ -542,12 +542,10 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
           💬
         </button>
         {href ? (
-          <Link href={href} className="jr-more" aria-label="Open creator">
-            ▾
+          <Link href={href} className="jr-more" aria-label={`Open ${c.name}`}>
+            Open ›
           </Link>
-        ) : (
-          <span className="jr-more">▾</span>
-        )}
+        ) : null}
       </div>
       <style>{`
         .jr { display: flex; align-items: flex-start; gap: 14px; padding: 13px 14px 14px 13px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; transition: border-color .15s; }
@@ -565,11 +563,12 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         .jr-step { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ad-ink); }
         .jr-step .ga-bar { width: 160px; height: 6px; flex-shrink: 0; background: #eceef6; }
         .jr-turn { margin-top: 8px; font-size: 12px; line-height: 1.35; color: #8791a7; }
-        .jr-act { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .jr-act { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: center; }
         .jr-btn { height: 41px; padding: 0 15px; }
-        .jr-chat { width: 46px; height: 39px; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12px; color: var(--ad-primary-ink); }
+        .jr-chat { width: 41px; height: 41px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 17px; color: var(--ad-primary-ink); }
         .jr-chat:hover { border-color: var(--ad-primary); }
-        .jr-more { width: 26px; text-align: center; font-size: 12px; font-weight: 800; color: #6657e9; }
+        .jr-more { display: inline-flex; align-items: center; height: 41px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 13px; font-weight: 800; color: #6657e9; white-space: nowrap; }
+        .jr-more:hover { border-color: var(--ad-primary); background: var(--ad-soft-2); }
         @media (max-width: 1023px) {
           .jr { flex-wrap: wrap; }
           .jr-act { width: 100%; padding-left: 52px; }

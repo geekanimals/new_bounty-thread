@@ -420,13 +420,14 @@ export default function UploadStart({ id, mode = "upload" }) {
       <style>{`
 
         .us-gbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-        .us-ex td, .us-ex th { white-space: nowrap; }
+        .us-ex { width: max-content; min-width: 100%; }
+        .us-ex td, .us-ex th { white-space: nowrap !important; }
         .us-sheet { padding: 22px 20px 34px; border: 1px solid var(--ad-line); border-radius: 14px; }
         .us-sheet__t { font-size: 12px; line-height: 1.4; color: var(--ad-muted); }
         .us-sheet__t b { font-size: 14px; font-weight: 700; color: var(--ad-ink); }
         .us-row { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
         .us-row + .us-row { margin-top: 15px; }
-        .us-lab { width: 83px; flex-shrink: 0; font-size: 12px; font-weight: 700; line-height: 1.33; color: var(--ad-ink); }
+        .us-lab { width: 96px; flex-shrink: 0; font-size: 12px; font-weight: 700; line-height: 1.33; color: var(--ad-ink); }
         .us-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
         .us-sel { width: 160px; height: 43px; padding: 0 12px; -webkit-appearance: none; appearance: none; font-size: 14px; color: #293652; cursor: pointer; }
         .us-b { height: 43px; padding: 0 15px; }
@@ -461,7 +462,9 @@ export default function UploadStart({ id, mode = "upload" }) {
         .us-gtxt { margin-top: 13px; font-size: 12px; line-height: 1.55; color: var(--ad-muted); }
         .us-guide hr { margin: 20px 0 0; border: 0; border-top: 1px solid var(--ad-line); }
         .us-gtw { overflow-x: auto; margin-top: 16px; }
-        .us-gt td { height: 48px; padding-top: 6px; padding-bottom: 6px; }
+        .us-gt { table-layout: auto; }
+        .us-gt td { height: 48px; padding-top: 8px; padding-bottom: 8px; white-space: normal; overflow: visible; text-overflow: clip; max-width: none; line-height: 1.4; vertical-align: top; }
+        .us-gt td:first-child { white-space: nowrap; }
 
         @media (max-width: 640px) {
           .us-sheet { padding: 16px 14px; }
