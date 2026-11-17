@@ -7,7 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
-import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, loadTemplates, rejectionReasons } from "@/components/admin/campaign/journey";
+import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectionReasons } from "@/components/admin/campaign/journey";
 
 /* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
@@ -85,30 +85,46 @@ export default function WorkspaceCreators() {
     setBusy("");
   };
 
-  /* 💬 WhatsApp to selected — template ya apna message (purana ccWaSend) */
+  /* 💬 WhatsApp to selected — har creator ko uske ABHI ke step ka naya Utility message (Snapto drip, api.snapto_send_current_step).
+     Purane geek_* templates yahan se nahi jaate. Apna likha message (24 ghante wali window) waisa hi. */
   const waSelected = async () => {
-    const tpls = await loadTemplates();
     const v = await ask({
       title: `💬 WhatsApp to ${sel.length} creator${sel.length > 1 ? "s" : ""}`,
-      text: "Pick a template, or type your own message (typed messages only reach creators who wrote to you in the last 24 hours).",
+      text: "Each creator gets the WhatsApp message for the step they are on right now — invite, contract, address, courier, video brief, post link or completed (the new templates). Steps with no message are skipped and listed. Or type your own message — that only reaches creators who wrote to you in the last 24 hours.",
       ok: "Send on WhatsApp",
-      fields: [
-        { k: "tpl", label: "Template", options: tpls.map((t) => [t.name, t.name.replace(/^geek_/, "").replace(/_/g, " ")]) },
-        { k: "text", label: "…or your own message", area: true, placeholder: "Leave empty to send the template" },
-      ],
+      fields: [{ k: "text", label: "…or your own message (optional)", area: true, placeholder: "Leave empty to send each creator their current step's message" }],
     });
     if (!v) return;
-    if (!v.tpl && !v.text.trim()) return setToast("Pick a template or type a message.");
     setBusy("wa");
-    const r = await sendWhatsApp({ campaignId: id, keys: sel.map(keyOf), template: v.text.trim() ? null : v.tpl, text: v.text.trim() });
+    const keys = sel.map(keyOf);
+    if (v.text.trim()) {
+      const r = await sendWhatsApp({ campaignId: id, keys, template: null, text: v.text.trim() });
+      setBusy("");
+      if (r.cancelled) return;
+      setToast(r.msg);
+      if (!r.bad?.length && r.ok) setSel([]);
+      return reload();
+    }
+    const ms = await rpc("admin", "api.campaign_messaging", { p_campaign: id });
+    const sw = ms.data || {};
+    if (!ms.error && !(sw.wa_on && sw.global_wa_on !== false)) {
+      setBusy("");
+      return setToast("WhatsApp is OFF for this campaign — turn it on in Overview first, then send.");
+    }
+    const { data: d, error: e } = await rpc("admin", "api.snapto_send_current_step", {
+      p_campaign: id,
+      p_invites: keys.filter((k) => k[0] === "i").map((k) => k.slice(2)),
+      p_parts: keys.filter((k) => k[0] === "p").map((k) => k.slice(2)),
+    });
     setBusy("");
-    if (r.cancelled) return;
-    setToast(r.msg);
-    if (!r.bad?.length && r.ok) setSel([]);
+    if (e) return setToast(errText(e));
+    const skipped = (d && d.skipped) || [];
+    setToast(`💬 ${d?.queued ?? 0} creator${d?.queued === 1 ? "" : "s"} will get their step's message in a few minutes${skipped.length ? ` · ${skipped.length} skipped` : ""} ✓`);
+    if (skipped.length) window.alert("Not sent:\n" + skipped.slice(0, 40).map((x) => `${x.who || "Creator"} — ${x.why}`).join("\n"));
+    if (d?.queued) setSel([]);
     reload();
   };
 
-  /* ✖ Decline selected — sirf Applied / Screened wale (screen_participation, ek reason sabko) */
   const declinable = sel.map((rid) => all.find((x) => x.id === rid)).filter((x) => x && x.kind === "p" && ["applied", "eligible"].includes(x.x.stage));
   const declineSel = async () => {
     if (!declinable.length) return setToast("Tick creators who are on Applied first.");

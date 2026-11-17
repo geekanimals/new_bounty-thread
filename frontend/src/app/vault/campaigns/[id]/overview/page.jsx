@@ -206,7 +206,7 @@ export default function WorkspaceOverview() {
           <section className="ga-card wo-card">
             <h2 className="ga-h2">Campaign tools</h2>
             <div className="wo-tools">
-              {TOOLS.map((t) => (
+              {TOOLS.filter((t) => t.t !== "Payments" || ["paid", "barter_paid"].includes(row?.campaign_type)).map((t) => (
                 <Link key={t.t} href={t.href} className={`wo-tool ${t.short ? "wo-tool--s" : ""}`}>
                   {t.ic} {t.t}
                 </Link>

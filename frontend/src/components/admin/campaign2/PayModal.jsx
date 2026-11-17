@@ -30,9 +30,23 @@ export const statusOf = (r) => {
   return left > 0 ? "Not due yet" : "Fully paid";
 };
 
-/* Ek popup, kai kaam: fee set · verify · details maango · payment record / Razorpay · mark paid · details */
+const STATUS_TXT = { waiting: "not due yet", due: "due", queued: "sending…", processing: "sent — waiting for the bank", paid: "paid ✓", failed: "failed", cancelled: "cancelled" };
+const DET_TXT = { pending: "Not added", submitted: "Check by hand", verifying: "Checking…", verified: "Verified ✓", failed: "Failed ✗", needs_update: "Asked again" };
+export const termsLine = (p, days) => {
+  if (p.amount == null) return "";
+  const d = p.due_days || days || 7,
+    a = +p.advance_pct || 0;
+  return a >= 100 ? "all in advance (after signing)" : a > 0 ? `${a}% advance (${inr(Math.round((p.amount * a) / 100))}) after signing · balance ${d} days after posts` : `paid ${d} days after every post is live`;
+};
+
+/* Ek popup, kai kaam (purane payments.js ki har row ke saare button):
+ * manage (sab ek jagah) · fee set · bank / UPI bharna · poori details dekhna · verify · auto-check · details maango ·
+ * payment record / Razorpay · mark paid (UTR) · wapas due · screenshot add / dekhna · hold / release */
 export default function PayModal({ modal, days, connected, onClose, onDone }) {
-  const { row: r, kind } = modal;
+  const r = modal.row;
+  const [kind, setKind] = useState(modal.kind);
+  const [payout, setPayout] = useState(modal.payout || null);
+  const [rev, setRev] = useState(null);
   const p = r.payment || {};
   const po = p.payouts || [];
   const left = p.left != null ? +p.left : +p.amount || 0;
@@ -48,6 +62,12 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
     how: canRzp ? "razorpay" : "manual",
     utr: "",
     on: "",
+    method: p.method === "upi" ? "upi" : "bank",
+    aname: p.account_name || "",
+    ano: "",
+    ifsc: p.ifsc || "",
+    upi: p.upi_id || "",
+    reason: "",
   }));
   const fileRef = useRef(null);
   // aaj ki date effect mein (render mein new Date() nahi)
@@ -56,6 +76,55 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((o) => ({ ...o, [k]: e.target.value }));
   const name = who(r);
+  const markOut = payout || busyOut;
+  const anyBusy = !!busyOut;
+  const go = (k, o = null) => {
+    setErr("");
+    setPayout(o);
+    if (k === "verify") setF((x) => ({ ...x, note: "checked by the Geek team" }));
+    if (k === "ask") setF((x) => ({ ...x, note: p.details_status === "failed" ? "the bank could not verify this account" : "the account name doesn't match your name" }));
+    if (k === "fee") setF((x) => ({ ...x, note: p.terms_note || "" }));
+    setKind(k);
+  };
+
+  // poori bank / UPI details (log hota hai) — sirf jab "Full details" khole
+  useEffect(() => {
+    if (kind !== "reveal") return;
+    let alive = true;
+    rpc("admin", "api.payment_reveal", { p_participation: r.participation_id }).then(({ data, error }) => {
+      if (!alive) return;
+      if (error) setErr(errText(error));
+      else setRev(data || {});
+    });
+    return () => {
+      alive = false;
+    };
+  }, [kind, r.participation_id]);
+
+  // seedha chalne wale kaam (auto-check, release, wapas due) — popup band, list reload
+  const quick = async (fnName, args, msg, ask) => {
+    if (ask && !window.confirm(ask)) return;
+    setBusy(true);
+    setErr("");
+    const { error } = await rpc("admin", fnName, args);
+    if (error) {
+      setErr(errText(error));
+      return setBusy(false);
+    }
+    onDone(msg);
+  };
+  const openProof = async (path) => {
+    const { data, error } = await sbFor("admin").storage.from("payment-proofs").createSignedUrl(path, 600);
+    if (error || !data) return setErr("Couldn't open the screenshot: " + errText(error));
+    window.open(data.signedUrl, "_blank", "noopener");
+  };
+  const copy = async (v) => {
+    try {
+      await navigator.clipboard.writeText(v);
+    } catch {
+      window.prompt("Copy:", v);
+    }
+  };
 
   // payment ka screenshot — purane jaisa "payment-proofs" bucket
   const upProof = async () => {
@@ -94,10 +163,40 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
         if (error) throw error;
         return onDone(`Asked ${name} for new details ✓`);
       }
+      if (kind === "bank") {
+        const bank = f.method === "bank";
+        if (!f.aname.trim()) throw new Error("Enter the account holder name.");
+        if (bank && !/^\d{9,18}$/.test(f.ano.replace(/[\s-]/g, ""))) throw new Error("Enter the full account number (9–18 digits).");
+        if (bank && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(f.ifsc.trim())) throw new Error("Enter a valid IFSC (like HDFC0001234).");
+        if (!bank && !/^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(f.upi.trim())) throw new Error("Enter a valid UPI ID (like name@okhdfcbank).");
+        const { error } = await rpc("admin", "api.payment_admin_details", {
+          p_participation: r.participation_id,
+          p_method: f.method,
+          p_account_name: f.aname.trim(),
+          p_account_no: bank ? f.ano.replace(/[\s-]/g, "") : null,
+          p_ifsc: bank ? f.ifsc.trim().toUpperCase() : null,
+          p_upi: bank ? null : f.upi.trim().toLowerCase(),
+        });
+        if (error) throw error;
+        return onDone(`Payment details saved for ${name} ✓ — the check runs again`);
+      }
+      if (kind === "hold") {
+        if (!f.reason.trim()) throw new Error("Write why the payment is on hold.");
+        const { error } = await rpc("admin", "api.payment_hold", { p_participation: r.participation_id, p_hold: true, p_reason: f.reason.trim() });
+        if (error) throw error;
+        return onDone(`${name}'s payment is on hold ✓`);
+      }
+      if (kind === "proof") {
+        const path = await upProof();
+        if (!path) throw new Error("Choose the screenshot (image or PDF).");
+        const { error } = await rpc("admin", "api.payout_set_proof", { p_payout: payout.payout_id, p_path: path });
+        if (error) throw error;
+        return onDone("Screenshot added ✓ — the creator can open it");
+      }
       if (kind === "mark") {
         const proof = await upProof();
         if (!f.utr.trim() && !proof) throw new Error("Add the UTR or a screenshot of the payment.");
-        const { error } = await rpc("admin", "api.payout_mark_paid", { p_payout: busyOut.payout_id, p_utr: f.utr.trim() || null, p_paid_on: f.on || null, p_note: f.note.trim() || null, p_proof_path: proof });
+        const { error } = await rpc("admin", "api.payout_mark_paid", { p_payout: markOut.payout_id, p_utr: f.utr.trim() || null, p_paid_on: f.on || null, p_note: f.note.trim() || null, p_proof_path: proof });
         if (error) throw error;
         return onDone(`Marked paid ✓ — ${name} was told`);
       }
@@ -127,7 +226,9 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
     }
   };
 
-  const title = { fee: "Set fee", verify: "Verify", ask: "Ask for details", pay: "Record payment", mark: "Mark paid", details: "Payments" }[kind];
+  const title = { manage: "Payment", fee: "Fee & terms", bank: "Bank / UPI details", reveal: "Full payment details", verify: "Verify", ask: "Ask for details", pay: "Record payment", mark: "Mark paid", details: "Payments", proof: "Payment screenshot", hold: "Put on hold" }[kind];
+  const where = p.method === "upi" ? `UPI ${p.upi_id || ""}` : p.method === "bank" ? `A/c ••${p.account_last4 || ""} · ${p.ifsc || ""}${p.bank_name ? ` · ${p.bank_name}` : ""}` : "No bank / UPI yet";
+  const back = modal.kind === "manage" && kind !== "manage";
   const manualFields = (
     <>
       <div className="pm-row">
@@ -225,12 +326,219 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
             {f.how === "manual" && manualFields}
           </>
         )}
-        {kind === "mark" && busyOut && (
+        {kind === "mark" && markOut && (
           <>
             <p className="pm-txt">
-              {PART[busyOut.part] || "Payment"} of {inr(busyOut.amount)} paid outside the app. The creator is told, with the UTR.
+              {PART[markOut.part] || "Payment"} of {inr(markOut.amount)} paid outside the app. The creator is told, with the UTR.
             </p>
             {manualFields}
+          </>
+        )}
+        {kind === "manage" && (
+          <div className="pm-mg">
+            <section>
+              <h4>Fee</h4>
+              {p.amount != null ? (
+                <p>
+                  <b>{inr(p.amount)}</b> · {termsLine(p, days)}
+                  {p.fee_source === "bulk" ? " · from sheet" : ""}
+                  <br />
+                  Paid <b>{inr(p.paid_total || 0)}</b> · left <b>{inr(left)}</b>
+                  {p.terms_note ? <><br />📝 {p.terms_note}</> : null}
+                </p>
+              ) : (
+                <p>Fee not set — the contract waits for it.</p>
+              )}
+              {r.first_fee && (
+                <p className="pm-dim">
+                  First fee with Geek: <b>{inr(r.first_fee.amount)}</b> · {r.first_fee.campaign || ""}
+                </p>
+              )}
+              <div className="pm-btns">
+                <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("fee")}>
+                  {p.amount == null ? "💰 Set fee & terms" : "✏️ Fee & terms"}
+                </button>
+                {p.amount != null && left > 0 && (
+                  <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("pay")}>
+                    💸 Pay
+                  </button>
+                )}
+              </div>
+            </section>
+            <section>
+              <h4>Bank / UPI</h4>
+              <p>
+                {where} · <b>{DET_TXT[p.details_status] || p.details_status || "—"}</b>
+                {p.details_source && p.details_source !== "creator" ? ` (${p.details_source === "bulk" ? "from sheet" : "added by team"})` : ""}
+                {p.verify_name ? <><br />Name at bank: <b>{p.verify_name}</b>{p.account_name && p.verify_name.toLowerCase() !== String(p.account_name).toLowerCase() ? ` · typed: ${p.account_name}` : ""}</> : p.account_name ? <><br />Name: {p.account_name}</> : null}
+                {p.verify_message && p.details_status !== "verified" ? <><br />{p.verify_message}</> : null}
+                {p.details_status === "needs_update" && p.request_reason ? <><br />Asked: “{p.request_reason}”</> : null}
+              </p>
+              <div className="pm-btns">
+                <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("bank")} disabled={anyBusy}>
+                  ✏️ {p.method ? "Edit" : "Add"} details
+                </button>
+                {p.method && (
+                  <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("reveal")}>
+                    👁 Full details
+                  </button>
+                )}
+                {p.method && p.details_status !== "verified" && (
+                  <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("verify")}>
+                    ✓ Verified by me
+                  </button>
+                )}
+                {p.method && connected && p.details_status !== "verifying" && (
+                  <button type="button" className="ga-btn ga-btn--ghost" disabled={busy} onClick={() => quick("api.payment_verify", { p_participation: r.participation_id, p_mode: "auto" }, "Automatic check started — the result shows in a minute ✓")}>
+                    ↻ Auto-check
+                  </button>
+                )}
+                <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("ask")} disabled={anyBusy}>
+                  ✉️ Ask again
+                </button>
+              </div>
+            </section>
+            <section>
+              <h4>Payments</h4>
+              {po.length ? (
+                po.map((o) => {
+                  const bulk = o.status === "processing" && o.provider === "razorpayx_bulk";
+                  return (
+                    <div key={o.payout_id} className="pm-out">
+                      <span>
+                        {PART[o.part] || o.part} · <b>{inr(o.amount)}</b> · {STATUS_TXT[o.status] || o.status}
+                        {o.status === "due" && o.due_at ? ` · by ${when(o.due_at)}` : ""}
+                        {o.utr ? ` · UTR ${o.utr}` : ""}
+                        {o.note === "part payment" ? " · part payment" : ""}
+                        {o.status === "failed" && o.failure_reason ? ` · ${o.failure_reason}` : ""}
+                        {bulk ? ` · in the bulk file (ref ${o.ref_code})` : ""}
+                      </span>
+                      <span className="pm-btns">
+                        {(["due", "failed"].includes(o.status) || bulk) && (
+                          <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("mark", o)}>
+                            ✅ Paid (UTR)
+                          </button>
+                        )}
+                        {(bulk || o.status === "failed") && (
+                          <button type="button" className="ga-btn ga-btn--ghost" disabled={busy} onClick={() => quick("api.payout_reset", { p_payout: o.payout_id }, "Back to due ✓", "Put this payment back to “due”?\n\nOnly if it was NOT paid through the RazorpayX bulk file (or it failed). It can then be paid again.")}>
+                            ↺ Back to due
+                          </button>
+                        )}
+                        {o.proof_path ? (
+                          <button type="button" className="ga-btn ga-btn--ghost" onClick={() => openProof(o.proof_path)}>
+                            📎 Screenshot
+                          </button>
+                        ) : o.status === "paid" ? (
+                          <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("proof", o)}>
+                            📎 Add screenshot
+                          </button>
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <p>{p.amount == null ? "—" : "No payments yet."}</p>
+              )}
+              <div className="pm-btns">
+                {p.on_hold ? (
+                  <>
+                    <span className="pm-hold">⏸ On hold{p.hold_reason ? `: ${p.hold_reason}` : ""}</span>
+                    <button type="button" className="ga-btn ga-btn--ghost" disabled={busy} onClick={() => quick("api.payment_hold", { p_participation: r.participation_id, p_hold: false, p_reason: null }, "Released ✓")}>
+                      ▶ Release
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="ga-btn ga-btn--ghost" onClick={() => go("hold")}>
+                    ⏸ Hold
+                  </button>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+        {kind === "bank" && (
+          <>
+            <p className="pm-txt">Use this when the creator sent their details another way (WhatsApp, email). They must be in the creator&apos;s own name. The automatic check runs again.</p>
+            <div className="pm-seg">
+              <button type="button" className={f.method === "bank" ? "is-on" : ""} onClick={() => setF((o) => ({ ...o, method: "bank" }))}>
+                🏦 Bank account
+              </button>
+              <button type="button" className={f.method === "upi" ? "is-on" : ""} onClick={() => setF((o) => ({ ...o, method: "upi" }))}>
+                📱 UPI ID
+              </button>
+            </div>
+            <label className="ga-label" htmlFor="pm-an">
+              Account holder name
+            </label>
+            <input id="pm-an" className="ga-input" value={f.aname} onChange={set("aname")} maxLength={80} />
+            {f.method === "bank" ? (
+              <div className="pm-row">
+                <div>
+                  <label className="ga-label" htmlFor="pm-ano">
+                    Account number
+                  </label>
+                  <input id="pm-ano" className="ga-input" value={f.ano} onChange={set("ano")} inputMode="numeric" autoComplete="off" maxLength={22} placeholder={p.account_last4 ? `•••• ${p.account_last4} — type the full number` : "9–18 digits"} />
+                </div>
+                <div>
+                  <label className="ga-label" htmlFor="pm-ifsc">
+                    IFSC
+                  </label>
+                  <input id="pm-ifsc" className="ga-input" value={f.ifsc} onChange={set("ifsc")} maxLength={11} style={{ textTransform: "uppercase" }} placeholder="HDFC0001234" />
+                </div>
+              </div>
+            ) : (
+              <>
+                <label className="ga-label" htmlFor="pm-upi">
+                  UPI ID
+                </label>
+                <input id="pm-upi" className="ga-input" value={f.upi} onChange={set("upi")} maxLength={100} autoComplete="off" placeholder="name@okhdfcbank" />
+              </>
+            )}
+          </>
+        )}
+        {kind === "reveal" && (
+          <div className="pm-outs">
+            {!rev && !err && <p className="pm-txt">Loading…</p>}
+            {rev &&
+              [
+                ["Name", rev.account_name],
+                ...(rev.method === "upi" ? [["UPI ID", rev.upi_id]] : [["Account number", rev.account_no], ["IFSC", rev.ifsc]]),
+              ]
+                .filter(([, v]) => v)
+                .map(([k, v]) => (
+                  <div key={k}>
+                    <span>{k}</span>
+                    <span>
+                      <b>{v}</b>{" "}
+                      <button type="button" className="pm-copy" onClick={() => copy(v)}>
+                        Copy
+                      </button>
+                    </span>
+                  </div>
+                ))}
+            {rev && <p className="pm-txt">This view is logged. Don&apos;t share these details outside the payment.</p>}
+          </div>
+        )}
+        {kind === "proof" && payout && (
+          <>
+            <p className="pm-txt">
+              {PART[payout.part] || "Payment"} of {inr(payout.amount)}
+              {payout.utr ? ` · UTR ${payout.utr}` : ""}. The creator can open and download it from the campaign in their app.
+            </p>
+            <label className="ga-label" htmlFor="pm-proof">
+              Screenshot (image or PDF, under 10 MB)
+            </label>
+            <input id="pm-proof" ref={fileRef} type="file" accept="image/*,.pdf" className="ga-input pm-file" />
+          </>
+        )}
+        {kind === "hold" && (
+          <>
+            <p className="pm-txt">No payment goes to {name} until you release it. Use it when a post was taken down or something needs checking.</p>
+            <label className="ga-label" htmlFor="pm-reason">
+              Why?
+            </label>
+            <input id="pm-reason" className="ga-input" value={f.reason} onChange={set("reason")} maxLength={200} placeholder="e.g. a post was taken down" autoFocus />
           </>
         )}
         {kind === "details" && (
@@ -255,12 +563,17 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
         )}
         {err && <p className="pm-err">{err}</p>}
         <div className="pm-act">
+          {back && (
+            <button type="button" className="ga-btn ga-btn--ghost pm-back" onClick={() => go("manage")}>
+              ← Back
+            </button>
+          )}
           <button type="button" className="ga-btn ga-btn--ghost" onClick={onClose}>
-            {kind === "details" ? "Close" : "Cancel"}
+            {["details", "manage", "reveal"].includes(kind) ? "Close" : "Cancel"}
           </button>
-          {kind !== "details" && (
+          {!["details", "manage", "reveal"].includes(kind) && (
             <button type="submit" className="ga-btn ga-btn--primary" disabled={busy}>
-              {busy ? "Saving…" : kind === "verify" ? "Mark verified" : kind === "ask" ? "Send" : kind === "pay" && f.how === "razorpay" ? "⚡ Pay now" : "Save"}
+              {busy ? "Saving…" : kind === "verify" ? "Mark verified" : kind === "ask" ? "Send" : kind === "pay" && f.how === "razorpay" ? "⚡ Pay now" : kind === "bank" ? "Save & verify" : kind === "proof" ? "Upload" : kind === "hold" ? "Put on hold" : "Save"}
             </button>
           )}
         </div>
@@ -277,6 +590,19 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
         .pm-seg button:disabled { opacity: .45; cursor: not-allowed; }
         .pm-outs { margin-top: 12px; display: grid; gap: 6px; font-size: 13px; }
         .pm-outs div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--ad-soft-2); }
+        .pm { max-height: calc(100vh - 40px); overflow-y: auto; }
+        .pm-mg { display: grid; gap: 14px; margin-top: 14px; }
+        .pm-mg section { padding: 12px 14px; border-radius: 12px; background: var(--ad-soft-2); }
+        .pm-mg h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ad-muted); }
+        .pm-mg p { margin: 0; font-size: 13px; line-height: 1.55; }
+        .pm-dim { margin-top: 4px !important; color: var(--ad-muted); }
+        .pm-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .pm-btns .ga-btn { height: 32px; padding: 0 11px; font-size: 12px; }
+        .pm-out { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 0; border-bottom: 1px solid var(--ad-line-2); font-size: 13px; }
+        .pm-out .pm-btns { margin-top: 0; }
+        .pm-hold { align-self: center; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
+        .pm-copy { margin-left: 6px; padding: 2px 8px; border: 1px solid var(--ad-line-2); border-radius: 8px; background: #fff; font-size: 11.5px; }
+        .pm-back { margin-right: auto; }
         .pm-err { margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
         .pm-act { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
         @media (max-width: 640px) { .pm-row { grid-template-columns: 1fr; } }

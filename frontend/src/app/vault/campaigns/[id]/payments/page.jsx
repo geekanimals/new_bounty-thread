@@ -7,12 +7,31 @@ import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Panel, SubTabs, Note, MiniStats, TextBtn, TableState, useToast, downloadFile, readSheetFile, inr, when } from "@/components/admin/campaign2/kit";
 import { useRpc, rpc, errText } from "@/lib/supabase";
 import PayModal, { who, readyOuts, statusOf } from "@/components/admin/campaign2/PayModal";
+import { useCampaign } from "@/components/admin/campaign/live";
 
 /*
  * 💰 Payments — purane app ka payments.js (Super Admin only).
  * Data: api.campaign_payments · Actions: payment_set_terms, payment_verify, payment_request_details, payment_hold,
- * payout_pay, payout_mark_paid, payout_queue (Razorpay), payout_export (bulk file), payout_import_results, payments_ping.
+ * payout_pay, payout_mark_paid, payout_queue (Razorpay), payout_export (bulk file), payout_import_results, payments_ping,
+ * payment_admin_details (team bank / UPI), payment_reveal, payout_set_proof, payout_reset, payment_bulk_terms (fees sheet).
+ * Sirf Paid aur Barter + Paid campaign mein — Barter mein payment nahi hota.
  */
+
+// fees sheet ke columns (purane PAY_COLS jaisa) — campaign mein pehle se jude creators ke liye
+const FEE_COLS = [
+  ["handle", /insta|handle|username|^ig\b|profile/],
+  ["phone", /whats ?app|phone|mobile/],
+  ["email", /e-?mail/],
+  ["name", /^(full ?name|name|creator( name)?)$/],
+  ["fee", /^(?!.*(advance|%|day|term|note|mode|status|upi|account|ifsc|bank)).*(fee|amount|commercial|price|rate|charge|budget|deal|payment)/],
+  ["advance_pct", /advance/],
+  ["pay_days", /days/],
+  ["pay_terms", /terms|note/],
+  ["upi", /upi|vpa/],
+  ["account_no", /^(?!.*(name|holder|type)).*(a\/?c|account)/],
+  ["ifsc", /ifsc/],
+  ["account_name", /holder|account ?name|beneficiary|bene ?name|name (as )?(in|on|per) bank/],
+];
 
 const FILTERS = [
   ["all", "Everyone"],
@@ -54,6 +73,11 @@ export default function CampaignPayments() {
   const [modal, setModal] = useState(null); // { row, kind }
   const [busy, setBusy] = useState(false);
   const impRef = useRef(null);
+  const feeRef = useRef(null);
+  const [fees, setFees] = useState(null); // { rows, cols, result, err }
+  const camp = useCampaign(id && id !== "sample" ? id : null);
+  const kind = camp.c ? camp.c.campaign_type || "" : "";
+  const noPay = !!camp.c && !["paid", "barter_paid"].includes(kind);
 
   const rows = useMemo(() => (data && data.rows) || [], [data]);
   const prov = (data && data.provider) || {};
@@ -185,6 +209,48 @@ export default function CampaignPayments() {
     }
   };
 
+  // 📥 fees sheet — creators already on this campaign (purane payUploadModal jaisa)
+  const readFees = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const all = await readSheetFile(file);
+      if (!all || all.length < 2) throw new Error("No rows in that file.");
+      const head = all[0].map((h) => String(h || "").trim().toLowerCase()),
+        used = new Set(),
+        map = {};
+      FEE_COLS.forEach(([k, re]) => {
+        const i = head.findIndex((h, ix) => !used.has(ix) && re.test(h));
+        if (i >= 0) {
+          map[k] = i;
+          used.add(i);
+        }
+      });
+      if (map.fee == null && map.upi == null && map.account_no == null) throw new Error("Couldn't find a Fee (or UPI / Account no) column.");
+      if (map.handle == null && map.phone == null && map.email == null) throw new Error("Add an Instagram, WhatsApp or email column to match the creators.");
+      const list2 = all
+        .slice(1)
+        .filter((r) => r.some(Boolean))
+        .map((r, i) => {
+          const o = { i: String(i + 2) };
+          Object.entries(map).forEach(([k, ix]) => (o[k] = String(r[ix] ?? "").trim()));
+          return o;
+        });
+      setFees({ rows: list2, cols: Object.keys(map), result: null, err: "" });
+    } catch (ex) {
+      show(errText(ex));
+    }
+  };
+  const saveFees = async () => {
+    setBusy(true);
+    const { data: d, error: e } = await rpc("admin", "api.payment_bulk_terms", { p_campaign: id, p_rows: fees.rows });
+    setBusy(false);
+    if (e) return setFees((x) => ({ ...x, err: errText(e) }));
+    setFees((x) => ({ ...x, result: d || {}, err: "" }));
+    reload(true);
+  };
+
   const csv = () => {
     downloadFile(`payments-${new Date().toISOString().slice(0, 10)}.csv`, [
       ["Creator", "Name", "Step", "Fee", "Advance %", "Pay days", "Terms", "Method", "Pay to", "Details", "Advance", "Advance status", "Advance UTR", "Balance", "Balance status", "Balance due", "Balance UTR", "On hold"],
@@ -223,13 +289,22 @@ export default function CampaignPayments() {
         sub="Fees are visible only to Super Admins — never to brands, agencies or other creators."
         actions={
           <>
-            <TextBtn href={`/vault/campaigns/${id}/upload`}>📥 Upload fees (sheet)</TextBtn>
+            <TextBtn onClick={() => feeRef.current?.click()}>📥 Upload fees (sheet)</TextBtn>
+            <input ref={feeRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={readFees} />
+            <TextBtn href={`/vault/campaigns/${id}/upload`}>📄 Bulk upload (new creators)</TextBtn>
             <TextBtn onClick={csv}>⬇️ CSV</TextBtn>
             <TextBtn onClick={() => impRef.current?.click()}>⬆ Import RazorpayX report</TextBtn>
             <input ref={impRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={importReport} />
           </>
         }
       >
+        {noPay && (
+          <div className="py-note">
+            <Note tone="amber" icon="🎁">
+              <b>This is a Barter campaign</b> — creators get the product, so there are no fees or payouts here. Payments are for <b>Paid</b> and <b>Barter + Paid</b> campaigns.
+            </Note>
+          </div>
+        )}
         <MiniStats
           items={[
             { value: inr(agreed), label: "Agreed", note: `${withFee} creator${withFee === 1 ? "" : "s"}` },
@@ -307,8 +382,11 @@ export default function CampaignPayments() {
                   <tr key={r.participation_id}>
                     <td className="py-ck">{ready.length > 0 && <input type="checkbox" checked={ready.every((o) => sel.has(o.payout_id))} onChange={() => toggleRow(r)} aria-label={`Select ${who(r)}`} />}</td>
                     <td>
-                      <b>{nm || who(r)}</b>
-                      {nm && who(r).startsWith("@") ? ` · ${who(r)}` : ""}
+                      <button type="button" className="py-name" onClick={() => setModal({ row: r, kind: "manage" })} title="All payment details and actions">
+                        <b>{nm || who(r)}</b>
+                        {nm && who(r).startsWith("@") ? ` · ${who(r)}` : ""}
+                      </button>
+                      {p.on_hold && p.hold_reason ? <div className="py-sub">⏸ {p.hold_reason}</div> : null}
                     </td>
                     <td>{inr(p.amount)}</td>
                     <td>{p.amount == null ? "—" : `${+p.advance_pct || 0}%`}</td>
@@ -321,9 +399,14 @@ export default function CampaignPayments() {
                       </span>
                     </td>
                     <td>
-                      <button type="button" className="ga-btn ga-btn--ghost py-act" onClick={() => act(r)}>
-                        {ACTION[st]}
-                      </button>
+                      <span className="py-acts">
+                        <button type="button" className="ga-btn ga-btn--ghost py-act" onClick={() => act(r)}>
+                          {ACTION[st]}
+                        </button>
+                        <button type="button" className="ga-btn ga-btn--ghost py-act py-more" onClick={() => setModal({ row: r, kind: "manage" })} aria-label={`Manage ${who(r)}`} title="Manage: fee, bank / UPI, payments, screenshots, hold">
+                          ⋯
+                        </button>
+                      </span>
                     </td>
                   </tr>
                 );
@@ -359,6 +442,68 @@ export default function CampaignPayments() {
       </Panel>
 
       {modal && <PayModal modal={modal} days={data?.due_days} connected={!!prov.connected} onClose={() => setModal(null)} onDone={(m) => (setModal(null), after(m))} />}
+      {fees && (
+        <div className="ga-overlay" onClick={() => !busy && setFees(null)}>
+          <div className="ga-modal py-fm" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Upload fees">
+            <h3 className="ga-h2">📥 Upload fees for this campaign&apos;s creators</h3>
+            <p className="py-fm__t">
+              One row per creator already on this campaign — matched on Instagram, WhatsApp or email. Columns: Fee · Advance % · Pay days · Terms · and optionally UPI or Account no + IFSC + Account holder. Contracts that were waiting go out with the fee. New creators? Use 📄 Bulk upload.
+            </p>
+            <p className="py-fm__t">
+              Found <b>{fees.rows.length}</b> rows · columns: {fees.cols.map((k) => k.replace("_", " ")).join(", ")}
+            </p>
+            <div className="c2-tw">
+              <table className="c2-t">
+                <thead>
+                  <tr>
+                    <th>Row</th>
+                    <th>Creator</th>
+                    <th>Fee</th>
+                    <th>Advance</th>
+                    <th>Days</th>
+                    <th>Pay to</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fees.rows.slice(0, 8).map((x) => (
+                    <tr key={x.i}>
+                      <td>{x.i}</td>
+                      <td>{x.handle || x.phone || x.email || ""}</td>
+                      <td>{x.fee || ""}</td>
+                      <td>{x.advance_pct || ""}</td>
+                      <td>{x.pay_days || ""}</td>
+                      <td>{x.upi || (x.account_no ? "a/c ••" + x.account_no.slice(-4) : "")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {fees.rows.length > 8 && <p className="py-fm__t">…and {fees.rows.length - 8} more</p>}
+            {fees.result && (
+              <Note tone="green" icon="✓">
+                {fees.result.updated ?? 0} updated{fees.result.not_found ? ` · ${fees.result.not_found} not on this campaign` : ""}
+                {(fees.result.errors || []).length ? ` · ${fees.result.errors.length} with a problem` : ""}
+                {(fees.result.errors || []).slice(0, 20).map((x, i) => (
+                  <div key={i}>
+                    Row {x.row || "?"}: {x.error}
+                  </div>
+                ))}
+              </Note>
+            )}
+            {fees.err && <p className="py-fm__err">{fees.err}</p>}
+            <div className="py-fm__act">
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setFees(null)} disabled={busy}>
+                {fees.result ? "Close" : "Cancel"}
+              </button>
+              {!fees.result && (
+                <button type="button" className="ga-btn ga-btn--primary" onClick={saveFees} disabled={busy || !fees.rows.length}>
+                  {busy ? "Saving…" : `Save ${fees.rows.length} fee${fees.rows.length === 1 ? "" : "s"}`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {toast}
 
       <style>{`
@@ -376,6 +521,16 @@ export default function CampaignPayments() {
         .py-ck { width: 40px; }
         .py-ck input, .py-all input { width: 15px; height: 15px; margin: 0; accent-color: #5f6577; }
         .py-act { height: 40px; padding: 0 15px; font-size: 13px; }
+        .py-acts { display: inline-flex; gap: 6px; }
+        .py-more { width: 40px; padding: 0; font-size: 18px; line-height: 1; }
+        .py-name { padding: 0; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+        .py-name:hover b { text-decoration: underline; }
+        .py-sub { margin-top: 3px; font-size: 11.5px; color: var(--ad-red); }
+        .py-fm { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto; padding: 24px; }
+        .py-fm__t { margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--ad-muted); }
+        .py-fm .c2-tw { margin-top: 12px; }
+        .py-fm__err { margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
+        .py-fm__act { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
         .py-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
         .py-all { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ad-ink); cursor: pointer; }
         .py-all input { accent-color: var(--ad-primary); }

@@ -239,6 +239,15 @@ export async function loadTemplates() {
   return (_tpls = L);
 }
 
+/** Ek / kai creators ko unke ABHI ke step ka naya Utility WhatsApp (api.snapto_send_current_step) */
+export async function sendStepWa(campaignId, invites, parts, who, say, reload) {
+  const { data: d, error } = await rpc("admin", "api.snapto_send_current_step", { p_campaign: campaignId, p_invites: invites || [], p_parts: parts || [] });
+  if (error) say(errText(error));
+  else if (d && d.queued) say(`✓ ${who} will get the WhatsApp in a few minutes`);
+  else say(`Not sent — ${((d && d.skipped) || [])[0]?.why || "no WhatsApp message for this step"}`);
+  if (reload) reload();
+}
+
 /**
  * WhatsApp to selected (purana ccWaSend, template + typed message):
  *  campaign_messaging check → campaign_wa_targets → har number par wa-send.
@@ -253,7 +262,7 @@ export async function sendWhatsApp({ campaignId, keys, template, text, confirmFn
   const tpls = template ? await loadTemplates() : [];
   const one = template ? tpls.find((x) => x.name === template) : null;
   if (template && !one) return { ok: 0, bad: [], msg: "That template isn't available." };
-  const base = (t && t.app_url) || "https://www.bountythreads.geekcreativeagency.com";
+  const base = (t && t.app_url) || "https://bounty.geekcreativeagency.com";
   const camp = (t && t.campaign) || "the campaign";
   const brand = (t && t.brand) || "the brand";
   const seen = new Set();
@@ -388,16 +397,17 @@ export async function runAction(key, row, ctx) {
   };
   switch (key) {
     case "step": {
+      // app + email purane jaise (team_send_step); WhatsApp ab naye Utility template se — current step ka drip
       if (!window.confirm(`Send “${row.act.label.replace(/^\S+\s*/, "")}” to ${who} now? (WhatsApp + app + email)`)) return;
-      return call("api.team_send_step", { p_participation: P, p_key: row.act.msg }, `✓ Sent to ${who}`);
+      await rpc("admin", "api.team_send_step", { p_participation: P, p_key: row.act.msg });
+      return sendStepWa(campaignId, [], [P], who, say, reload);
     }
     case "resend":
       return call("api.bulk_resend_invite", { p_invite: row.iid }, `↻ Invite re-sent to ${who}`);
     case "connectig": {
-      const r = await sendWhatsApp({ campaignId, keys: ["i:" + row.iid], template: "geek_selected_connect_instagram" });
-      if (!r.cancelled) say(r.msg);
-      if (reload) reload();
-      return;
+      // purana geek_selected_connect_instagram nahi — naya invite / current step message (Snapto drip)
+      if (!window.confirm(`Send ${who} a WhatsApp to finish joining the campaign?`)) return;
+      return sendStepWa(campaignId, [row.iid], [], who, say, reload);
     }
     case "bpscreen":
       return call("api.screen_participation", { p_participation: P, p_eligible: true, p_reason: null }, `✓ ${who} meets the brief`);

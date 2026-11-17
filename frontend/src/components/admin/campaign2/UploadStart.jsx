@@ -12,6 +12,8 @@ import { UploadCard, MsgOff, saveUpload, buildUpload, readUploadFile, readPasted
 // 📄 Campaign sheet ke columns — purane SH_COLS jaisa (bulk upload wale hi columns, wapas upload ho sake)
 const SH_COLS = [["Name", "name"], ["Instagram", "instagram"], ["WhatsApp", "whatsapp"], ["Email", "email"], ["City", "city"], ["Status", "status"], ["Address", "address"], ["State", "state"], ["PIN code", "pincode"], ["Courier", "courier"], ["Tracking", "tracking"], ["Video link", "video_link"], ["Post link", "post_link"]];
 const SHIP = ["Address", "State", "PIN code", "Courier", "Tracking"];
+// Paid / Barter + Paid: payment ke columns bhi (bulk upload inhe padhta hai — fee, advance, bank / UPI). Barter mein nahi.
+const PAY_COLS = [["Fee (₹)", "fee"], ["Advance %", "advance_pct"], ["Pay days", "pay_days"], ["Terms", "pay_terms"], ["UPI ID", "upi"], ["Account no", "account_no"], ["IFSC", "ifsc"], ["Account holder", "account_name"]];
 
 /**
  * Bulk upload step 1 — 3 roop (har ek apna route):
@@ -84,7 +86,7 @@ export default function UploadStart({ id, mode = "upload" }) {
   const download = async (fmt) => {
     const list = rows.filter((r) => (step === "" ? true : step === "out" ? /^Out/.test(r.status || "") : r.status_key === step && !/^Out/.test(r.status || "")));
     if (!list.length) return show("No creators to download for that choice.");
-    const cols = SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h)));
+    const cols = [...SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
     const aoa = [cols.map((c) => c[0]), ...list.map((r) => cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : r[k] == null ? "" : String(r[k]))))];
     const lab = step ? (opts.find((o) => o[0] === step) || [])[1] || step : "";
     const nm = `${String(sheet.data.campaign || "campaign").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "campaign"}-creators${lab ? "-" + lab.replace(/[^\w]+/g, "-").toLowerCase() : ""}`;
