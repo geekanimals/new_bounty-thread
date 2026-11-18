@@ -190,6 +190,15 @@ export async function readSheetLink(url) {
   return splitCsv(text);
 }
 
+/* phone jaisa dikhe tabhi phone — Google Form ka "Timestamp" (10/8/2026 16:45:12) / date phone nahi bane */
+const isDateLike = (x) => /[/:]/.test(x) || /^\d{4}-\d{2}-\d{2}/.test(x.trim());
+export const isPhoneLike = (x) => {
+  x = String(x || "").trim();
+  if (!x || /[a-z]/i.test(x) || isDateLike(x)) return false;
+  const d = x.replace(/\D/g, "");
+  return d.length >= 10 && d.length <= 13 && /^\+?[\d\s().-]+$/.test(x);
+};
+
 /* ---------- rows → state (purane bkSetRows) ---------- */
 const looksLikeHeader = (row) => row.some((c) => BK_FIELDS.some(([, , re]) => re.test(String(c || "")))) && !row.some((c) => /@.+\./.test(c) || /\d{8,}/.test(String(c).replace(/\D/g, "")));
 export function autoMap(head, kind) {
@@ -222,7 +231,7 @@ export function buildUpload(rows, src, kind) {
       const v = body.slice(0, 20).map((r) => String(r[i] || ""));
       const third = Math.max(1, v.length / 3);
       if (map.email == null && v.filter((x) => /@.+\./.test(x)).length >= third) map.email = i;
-      else if (map.phone == null && v.filter((x) => x.replace(/\D/g, "").length >= 10 && !/[a-z]/i.test(x)).length >= third) map.phone = i;
+      else if (map.phone == null && v.filter(isPhoneLike).length >= third) map.phone = i;
       else if (map.post_link == null && v.filter((x) => /instagram\.com\/(reel|reels|p|tv|stories)\//i.test(x)).length >= third) map.post_link = i;
       else if (map.handle == null && v.filter((x) => /instagram\.com|^@/.test(x)).length >= third) map.handle = i;
     }
@@ -250,7 +259,7 @@ export function rowData(up, r, kind) {
   const g = (k) => (["post_link", "video_link", "handle"].includes(k) ? fixLink(g0(k)) : g0(k));
   const st = r.status || "registered";
   return {
-    name: g("name"), handle: g("handle"), phone: g("phone"), email: g("email"), city: g("city"), followers: g("followers"),
+    name: g("name"), handle: g("handle"), phone: isPhoneLike(g("phone")) ? g("phone") : "", email: g("email"), city: g("city"), followers: g("followers"),
     status: serverStatus(kind, st), approved: stRank(st) >= 4,
     address: g("address"), state: g("state"), pincode: g("pincode"), courier: g("courier"), tracking: g("tracking"),
     post_link: g("post_link"), video_link: g("video_link"), coupon: g0("coupon").toUpperCase().replace(/\s+/g, ""),
