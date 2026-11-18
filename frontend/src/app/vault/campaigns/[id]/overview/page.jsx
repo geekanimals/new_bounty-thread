@@ -38,6 +38,13 @@ export default function WorkspaceOverview() {
   const ct = row?.contract_terms && typeof row.contract_terms === "object" ? row.contract_terms : {};
   const left = daysLeft(row?.end_date);
   const terms = [ct.collab_rights !== false ? "Collab with brand" : "", ct.blacklist_clause !== false ? "blacklist if no video" : "", ct.reship_clause !== false && row?.campaign_type !== "paid" ? "re-ship at their cost" : ""].filter(Boolean);
+  // purane "Campaign details" jaisa: hashtags + mentions alag, brief / files / photo neeche
+  const tagWords = String(row?.hashtags || "")
+    .split(/[\s,]+/)
+    .map((w) => w.trim())
+    .filter(Boolean)
+    .map((w) => (/^[#@]/.test(w) ? w : "#" + w));
+  const files = Array.isArray(row?.attachments) ? row.attachments.filter((a) => a && a.url) : [];
   const DETAILS = row
     ? [
         ["Each creator posts", delivChips(row.deliverables) || "Not set — Edit"],
@@ -48,6 +55,9 @@ export default function WorkspaceOverview() {
         ["Terms", terms.join(" · ") || "—"],
         ["Creators needed", row.creators ? String(row.creators) : "—"],
         ["Eligibility", eligLine(row.ideal_profile)],
+        ["Hashtags", tagWords.filter((w) => w.startsWith("#")).join(" ") || "—"],
+        ["Mentions", tagWords.filter((w) => w.startsWith("@")).join(" ") || "—"],
+        ...(row.budget ? [["Budget", fmtMoney(row.budget)]] : []),
       ]
     : [];
 
@@ -91,6 +101,12 @@ export default function WorkspaceOverview() {
   const approved = rowsAll.filter((c) => c.approved).length;
   const done = rowsAll.filter((c) => c.posted).length;
   const jn = (n) => (people.loading || bt.loading ? "…" : people.error ? "—" : n);
+  // posting progress (purana wsDelivProg): kitno ne sab post kiya, kitne links up, kitne post hata diye
+  const PG = Object.values(prog.data || {}).filter((v) => v && typeof v === "object");
+  const pgAll = PG.filter((v) => v.all_done).length;
+  const pgNeed = PG.reduce((a, v) => a + (+v.need || 0), 0);
+  const pgUp = PG.reduce((a, v) => a + (+v.done || 0), 0);
+  const pgGone = PG.reduce((a, v) => a + (v.posts || []).filter((x) => x && x.missing_since).length, 0);
 
   /* Delete (admin_delete_campaign — naam type karke confirm) */
   const del = async () => {
@@ -199,6 +215,32 @@ export default function WorkspaceOverview() {
                 </div>
               ))}
             </div>
+            {row && (
+              <details className="wo-more">
+                <summary>Brief, photo, product link &amp; files</summary>
+                <div className="wo-more__b">
+                  {row.cover_url ? <img src={row.cover_url} alt="" className="wo-cover" referrerPolicy="no-referrer" /> : <p className="wo-sub">No campaign photo — creators see a stock photo. Add one with Edit brief.</p>}
+                  {/^https?:\/\//i.test(row.product_link || "") && (
+                    <p>
+                      🎁 Product:{" "}
+                      <a href={row.product_link} target="_blank" rel="noopener noreferrer">
+                        open link ↗
+                      </a>
+                    </p>
+                  )}
+                  {row.brief ? <p className="wo-brief">{row.brief}</p> : <p className="wo-sub">No brief.</p>}
+                  {files.length > 0 && (
+                    <div className="wo-files">
+                      {files.map((a, i) => (
+                        <a key={i} href={/^https?:\/\//i.test(a.url) ? a.url : "#"} target="_blank" rel="noopener noreferrer">
+                          📎 {a.name || "file"}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
           </section>
         </div>
 
@@ -234,6 +276,24 @@ export default function WorkspaceOverview() {
                 <small>every post up</small>
               </Link>
             </div>
+            {PG.length > 0 ? (
+              <div className="wo-prog">
+                <p>
+                  <b>{pgAll}</b> of {PG.length} posted everything · <b>{pgUp}</b> of {pgNeed} links up
+                  {pgGone > 0 && (
+                    <span className="wo-gone">
+                      {" "}
+                      · ⚠️ <b>{pgGone}</b> post{pgGone > 1 ? "s" : ""} taken down
+                    </span>
+                  )}
+                </p>
+                <span className="ga-bar">
+                  <i style={{ width: `${pgNeed ? Math.round((100 * pgUp) / pgNeed) : 0}%` }} />
+                </span>
+              </div>
+            ) : (
+              !prog.loading && <p className="wo-sub">Nobody has reached posting yet.</p>
+            )}
           </section>
         </div>
       </div>
@@ -294,6 +354,17 @@ export default function WorkspaceOverview() {
         .wo-d p { font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--ad-muted); }
         .wo-d b { display: block; margin-top: 6px; font-size: 14px; font-weight: 700; line-height: 1.33; color: var(--ad-ink); }
 
+        .wo-prog { margin: -6px 0 6px; font-size: 12.5px; color: var(--ad-muted); }
+        .wo-prog b { color: var(--ad-ink); }
+        .wo-prog .ga-bar { display: block; margin-top: 8px; height: 6px; background: #eceef6; }
+        .wo-gone, .wo-gone b { color: #dc2626; }
+        .wo-more { margin-top: 16px; font-size: 13px; }
+        .wo-more summary { cursor: pointer; font-weight: 800; color: #6657e9; }
+        .wo-more__b { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; color: var(--ad-ink); }
+        .wo-more__b a { color: var(--ad-primary); font-weight: 700; }
+        .wo-cover { width: 160px; height: 100px; object-fit: cover; border-radius: 12px; }
+        .wo-brief { white-space: pre-wrap; line-height: 1.55; }
+        .wo-files { display: flex; flex-wrap: wrap; gap: 10px; }
         .wo-tools { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 10px; margin-top: 18px; }
         .wo-tool { display: flex; align-items: center; justify-content: center; min-height: 56px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--ad-line-2); text-align: center; font-size: 14px; font-weight: 800; line-height: 1.33; color: var(--ad-primary-ink); transition: border-color .15s, background .15s; }
         .wo-tool--s { min-height: 56px; }

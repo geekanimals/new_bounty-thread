@@ -472,6 +472,54 @@ export async function runAction(key, row, ctx) {
       if (!v) return;
       return call("api.bp_log_call", { p_participation: P, p_note: v.note.trim() }, "📝 Call noted");
     }
+    case "bprelink": {
+      // purana openBpRelink — creator se naya video link maango (app + WhatsApp + email)
+      const why = [
+        ["private", "The link doesn't open — it's private. Set Google Drive sharing to “Anyone with the link → Viewer”."],
+        ["wrong", "The link opens a different / wrong file."],
+        ["broken", "The video won't play or is cut off — please re-upload."],
+        ["other", "Something else…"],
+      ];
+      const v = await ask({ title: "Request a new video link", text: "The creator is asked for a fresh link on the app, WhatsApp and email. You can do this as many times as you need.", ok: "Send request", fields: [{ k: "why", label: "What's wrong with the link?", options: why, value: "private", required: true }, { k: "note", label: "Note (optional)", placeholder: "Add details for the creator" }] });
+      if (!v) return;
+      const base = v.why === "other" ? "" : (why.find((w) => w[0] === v.why) || [, ""])[1];
+      const reason = [base, v.note.trim()].filter(Boolean).join(" — ");
+      if (!reason) return say("Add a note for the creator.");
+      return call("api.bp_request_relink", { p_participation: P, p_reason: reason }, "🔗 New link requested");
+    }
+    case "bpmetrics": {
+      // purana openBpMetrics — post ke numbers haath se (Instagram se na aaye to)
+      const posts = row.x?.posts || [];
+      if (!posts.length) return runAction("bppost", row, ctx);
+      const NUMS = [["views", "Views / plays"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["shares", "Shares"], ["saves", "Saves"]];
+      const fields = [];
+      if (posts.length > 1) fields.push({ k: "post", label: "Post", options: posts.map((q) => [q.post_id, `${q.media_type || "post"} · ${fmtDate(q.posted_at)}`]), value: posts[posts.length - 1].post_id, required: true });
+      NUMS.forEach(([k, l]) => fields.push({ k, label: l, placeholder: "e.g. 12,400 or 12.4k" }));
+      const v = await ask({ title: "Add the numbers", text: "Instagram insights load on their own when the creator's account allows it. If not, type them here.", ok: "Save numbers", fields });
+      if (!v) return;
+      const pl = {};
+      NUMS.forEach(([k]) => {
+        const m = String(v[k] || "").replace(/[,\s]/g, "").toLowerCase().match(/^([0-9]+(?:\.[0-9]+)?)(k|m|l)?$/);
+        if (m) pl[k] = Math.round(Number(m[1]) * (m[2] === "k" ? 1e3 : m[2] === "m" ? 1e6 : m[2] === "l" ? 1e5 : 1));
+      });
+      if (!Object.keys(pl).length) return say("Add at least one number.");
+      pl.post_id = v.post || posts[posts.length - 1].post_id;
+      return call("api.bp_record_metrics", { p_participation: P, p_payload: pl }, "Numbers saved ✓");
+    }
+    case "bpreassign": {
+      // purana openBpReassign — product kisi aur matching creator ko
+      const { data } = await rpc("admin", "api.campaign_matches", { p_campaign: campaignId, p_limit: 40 });
+      const list = (Array.isArray(data) ? data : data?.creators || data?.matches || []).filter((c) => c.member_id && c.member_id !== row.x?.member_id);
+      if (!list.length) return say("No one else matches this brief yet — invite more creators first.");
+      const v = await ask({ title: "Send the product to someone else", ok: "Send to them", fields: [{ k: "member", label: "Next creator", options: list.map((c) => [c.member_id, `@${c.username || c.name || "creator"} · ${fmtNum(c.followers || 0)} followers`]), required: true }, { k: "reason", label: "Why", required: true, placeholder: "Creator went silent / product returned" }] });
+      if (!v) return;
+      return call("api.reassign_product", { p_participation: P, p_to_member: v.member, p_reason: v.reason.trim() }, "↪ Product moved to the next creator");
+    }
+    case "bpblack": {
+      const v = await ask({ title: `Blocklist ${who}?`, text: "They stay on the list until you lift it. Per the contract they must re-ship the product at their own cost — use “Send product to someone else” to pick who.", ok: "⛔ Blocklist", danger: true, fields: [{ k: "reason", label: "Why?", area: true, required: true }] });
+      if (!v) return;
+      return call("api.blacklist_creator", { p_participation: P, p_reason: v.reason.trim() }, "⛔ Blocklisted");
+    }
     case "bppay":
       if (ctx.router) ctx.router.push(`/vault/campaigns/${campaignId}/payments`);
       return;

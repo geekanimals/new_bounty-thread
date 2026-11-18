@@ -7,6 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { useToast, downloadFile, downloadXlsx, TableState, when } from "@/components/admin/campaign2/kit";
 import { useRpc, rpc, errText } from "@/lib/supabase";
+import UploadHistory from "@/components/admin/campaign2/UploadHistory";
 import { UploadCard, MsgOff, saveUpload, buildUpload, readUploadFile, readPasted, readSheetLink, statusesFor, useUploadKind, KIND_LABEL } from "@/components/admin/campaign2/upload";
 
 // 📄 Campaign sheet ke columns — purane SH_COLS jaisa (bulk upload wale hi columns, wapas upload ho sake)
@@ -60,6 +61,33 @@ const PAY_COLS = [["Fee (₹)", "fee"], ["Advance %", "advance_pct"], ["Pay days
  * Data: api.campaign_sheet_rows + api.campaign_sheet_link_get (download / Google Sheet), api.campaign_upload_history (history).
  * Sheet padhna browser mein (Excel / CSV / Word / Google Sheet / paste) → sessionStorage → /match.
  */
+/** Chune hue creators ki sheet (bulk upload jaise columns) — Creators tab ka "Download selected" aur yahan ka "Only the ticked" */
+export const tickedKey = (id) => `ga_ticked_${id}`;
+export function readTicked(id) {
+  try {
+    return JSON.parse(sessionStorage.getItem(tickedKey(id)) || "[]");
+  } catch {
+    return [];
+  }
+}
+export async function downloadSheetRows(id, keys, kind, fmt = "xlsx", data = null) {
+  let d = data;
+  if (!d) {
+    const r = await rpc("admin", "api.campaign_sheet_rows", { p_campaign: id });
+    if (r.error) throw r.error;
+    d = r.data;
+  }
+  const want = new Set((keys || []).map((k) => String(k).replace(/^([pi])-/, "$1:")));
+  const list = ((d && d.rows) || []).filter((r) => want.has(r.key));
+  if (!list.length) return 0;
+  const cols = [...SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
+  const aoa = [cols.map((c) => c[0]), ...list.map((r) => cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : r[k] == null ? "" : String(r[k]))))];
+  const nm = `${String((d && d.campaign) || "campaign").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "campaign"}-selected`;
+  if (fmt === "csv") downloadFile(nm + ".csv", aoa);
+  else await downloadXlsx(nm + ".xlsx", aoa, "Creators");
+  return list.length;
+}
+
 export default function UploadStart({ id, mode = "upload" }) {
   const router = useRouter();
   const fileRef = useRef(null);
@@ -67,6 +95,7 @@ export default function UploadStart({ id, mode = "upload" }) {
   const kind = useUploadKind(id);
   const skip = !id || id === "sample";
   const sheet = useRpc("admin", "api.campaign_sheet_rows", { p_campaign: id }, { skip });
+  const [tickN] = useState(() => (typeof window === "undefined" ? 0 : readTicked(id).length));
   const link = useRpc("admin", "api.campaign_sheet_link_get", { p_campaign: id }, { skip });
   const hist = useRpc("admin", "api.campaign_upload_history", { p_campaign: id }, { skip: skip || mode !== "history" });
   const [step, setStep] = useState("");
@@ -200,8 +229,23 @@ export default function UploadStart({ id, mode = "upload" }) {
                 ⬇️ CSV
               </button>
               <span className="us-or">or</span>
-              <button type="button" className="c2-tbtn" onClick={() => show("Tick creators in the Creators tab and download from there")} title="Tick creators in the Creators tab first">
-                ⬇️ Only the ticked (0)
+              <button
+                type="button"
+                className="c2-tbtn"
+                disabled={!sheet.data}
+                title="Creators you ticked in the Creators tab"
+                onClick={async () => {
+                  const keys = readTicked(id);
+                  if (!keys.length) return show("Tick creators in the Creators tab first — then come back here, or use “Download selected” there.");
+                  try {
+                    const n = await downloadSheetRows(id, keys, kind, "xlsx", sheet.data);
+                    show(n ? `⬇ ${n} ticked creator${n !== 1 ? "s" : ""} downloaded` : "None of the ticked creators are in this sheet any more.");
+                  } catch (e) {
+                    show(errText(e));
+                  }
+                }}
+              >
+                ⬇️ Only the ticked ({tickN})
               </button>
             </div>
           </div>
@@ -284,6 +328,22 @@ export default function UploadStart({ id, mode = "upload" }) {
                 </tbody>
               </table>
             </div>
+            {ups.length > 0 && (
+              <UploadHistory
+                id={id}
+                kind={kind}
+                ups={ups}
+                show={show}
+                onDownload={async (keys) => {
+                  try {
+                    const k = await downloadSheetRows(id, keys, kind, "xlsx", sheet.data);
+                    show(k ? `⬇ ${k} creator${k !== 1 ? "s" : ""} downloaded — bulk-upload columns` : "None of these creators are in the sheet any more.");
+                  } catch (e) {
+                    show(errText(e));
+                  }
+                }}
+              />
+            )}
           </div>
         ) : (
           <Link href={`${base}/history`} className="us-fold">

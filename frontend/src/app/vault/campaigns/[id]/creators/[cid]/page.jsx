@@ -8,6 +8,7 @@ import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, invoke, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast, INVITE_STEPS, inviteStepRank } from "@/components/admin/campaign/live";
 import { CreatorRow, buildRows, runAction, useAsk } from "@/components/admin/campaign/journey";
+import PartPanel from "@/components/admin/campaign/PartPanel";
 
 const tm = (t) => {
   try {
@@ -312,6 +313,16 @@ export default function WorkspaceCreator() {
                 <button type="button" className="wcc-btn" onClick={links}>
                   🔗 Links / courier
                 </button>
+                {memberId && (
+                  <>
+                    <Link href={`/vault/creators/${memberId}/profile`} className="wcc-btn">
+                      👤 Full profile &amp; history
+                    </Link>
+                    <Link href={`/vault/creators/${memberId}/media-kit`} className="wcc-btn">
+                      🪪 Media Kit
+                    </Link>
+                  </>
+                )}
               </div>
               <div className="wcc-links">
                 <button type="button" disabled={busy === "pause"} onClick={togglePause}>
@@ -324,6 +335,20 @@ export default function WorkspaceCreator() {
             </div>
           </div>
         </div>
+        {x.kind === "p" && (
+          <div className="wcc-box wcc-pp">
+            <PartPanel
+              row={x}
+              busy={busy.startsWith("pp:") ? busy.slice(3) : ""}
+              ship={camp?.campaign_type !== "paid"}
+              onAct={async (k) => {
+                setBusy("pp:" + k);
+                await runAction(k, x, { campaignId: id, ask: askFn, say: setToast, reload, router });
+                setBusy("");
+              }}
+            />
+          </div>
+        )}
       </section>
 
       {ask && (
@@ -359,6 +384,7 @@ export default function WorkspaceCreator() {
         .wcc-open { flex-shrink: 0; height: 41px; display: inline-flex; align-items: center; padding: 0 15px; border-radius: 10px; background: #fff; font-size: 14px; font-weight: 800; color: var(--ad-primary-ink); }
         .wcc-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; padding: 13px 14px 14px; background: #f3f0e8; }
         .wcc-day { align-self: center; margin: 10px auto 2px; padding: 3px 10px; border-radius: 999px; background: rgba(127,127,127,.14); font-size: 11px; color: var(--ga-muted, #8a8f9c); }
+        .wcc-pp { margin-top: 18px; }
         .wcc-msg { align-self: flex-start; width: min(447px, 88%); padding: 10px 12px 8px; border-radius: 9px; background: #fff; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
         .wcc-msg p { white-space: pre-line; font-size: 13px; line-height: 1.33; color: var(--ad-ink); }
         .wcc-msg small { display: block; margin-top: 4px; text-align: right; font-size: 12px; color: var(--ad-muted); }

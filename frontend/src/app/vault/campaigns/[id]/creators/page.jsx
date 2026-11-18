@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
@@ -8,6 +8,7 @@ import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
 import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectionReasons } from "@/components/admin/campaign/journey";
+import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 
 /* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
@@ -61,14 +62,22 @@ export default function WorkspaceCreators() {
     let r = all.filter(BOXES[box].f).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
     if (who === "Creator’s turn") r = r.filter((x) => x.turnWho === "creator");
     if (who === "Our turn") r = r.filter((x) => x.turnWho === "you");
-    if (size === "Under 10k") r = r.filter((x) => x.followersN < 10000);
-    if (size === "10k – 50k") r = r.filter((x) => x.followersN >= 10000 && x.followersN <= 50000);
+    if (who === "On Geek OS") r = r.filter((x) => x.registered);
+    if (who === "Not yet on Geek") r = r.filter((x) => !x.registered);
+    if (size === "Nano · under 10K" || size === "Under 10k") r = r.filter((x) => x.followersN < 10000);
+    if (size === "Micro · 10K–50K" || size === "10k – 50k") r = r.filter((x) => x.followersN >= 10000 && x.followersN < 50000);
+    if (size === "Mid · 50K–200K") r = r.filter((x) => x.followersN >= 50000 && x.followersN < 200000);
+    if (size === "Macro · 200K+") r = r.filter((x) => x.followersN >= 200000);
     if (posted === "Posted") r = r.filter((x) => x.posted);
     if (posted === "Not posted") r = r.filter((x) => !x.posted);
     r = [...r];
+    const views = (x) => (x.x?.posts || []).reduce((t, p) => t + (+(p.stats?.views || p.stats?.plays || p.stats?.reach) || 0), 0);
     if (sort === "Sort: furthest step") r.sort((a, b) => b.step - a.step || b.sortStep - a.sortStep);
-    if (sort === "Sort: name") r.sort((a, b) => a.name.localeCompare(b.name));
-    if (sort === "Sort: followers") r.sort((a, b) => b.followersN - a.followersN);
+    if (sort === "Sort: earliest step") r.sort((a, b) => a.step - b.step || a.sortStep - b.sortStep);
+    if (sort === "Sort: name" || sort === "Name A → Z") r.sort((a, b) => a.name.localeCompare(b.name));
+    if (sort === "Sort: followers" || sort === "Followers: high → low") r.sort((a, b) => b.followersN - a.followersN);
+    if (sort === "Followers: low → high") r.sort((a, b) => a.followersN - b.followersN);
+    if (sort === "Most views") r.sort((a, b) => views(b) - views(a));
     return r;
   }, [all, box, q, sort, who, size, posted]);
 
@@ -77,6 +86,60 @@ export default function WorkspaceCreators() {
   const toggle = (cid) => setSel((s) => (s.includes(cid) ? s.filter((x) => x !== cid) : [...s, cid]));
   const keyOf = (rid) => (rid[0] === "p" ? "p:" : "i:") + rid.slice(2);
   const ctx = { campaignId: id, ask, say: setToast, reload, router };
+
+  // tick kiye creators Bulk sheet ke "Only the ticked" ke liye bhi yaad rahein
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(tickedKey(id), JSON.stringify(sel));
+    } catch {}
+  }, [sel, id]);
+
+  // ⚡ jinka kaam hamari taraf baaki hai (purana "N need you — do it now")
+  const needN = all.filter((x) => x.turnWho === "you" && !x.failed).length;
+
+  // got the product, never posted, and the campaign is over or their video is overdue (purana ccNoPost)
+  const today = new Date().toISOString().slice(0, 10);
+  const ended = (camp?.end_date && camp.end_date < today) || ["completed", "ended", "closed"].includes(String(camp?.status || "").toLowerCase());
+  const noPost = all.filter(
+    (r) =>
+      r.kind === "p" &&
+      !r.x.blacklisted &&
+      !(r.x.posts || []).length &&
+      (["content_created", "changes_requested", "content_submitted", "content_approved"].includes(r.x.stage) || (r.x.stage === "product_sent" && r.x.shipment?.status === "delivered")) &&
+      (ended || (r.x.due_on && r.x.due_on < today))
+  );
+  const blockNoPost = async () => {
+    const names = noPost.map((r) => r.handle || r.name).join(", ");
+    const v = await ask({
+      title: `⛔ Blocklist ${noPost.length} creator${noPost.length > 1 ? "s" : ""} who didn't post?`,
+      text: `${names}. They got the product but never posted. They stay blocked until you lift it, and per the contract must re-ship the product.`,
+      ok: "⛔ Blocklist them",
+      danger: true,
+      fields: [{ k: "reason", label: "Reason", value: "Received the product, did not post — campaign over", required: true }],
+    });
+    if (!v) return;
+    setBusy("block");
+    let ok = 0;
+    const bad = [];
+    for (const r of noPost) {
+      const { error } = await rpc("admin", "api.blacklist_creator", { p_participation: r.pid, p_reason: v.reason.trim() });
+      if (error) bad.push(`${r.handle || r.name}: ${errText(error)}`);
+      else ok++;
+    }
+    setBusy("");
+    setToast(`⛔ ${ok} creator(s) blocklisted${bad.length ? ` · ${bad.length} failed — ${bad[0]}` : ""}`);
+    reload();
+  };
+  const dlSelected = async () => {
+    setBusy("dl");
+    try {
+      const n = await downloadSheetRows(id, sel, camp?.campaign_type || "barter");
+      setToast(n ? `⬇ ${n} creator${n !== 1 ? "s" : ""} downloaded — same columns as the bulk upload, edit and upload it again` : "None of the selected creators could be exported.");
+    } catch (e) {
+      setToast(errText(e));
+    }
+    setBusy("");
+  };
 
   const act = async (x) => {
     if (!x.act) return;
@@ -204,9 +267,9 @@ export default function WorkspaceCreators() {
         <div className="wcr-filters">
           <input className="ga-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
           {[
-            [sort, setSort, ["Sort: furthest step", "Sort: name", "Sort: followers"], "Sort"],
-            [who, setWho, ["Everyone", "Creator’s turn", "Our turn"], "Whose turn"],
-            [size, setSize, ["Any size", "Under 10k", "10k – 50k"], "Follower size"],
+            [sort, setSort, ["Sort: furthest step", "Sort: earliest step", "Followers: high → low", "Followers: low → high", "Name A → Z", "Most views"], "Sort"],
+            [who, setWho, ["Everyone", "Our turn", "Creator’s turn", "On Geek OS", "Not yet on Geek"], "Who"],
+            [size, setSize, ["Any size", "Nano · under 10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K+"], "Follower size"],
             [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
           ].map(([v, set, opts, label]) => (
             <select key={label} className="ga-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
@@ -232,6 +295,28 @@ export default function WorkspaceCreators() {
           <button type="button" className="wcr-txt" disabled={!notReg.length || busy === "re"} onClick={resendAll}>
             {busy === "re" ? "Sending…" : `↻ Resend invite to not-registered (${notReg.length})`}
           </button>
+          {sel.length > 0 && (
+            <>
+              <button type="button" className="wcr-txt" disabled={busy === "dl"} onClick={dlSelected} title="Same columns as the bulk upload — edit and upload it again">
+                {busy === "dl" ? "Downloading…" : `⬇ Download selected (${sel.length})`}
+              </button>
+              <button type="button" className="wcr-txt" onClick={() => setSel([])}>
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+        <div className="wcr-chips">
+          {needN > 0 && (
+            <button type="button" className={`wcr-need ${who === "Our turn" ? "is-on" : ""}`} onClick={() => setWho(who === "Our turn" ? "Everyone" : "Our turn")}>
+              {who === "Our turn" ? "✕ Show everyone" : `⚡ ${needN} need${needN > 1 ? "" : "s"} you — do it now`}
+            </button>
+          )}
+          {noPost.length > 0 && (
+            <button type="button" className="wcr-block" disabled={busy === "block"} onClick={blockNoPost} title="Got the product but never posted">
+              {busy === "block" ? "Blocking…" : `⛔ Blocklist who didn't post (${noPost.length})`}
+            </button>
+          )}
         </div>
         <button type="button" className="wcr-txt wcr-pick" onClick={() => (setBox(3), setSel(all.filter((x) => x.registered && !x.ig).map((x) => x.id)))}>
           📸 Pick everyone without Instagram
@@ -278,6 +363,12 @@ export default function WorkspaceCreators() {
         select.ga-input { appearance: none; -webkit-appearance: none; }
         .wcr-card { padding: 22px 22px 22px; }
         .wcr-list { margin-top: 20px; padding-bottom: 30px; }
+        .wcr-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .wcr-chips:empty { display: none; }
+        .wcr-need { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #f3c27a; background: #fff6e6; font-size: 13px; font-weight: 800; color: #a15c00; cursor: pointer; }
+        .wcr-need.is-on { background: var(--ad-primary); border-color: var(--ad-primary); color: #fff; }
+        .wcr-block { height: 36px; padding: 0 14px; border-radius: 10px; border: 0; background: #dc2626; font-size: 13px; font-weight: 800; color: #fff; cursor: pointer; }
+        .wcr-block:disabled { opacity: .6; }
         .wcr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
         .wcr-sub { margin-top: 8px; font-size: 12px; color: var(--ad-muted); }
         .wcr-head__act { display: flex; align-items: center; gap: 16px; padding-top: 2px; }
