@@ -647,7 +647,7 @@ export function MatchDetails({ m }) {
   );
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, busy, stats, match }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const pct = Math.max(4, Math.round((c.step / 12) * 100));
@@ -739,6 +739,11 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
             🔍 Match details
           </button>
         )}
+        {onReject && (
+          <button type="button" className="ga-btn ga-btn--ghost jr-rej" onClick={onReject} disabled={busy} title="Reject — they stay in the campaign under Rejected">
+            ✗ Reject
+          </button>
+        )}
         {c.act && (
           <button type="button" className="ga-btn ga-btn--primary jr-btn" onClick={onAction} disabled={busy}>
             {busy ? "…" : c.action}
@@ -775,6 +780,8 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         .jr-act { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: center; }
         .jr-btn { height: 41px; padding: 0 15px; }
         .jr-mbtn { height: 41px; padding: 0 12px; font-size: 12.5px; }
+        .jr-rej { height: 41px; padding: 0 12px; font-size: 12.5px; color: #d6453d; }
+        .jr-rej:hover { border-color: #d6453d; }
         .jr-mbtn.is-on { border-color: var(--ad-primary); color: var(--ad-primary); }
         .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }
         .jr-chat { width: 41px; height: 41px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 17px; color: var(--ad-primary-ink); }

@@ -13,12 +13,13 @@ import WaPanel from "@/components/admin/campaign/WaPanel";
 
 /* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
-  { l: "Total", s: "everyone active", f: (c) => !c.failed },
+  { l: "Total", s: "everyone · incl. rejected", f: () => true },
   { l: "Invited", s: "not registered", f: (c) => !c.registered },
   { l: "Registered", s: "on Geek OS", f: (c) => c.registered },
   { l: "No Instagram", s: "signed up, not linked", f: (c) => c.registered && !c.ig },
   { l: "Instagram", s: "media kit connected", f: (c) => c.ig },
   { l: "Applied", s: "waiting", f: (c) => c.applied && c.registered && !c.failed },
+  { l: "Rejected", s: "not a fit / brand passed", f: (c) => c.failed },
   { l: "Approved", s: "brand said yes", f: (c) => c.approved },
   { l: "Contract signed", f: (c) => (c.sheet ?? c.step) >= 5 },
   { l: "Address confirmed", s: "brief sent", f: (c) => (c.sheet ?? c.step) >= 6 },
@@ -146,6 +147,12 @@ export default function WorkspaceCreators() {
     setBusy("");
   };
 
+  // ✗ Reject — Applied / eligible: "not a fit" (reason creator ko jaata hai) · brand ki list par: "brand passed"
+  const reject = async (x) => {
+    setBusy(x.id);
+    await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, ctx);
+    setBusy("");
+  };
   const act = async (x) => {
     if (!x.act) return;
     setBusy(x.id);
@@ -319,6 +326,7 @@ export default function WorkspaceCreators() {
               checked={sel.includes(x.id)}
               onCheck={() => toggle(x.id)}
               onAction={() => act(x)}
+              onReject={x.kind === "p" && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage) ? () => reject(x) : null}
               busy={busy === x.id}
               onChat={() => router.push(`/vault/campaigns/${c.id}/creators/${x.id}`)}
               stats={(mstats.data || {})[keyOf(x.id)]}

@@ -241,6 +241,15 @@ export default function WorkspaceCreator() {
           }}
           onChat={() => document.getElementById("wcc-msg")?.focus()}
           match={isP ? (bmatch.data || {})[rid] : null}
+          onReject={
+            isP && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage)
+              ? async () => {
+                  setBusy("act");
+                  await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, { campaignId: id, ask: askFn, say: setToast, reload, router });
+                  setBusy("");
+                }
+              : null
+          }
         />
 
         <div className="wcc-grid">
