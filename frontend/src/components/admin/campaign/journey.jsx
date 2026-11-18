@@ -602,7 +602,54 @@ const rawPhone = (c) => String(c.x?.phone || c.i?.phone || "").replace(/\D/g, ""
 const emailOf = (c) => c.x?.email || c.x?.creator?.email || c.i?.email || "";
 const igOf = (c) => String(c.handle || "").replace(/^@/, "").trim();
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, busy, stats }) {
+/* ---------- brief match (live api.campaign_brief_match → intel.ci_eligibility) ----------
+ * Har applicant ko campaign ki ABHI wali eligibility se check karta hai — brief badla to sab dobara check.
+ */
+const MISSING_RE = /not in your profile yet|not connected|no city|not yet|not set|not enough recent|no categories/i;
+export function matchState(m) {
+  if (!m || !Array.isArray(m.criteria) || !m.criteria.length) return null;
+  const bad = m.criteria.filter((x) => !x.ok);
+  if (!bad.length) return { k: "ok", label: "✓ Matches brief", tone: "green", bad };
+  if (bad.every((x) => MISSING_RE.test(x.have || ""))) return { k: "missing", label: "? Profile incomplete", tone: "orange", bad };
+  return { k: "no", label: "✗ Not a match", tone: "red", bad };
+}
+export function MatchDetails({ m }) {
+  const s = matchState(m);
+  if (!s) return null;
+  return (
+    <div className="bm-box">
+      <p className="bm-h">
+        {s.k === "ok" ? "Matches every criterion of the current brief." : s.k === "missing" ? "Can’t confirm yet — the creator hasn’t filled these in their profile." : `Doesn’t match ${s.bad.length} criteri${s.bad.length > 1 ? "a" : "on"} of the current brief.`}
+        <small> Checked live against the brief as it is now — editing eligibility re-checks everyone.</small>
+      </p>
+      <ul>
+        {m.criteria.map((x) => (
+          <li key={x.key} className={x.ok ? "is-ok" : MISSING_RE.test(x.have || "") ? "is-miss" : "is-no"}>
+            <span>{x.ok ? "✓" : MISSING_RE.test(x.have || "") ? "?" : "✗"}</span>
+            <b>{x.need}</b>
+            <i>{String(x.have || "").replace(/^Your /, "Their ").replace(/^You /, "They ").replace(/your profile/g, "their profile")}</i>
+          </li>
+        ))}
+      </ul>
+      <style>{`
+        .bm-box { margin-top: 10px; padding: 11px 12px; border-radius: 12px; background: var(--ad-soft-2); font-size: 12.5px; }
+        .bm-h { color: var(--ad-ink); font-weight: 700; }
+        .bm-h small { display: block; margin-top: 2px; font-weight: 500; color: var(--ad-muted); }
+        .bm-box ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+        .bm-box li { display: grid; grid-template-columns: 18px minmax(120px, 1fr) 1.2fr; gap: 8px; align-items: baseline; }
+        .bm-box li span { font-weight: 800; }
+        .bm-box li.is-ok span { color: #0b9b6c; } .bm-box li.is-no span { color: #d6453d; } .bm-box li.is-miss span { color: #c27a00; }
+        .bm-box li b { font-weight: 600; color: var(--ad-ink); }
+        .bm-box li i { font-style: normal; color: var(--ad-muted); }
+        .bm-box li.is-no i { color: #c0392b; }
+      `}</style>
+    </div>
+  );
+}
+
+export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, busy, stats, match }) {
+  const [showMatch, setShowMatch] = useState(false);
+  const ms = matchState(match);
   const pct = Math.max(4, Math.round((c.step / 12) * 100));
   return (
     <div className={`jr ${open ? "is-open" : ""}`}>
@@ -623,6 +670,11 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
               {t}
             </span>
           ))}
+          {ms && (
+            <button type="button" className={`ga-badge ga-badge--${ms.tone} jr-match`} onClick={() => setShowMatch((v) => !v)} title="See how they match the brief">
+              {ms.label}
+            </button>
+          )}
         </p>
         <p className="jr-meta">
           {c.phone ? (
@@ -666,6 +718,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
           </span>
         </div>
         <p className="jr-turn">{c.turn}</p>
+        {ms && showMatch && <MatchDetails m={match} />}
         {stats && (
           <p className="jr-stats">
             🟢 WhatsApp {stats.wa || 0} · ✉️ Email {stats.em || 0} · 🔔 Reminders {stats.rem || 0}
@@ -681,6 +734,11 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         )}
       </div>
       <div className="jr-act">
+        {ms && (
+          <button type="button" className={`ga-btn ga-btn--ghost jr-mbtn ${showMatch ? "is-on" : ""}`} onClick={() => setShowMatch((v) => !v)} title="Check every criterion before you approve">
+            🔍 Match details
+          </button>
+        )}
         {c.act && (
           <button type="button" className="ga-btn ga-btn--primary jr-btn" onClick={onAction} disabled={busy}>
             {busy ? "…" : c.action}
@@ -716,6 +774,9 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         .jr-stats { margin-top: 5px; font-size: 11.5px; line-height: 1.35; color: #8791a7; }
         .jr-act { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: center; }
         .jr-btn { height: 41px; padding: 0 15px; }
+        .jr-mbtn { height: 41px; padding: 0 12px; font-size: 12.5px; }
+        .jr-mbtn.is-on { border-color: var(--ad-primary); color: var(--ad-primary); }
+        .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }
         .jr-chat { width: 41px; height: 41px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 17px; color: var(--ad-primary-ink); }
         .jr-chat:hover { border-color: var(--ad-primary); }
         .jr-more { display: inline-flex; align-items: center; height: 41px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 13px; font-weight: 800; color: #6657e9; white-space: nowrap; }

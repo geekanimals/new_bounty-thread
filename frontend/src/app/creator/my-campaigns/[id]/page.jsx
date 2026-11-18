@@ -5,6 +5,7 @@ import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import TrackerFrame, { useTracker, TrackerWait, currentPath } from "@/components/creator/TrackerSteps";
 import PayBox from "@/components/creator/PayBox";
+import ReviewProofs from "@/components/creator/ReviewProofs";
 import { noteOf, fdate, DECLINED, codeFill, safeLink, compLine, respondToInvite } from "@/services/creator";
 
 /** brief ki ek line (khaali ho to kuch nahi) */
@@ -171,6 +172,8 @@ export default function CampaignOverview() {
         {card()}
 
         {!declined && <PayBox t={t} />}
+
+        {!declined && !["invited", "applied", "eligible", "sent_to_brand"].includes(m.stage) && <ReviewProofs campaignId={m.campaign_id} />}
 
         {b && (
           <details className="ov-fold" open={["content_created", "changes_requested"].includes(m.stage)}>

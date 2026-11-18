@@ -214,3 +214,22 @@ export async function checkVideoLink(url) {
     return { ok: true, checked: false };
   }
 }
+
+/* =====================================================================
+ * Review deliverables (Google / District review) — screenshot proof
+ * ===================================================================== */
+/** { need: {google_review, district_review}, missing: [...], proofs: [...] } */
+export const getMyReviewProofs = (campaignId) => api("my_review_proofs", { p_campaign: campaignId });
+
+/** Screenshot storage (review-proofs/c/<uid>/<campaign>/...) mein, phir record */
+export async function uploadReviewProof(campaignId, kind, file) {
+  const uid = await myUserId();
+  if (!uid) return { data: null, error: { message: "Please log in again" } };
+  if (!file || !/^image\//.test(file.type || "image/")) return { data: null, error: { message: "Pick an image (screenshot)" } };
+  if (file.size > 10 * 1024 * 1024) return { data: null, error: { message: "Image is bigger than 10 MB" } };
+  const ext = ((file.name || "").match(/\.[^.]+$/) || [".jpg"])[0].toLowerCase();
+  const path = `c/${uid}/${campaignId}/${kind}-${Date.now()}${ext}`;
+  const up = await sb().storage.from("review-proofs").upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
+  if (up.error) return { data: null, error: up.error };
+  return api("submit_review_proof", { p_campaign: campaignId, p_kind: kind, p_path: path });
+}

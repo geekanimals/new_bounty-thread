@@ -13,7 +13,7 @@ export default function NewCampaignReview() {
   const [err, setErr] = useState("");
   const n = (k) => Number(d[k]) || 0;
   const plural = (v, one, many) => `${v} ${v === 1 ? one : many}`;
-  const parts = [n("reels") && plural(n("reels"), "Reel", "Reels"), n("stories") && plural(n("stories"), "Story", "Stories"), n("posts") && plural(n("posts"), "Post", "Posts"), n("carousels") && plural(n("carousels"), "Carousel", "Carousels")].filter(Boolean);
+  const parts = [n("reels") && plural(n("reels"), "Reel", "Reels"), n("stories") && plural(n("stories"), "Story", "Stories"), n("posts") && plural(n("posts"), "Post", "Posts"), n("carousels") && plural(n("carousels"), "Carousel", "Carousels"), n("googleReviews") && plural(n("googleReviews"), "Google review", "Google reviews"), n("districtReviews") && plural(n("districtReviews"), "District review", "District reviews")].filter(Boolean);
 
   // har check / line → us step ka link, jis field mein kami hai us par cursor (?focus=)
   const eq = d.editId ? `edit=${d.editId}&` : "";

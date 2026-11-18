@@ -65,10 +65,13 @@ export const DELIV_KINDS = [
   ["story", "Story", "⭕", "Stories"],
   ["post", "Post", "🖼️", "Posts"],
   ["carousel", "Carousel", "🗂️", "Carousels"],
+  ["google_review", "Google review (screenshot)", "⭐", "Google reviews (screenshot)"],
+  ["district_review", "District review (screenshot)", "🎟️", "District reviews (screenshot)"],
 ];
 export function parseDeliverablesText(t) {
   const out = { counts: {}, other: [] };
   String(t || "")
+    .replace(/\s+(?=\d+\s*[x×]?\s*(?:google|district))/gi, " + ")
     .split(/\s*(?:\+|,|&|;|\n|\band\b)\s*/i)
     .map((x) => x.trim())
     .filter(Boolean)
@@ -76,7 +79,7 @@ export function parseDeliverablesText(t) {
       const m = /^(\d+)\s*[x×]?\s*(.*)$/i.exec(part);
       const q = m ? Math.max(1, Math.min(20, parseInt(m[1]))) : 1;
       const lbl = (m ? m[2] : part).toLowerCase();
-      const k = /reel/.test(lbl) ? "reel" : /stor/.test(lbl) ? "story" : /carousel/.test(lbl) ? "carousel" : /(post|static|feed)/.test(lbl) ? "post" : null;
+      const k = /google/.test(lbl) ? "google_review" : /district/.test(lbl) ? "district_review" : /reel/.test(lbl) ? "reel" : /stor/.test(lbl) ? "story" : /carousel/.test(lbl) ? "carousel" : /(post|static|feed)/.test(lbl) ? "post" : null;
       if (k) out.counts[k] = (out.counts[k] || 0) + q;
       else out.other.push(part);
     });

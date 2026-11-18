@@ -4,14 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PageHead } from "@/components/admin/ui";
 import { useCampaign, typeShort, campStatusPick } from "@/components/admin/campaign/live";
+import ShareCampaign from "@/components/admin/campaign2/ShareCampaign";
 
 /* Campaign workspace ke tabs (Figma) — har tab apna route */
 export const WS_TABS = [
   { k: "overview", label: "Overview", also: ["contract", "find"] },
   { k: "creators", label: "Creators", also: ["upload"] },
-  { k: "content", label: "Content" },
+  { k: "content", label: "Content", also: ["reviews"] },
   { k: "fulfilment", label: "Fulfilment", also: ["payments"] },
-  { k: "messages", label: "Messages", also: ["outreach"] },
+  { k: "messages", label: "Messages", also: ["outreach", "delivery"] },
   { k: "attribution", label: "Attribution" },
   { k: "report", label: "Report", also: ["list", "traits"] },
 ];
@@ -42,6 +43,7 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
         title={title || `${c.name}${c.name.includes("·") || !c.type ? "" : ` · ${c.type}`}`}
         sub={sub || [c.brand, c.type, c.status].filter(Boolean).join(" · ") || "\u00a0"}
       >
+        {id && id !== "sample" && <ShareCampaign id={id} />}
         {actions || (
           <>
             {(!row || row.id) && (

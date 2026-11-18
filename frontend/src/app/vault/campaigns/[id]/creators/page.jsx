@@ -42,6 +42,7 @@ export default function WorkspaceCreators() {
   const prog = useRpc("admin", "api.campaign_deliverable_progress", { p_campaign: id }, { skip: !on });
   // har creator ke WhatsApp / email / reminder ginti + aakhri message (purana ucStatsLoad)
   const mstats = useRpc("admin", "api.campaign_msg_stats", { p_campaign: id }, { skip: !on });
+  const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const [box, setBox] = useState(0);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Sort: furthest step");
@@ -321,6 +322,7 @@ export default function WorkspaceCreators() {
               busy={busy === x.id}
               onChat={() => router.push(`/vault/campaigns/${c.id}/creators/${x.id}`)}
               stats={(mstats.data || {})[keyOf(x.id)]}
+              match={x.pid ? (bmatch.data || {})[x.pid] : null}
             />
           ))}
           {!rows.length && (

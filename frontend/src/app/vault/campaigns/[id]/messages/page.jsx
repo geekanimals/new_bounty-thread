@@ -42,6 +42,7 @@ export default function CampaignMessages() {
         active="messages"
         items={[
           { k: "messages", label: "💬 Messages & templates", href: `/vault/campaigns/${id}/messages` },
+          { k: "delivery", label: "📋 Delivery log", href: `/vault/campaigns/${id}/delivery` },
           { k: "outreach", label: "✉️ Outreach message", href: `/vault/campaigns/${id}/outreach` },
         ]}
       />

@@ -106,6 +106,8 @@ function draftFromRow(c) {
     stories: String(dv.counts.story || 0),
     posts: String(dv.counts.post || 0),
     carousels: String(dv.counts.carousel || 0),
+    googleReviews: String(dv.counts.google_review || 0),
+    districtReviews: String(dv.counts.district_review || 0),
     other: dv.other.join(" + "),
     reward: ct.product || "",
     value: c.product_value != null ? String(c.product_value) : ct.product_value != null ? String(ct.product_value) : "",
@@ -250,7 +252,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
   const num = (v) => (String(v ?? "").trim() === "" || isNaN(Number(v)) ? null : Number(v));
   if (!String(d.name).trim()) throw new Error("Add a campaign name.");
   if (!String(d.brand).trim()) throw new Error("Pick the brand (or type a new brand's name).");
-  const counts = { reel: num(d.reels) || 0, story: num(d.stories) || 0, post: num(d.posts) || 0, carousel: num(d.carousels) || 0 };
+  const counts = { reel: num(d.reels) || 0, story: num(d.stories) || 0, post: num(d.posts) || 0, carousel: num(d.carousels) || 0, google_review: num(d.googleReviews) || 0, district_review: num(d.districtReviews) || 0 };
   const delivText = deliverablesText(counts, d.other ? [d.other] : []);
   const tags = splitTags(`${d.hashtags || ""} ${d.mentions || ""}`);
   const ideal = {};

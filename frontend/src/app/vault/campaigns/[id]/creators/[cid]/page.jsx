@@ -40,6 +40,7 @@ export default function WorkspaceCreator() {
   const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !on });
   const hub = useRpc("admin", isP ? "api.campaign_creator_hub" : "api.invite_messages", isP ? { p_participation: rid } : { p_invite: rid }, { skip: !on });
   const pauses = useRpc("admin", "api.admin_msg_pauses", {}, { skip: !on });
+  const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on || !isP });
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState("");
@@ -239,6 +240,7 @@ export default function WorkspaceCreator() {
             setBusy("");
           }}
           onChat={() => document.getElementById("wcc-msg")?.focus()}
+          match={isP ? (bmatch.data || {})[rid] : null}
         />
 
         <div className="wcc-grid">
