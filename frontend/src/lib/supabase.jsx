@@ -222,9 +222,22 @@ export function useRpc(door, fn, args = {}, { skip = false, refreshMs = 0 } = {}
         const c = cacheGet(ck);
         setSt((s) => (c !== undefined ? { data: c, error: null, loading: false } : { ...s, loading: true }));
       }
-      const r = await rpc(door, fn, JSON.parse(key));
+      let r = await rpc(door, fn, JSON.parse(key));
+      // DB ek pal slow / timeout → 2 baar aur koshish (1.5s, 4s) — screen par 0 / khaali nahi aana chahiye
+      for (const wait of [1500, 4000]) {
+        if (!r.error || !alive.current || /permission|not authori|not your|denied|SESSION_EXPIRED|invalid input|does not exist/i.test(String(r.error.message || r.error.code || ""))) break;
+        await new Promise((ok) => setTimeout(ok, wait));
+        if (!alive.current) break;
+        r = await rpc(door, fn, JSON.parse(key));
+      }
       if (!r.error) cacheSet(ck, r.data);
-      if (alive.current) setSt({ data: r.data, error: r.error, loading: false });
+      if (alive.current)
+        setSt((s) =>
+          r.error && (s.data != null || cacheGet(ck) !== undefined)
+            ? // fail hua par pehle ka data hai → wahi dikhao (khaali mat karo), error sirf batane ke liye
+              { data: s.data != null ? s.data : cacheGet(ck), error: r.error, loading: false, stale: true }
+            : { data: r.data, error: r.error, loading: false }
+        );
       return r;
     },
     [door, fn, key, ck, skip]

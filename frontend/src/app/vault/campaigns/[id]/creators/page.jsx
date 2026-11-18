@@ -205,7 +205,8 @@ export default function WorkspaceCreators() {
 
   const loading = bt.loading || people.loading;
   const err = bt.error || people.error;
-  const n = (i) => (loading ? "…" : counts[i]);
+  // load fail hua aur dikhane ko kuch nahi → 0 nahi, "–" (galat lagta hai ki creators gayab ho gaye)
+  const n = (i) => (loading ? "…" : err && !all.length ? "–" : counts[i]);
 
   return (
     <AdminShell>
@@ -334,9 +335,9 @@ export default function WorkspaceCreators() {
           ))}
           {!rows.length && (
             <p className="wcr-empty">
-              {err ? (
+              {err && !all.length ? (
                 <>
-                  {errText(err)}{" "}
+                  Couldn’t load the creators (the database was slow) — {errText(err)}{" "}
                   <button type="button" className="wcr-txt" onClick={reload}>
                     Retry
                   </button>
