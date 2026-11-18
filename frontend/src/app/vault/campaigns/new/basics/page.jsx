@@ -115,10 +115,16 @@ export default function NewCampaignBasics() {
         </div>
       </div>
       <p className="nc-sec">WhatsApp invite photo (optional)</p>
-      <p className="nb-hint">Shown at the top of the WhatsApp invite. Leave empty to use the campaign photo (JPG / PNG only — WhatsApp does not take WebP). No photo at all → the normal text invite.</p>
+      <label className="nb-tick">
+        <input type="checkbox" checked={!!d.waPhotoOn} onChange={(e) => set("waPhotoOn", e.target.checked)} />
+        <span>
+          <b>Send the WhatsApp invite with this photo</b> — uses the photo template (campaign_invite_pic). Unticked → the normal text invite.
+        </span>
+      </label>
+      <p className="nb-hint">Upload the photo here (JPG / PNG — WebP is turned into JPG on upload). This photo is shown at the top of the invite and in &quot;One template for everyone&quot; photo templates.</p>
       <div className="nb-media">
         <div className="nb-cover">
-          {d.waImage ? <img src={d.waImage} alt="" referrerPolicy="no-referrer" /> : <span>{/\.(jpe?g|png)(\?|$)/i.test(d.cover || "") ? "Using the campaign photo" : "No WhatsApp photo — text invite"}</span>}
+          {d.waImage ? <img src={d.waImage} alt="" referrerPolicy="no-referrer" /> : <span>{d.waPhotoOn ? "Upload the WhatsApp photo" : "No WhatsApp photo — text invite"}</span>}
         </div>
         <div className="nb-mediact">
           <label className="ga-btn ga-btn--ghost nb-b">
@@ -159,6 +165,8 @@ export default function NewCampaignBasics() {
         .nb-types .ga-tab { height: 38px; font-weight: 800; color: #65718a; }
         .nb-types .ga-tab.is-on { color: #fff; }
         .nb-hint { margin: 0 0 14px; font-size: 12px; color: var(--ad-muted); }
+        .nb-tick { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 8px; font-size: 13px; color: var(--ad-ink); cursor: pointer; }
+        .nb-tick input { margin-top: 3px; }
         .nb-brand { height: 43px; }
         .nb-media { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
         .nb-cover { width: 150px; height: 94px; border-radius: 12px; border: 1px dashed #c9cde0; display: grid; place-items: center; overflow: hidden; font-size: 11px; color: var(--ad-muted); text-align: center; padding: 6px; }

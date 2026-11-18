@@ -69,6 +69,7 @@ export const DEFAULT_DRAFT = {
   productLink: "",
   cover: "",
   waImage: "",
+  waPhotoOn: false,
   files: [],
   // eligibility (ideal_profile) — intel.ci_eligibility apply par yahi check karta hai, campaign_matches matching mein
   gender: "",
@@ -140,6 +141,7 @@ function draftFromRow(c) {
     productLink: c.product_link || "",
     cover: c.cover_url || "",
     waImage: c.wa_invite_image || "",
+    waPhotoOn: !!c.wa_invite_photo_on,
     files: Array.isArray(c.attachments) ? c.attachments : [],
     igReq: ip.instagram || "verified",
     gender: ip.gender || "",
@@ -319,6 +321,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
   const cover = String(d.cover || "").trim();
   if (cover && !/^https:\/\//i.test(cover)) throw new Error("The campaign photo link must start with https://");
   const waImage = String(d.waImage || "").trim();
+  if (d.waPhotoOn && !waImage) throw new Error("WhatsApp invite with photo is ticked — upload the photo (JPG / PNG) or untick it.");
   if (waImage && !/^https:\/\/\S+\.(jpe?g|png)(\?\S*)?$/i.test(waImage)) throw new Error("The WhatsApp invite photo must be a JPG or PNG link (https://…jpg / .png).");
   const row = {
     name: String(d.name).trim(),
@@ -334,6 +337,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
     start_date: start,
     cover_url: cover || null,
     wa_invite_image: waImage || null,
+    wa_invite_photo_on: !!(d.waPhotoOn && waImage),
     attachments: Array.isArray(d.files) ? d.files : [],
     product_value: t === "paid" ? null : num(d.value),
     platforms: "Instagram",
@@ -388,6 +392,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
   const save = (r) => (d.editId ? sb.from("campaigns").update(r).eq("id", d.editId) : sb.from("campaigns").insert(r));
   let { error } = await save(row);
   // purana app: database purana ho to naye columns chhod ke dobara (cover_url / brand_id / tracking / terms)
+  if (error && /wa_invite_photo_on/i.test(error.message || "")) ({ error } = await save((delete row.wa_invite_photo_on, row)));
   if (error && /wa_invite_image/i.test(error.message || "")) ({ error } = await save((delete row.wa_invite_image, row)));
   if (error && /cover_url/i.test(error.message || "")) ({ error } = await save((delete row.cover_url, row)));
   if (error && /brand_id/i.test(error.message || "")) ({ error } = await save((delete row.brand_id, row)));

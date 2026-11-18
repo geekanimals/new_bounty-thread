@@ -39,7 +39,7 @@ export default function PhotoInvite({ campaignId }) {
         <>
           <p className="wo-sub" style={{ margin: "4px 0 8px" }}>
             {d.people || 0} invited creator{d.people === 1 ? "" : "s"} have not joined yet and have not had this message
-            {d.already_sent ? ` · ${d.already_sent} already got it` : ""}. New invites send the photo drip on their own.
+            {d.already_sent ? ` · ${d.already_sent} already got it` : ""}. New invites get the photo invite on their own while &quot;Send the WhatsApp invite with this photo&quot; is ticked in Edit brief.
           </p>
           {d.people > 0 &&
             (sure ? (
