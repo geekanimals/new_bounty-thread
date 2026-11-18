@@ -6,7 +6,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import DiscoveryHead from "@/components/admin/discovery/DiscoveryHead";
 import { rpc, invoke, useRpc, errText, sbFor } from "@/lib/supabase";
 import { kNum, cap1 } from "@/components/admin/creator/live";
-import { CS_SMART } from "@/components/admin/discovery/smart";
+import { CS_SMART } from "@/components/admin/discovery/csSmart";
 
 /* Discovery → Creator search — purane mountCreatorSearch jaisa:
  *  ✨ Describe who you need (English / Hinglish) · search · categories · location / followers / engagement / gender / source / sort
