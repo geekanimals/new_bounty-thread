@@ -68,6 +68,7 @@ export const DEFAULT_DRAFT = {
   other: "",
   productLink: "",
   cover: "",
+  waImage: "",
   files: [],
   // eligibility (ideal_profile) — intel.ci_eligibility apply par yahi check karta hai, campaign_matches matching mein
   gender: "",
@@ -138,6 +139,7 @@ function draftFromRow(c) {
     payDue: String(ct.pay_due_days ?? 7),
     productLink: c.product_link || "",
     cover: c.cover_url || "",
+    waImage: c.wa_invite_image || "",
     files: Array.isArray(c.attachments) ? c.attachments : [],
     igReq: ip.instagram || "verified",
     gender: ip.gender || "",
@@ -316,6 +318,8 @@ export async function saveCampaign(d, { draft = false } = {}) {
   if (plink && !/^https?:\/\//i.test(plink)) throw new Error("The product link must start with https://");
   const cover = String(d.cover || "").trim();
   if (cover && !/^https:\/\//i.test(cover)) throw new Error("The campaign photo link must start with https://");
+  const waImage = String(d.waImage || "").trim();
+  if (waImage && !/^https:\/\/\S+\.(jpe?g|png)(\?\S*)?$/i.test(waImage)) throw new Error("The WhatsApp invite photo must be a JPG or PNG link (https://…jpg / .png).");
   const row = {
     name: String(d.name).trim(),
     brand: String(d.brand).trim(),
@@ -329,6 +333,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
     product_link: t === "paid" ? null : plink || dest || (d._row && d._row.product_link) || null,
     start_date: start,
     cover_url: cover || null,
+    wa_invite_image: waImage || null,
     attachments: Array.isArray(d.files) ? d.files : [],
     product_value: t === "paid" ? null : num(d.value),
     platforms: "Instagram",
@@ -383,6 +388,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
   const save = (r) => (d.editId ? sb.from("campaigns").update(r).eq("id", d.editId) : sb.from("campaigns").insert(r));
   let { error } = await save(row);
   // purana app: database purana ho to naye columns chhod ke dobara (cover_url / brand_id / tracking / terms)
+  if (error && /wa_invite_image/i.test(error.message || "")) ({ error } = await save((delete row.wa_invite_image, row)));
   if (error && /cover_url/i.test(error.message || "")) ({ error } = await save((delete row.cover_url, row)));
   if (error && /brand_id/i.test(error.message || "")) ({ error } = await save((delete row.brand_id, row)));
   if (error && /tracking/i.test(error.message || "")) ({ error } = await save((delete row.tracking, row)));
@@ -408,7 +414,9 @@ export async function uploadCampaignFile(file, kind = "file") {
   if (!/^image\//.test(file.type || "") && file.size > 20 * 1024 * 1024) throw new Error(`${file.name} is over 20 MB.`);
   const rnd = Math.random().toString(36).slice(2, 8);
   let path;
-  if (kind === "cover") {
+  if (kind === "wa") {
+    path = `${org}/wa/${Date.now()}-${rnd}.jpg`;
+  } else if (kind === "cover") {
     const ext = (String(file.type).split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "jpg";
     path = `${org}/cover/${Date.now()}-${rnd}.${ext}`;
   } else {
@@ -416,7 +424,7 @@ export async function uploadCampaignFile(file, kind = "file") {
   }
   let up;
   try {
-    up = await uploadMedia("admin", "campaign-files", file, { scope: kind === "cover" ? "cover" : "files", fallback: { bucket: "campaign-files", path } });
+    up = await uploadMedia("admin", "campaign-files", file, { scope: kind === "cover" ? "cover" : kind === "wa" ? "wa" : "files", jpeg: kind === "wa", fallback: { bucket: "campaign-files", path } });
   } catch (e) {
     throw new Error(`Couldn't upload ${file.name}: ${e.message}`);
   }

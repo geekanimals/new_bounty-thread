@@ -15,6 +15,22 @@ export const DRIPS = {
       { after: "20 hours", text: "Account update: your registration for the {campaign} campaign is still pending. Your details are already saved.", buttons: ["Complete registration", "Not interested"] },
     ],
   },
+  "01i": {
+    name: "Campaign invite with photo (bulk)",
+    when: "Same as 01, when the campaign has a JPG / PNG photo (WhatsApp invite photo, else the campaign photo). Templates campaign_invite_pic_1 / _2 / _3",
+    stops: "they register and join the campaign",
+    msgs: [
+      { after: "10 minutes", text: "[campaign photo]\nHi {name}, your Bounty account for the {campaign} campaign is ready. To continue, please verify your WhatsApp number and accept the campaign terms.\n\n@GeekAnimals", buttons: ["Verify and continue", "Not interested"] },
+      { after: "3 hours", text: "[campaign photo]\nHi {name}, a quick update on your {campaign} campaign registration: it is still pending. Verifying your number takes about two minutes.\n\n@GeekAnimals", buttons: ["Verify and continue", "Not interested"] },
+      { after: "20 hours", text: "[campaign photo]\nAccount update: your registration for the {campaign} campaign is still pending. Your details are already saved.\n\n@GeekAnimals", buttons: ["Verify and continue", "Not interested"] },
+    ],
+  },
+  "01i1": {
+    name: "Invite reminder with photo (one message)",
+    when: "Sent once from the campaign to creators who were invited but have not joined",
+    stops: "sent once",
+    msgs: [{ after: "now", text: "[campaign photo]\nHi {name}, a quick update on your {campaign} campaign registration: it is still pending. Verifying your number takes about two minutes.\n\n@GeekAnimals", buttons: ["Verify and continue", "Not interested"] }],
+  },
   "02": {
     name: "Profile complete",
     when: "A creator signed up but their profile is not complete",

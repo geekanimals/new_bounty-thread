@@ -22,6 +22,7 @@ export default function NewCampaignBasics() {
       try {
         const r = await uploadCampaignFile(f, kind);
         if (kind === "cover") set("cover", r.url);
+        else if (kind === "wa") set("waImage", r.url);
         else {
           acc = [...acc, r];
           set("files", acc);
@@ -111,6 +112,25 @@ export default function NewCampaignBasics() {
             </button>
           )}
           <input id="nc-cover" className="ga-input nb-link" type="url" value={d.cover} onChange={(e) => set("cover", e.target.value)} placeholder="…or paste an image link (https://…)" aria-label="Campaign photo link" />
+        </div>
+      </div>
+      <p className="nc-sec">WhatsApp invite photo (optional)</p>
+      <p className="nb-hint">Shown at the top of the WhatsApp invite. Leave empty to use the campaign photo (JPG / PNG only — WhatsApp does not take WebP). No photo at all → the normal text invite.</p>
+      <div className="nb-media">
+        <div className="nb-cover">
+          {d.waImage ? <img src={d.waImage} alt="" referrerPolicy="no-referrer" /> : <span>{/\.(jpe?g|png)(\?|$)/i.test(d.cover || "") ? "Using the campaign photo" : "No WhatsApp photo — text invite"}</span>}
+        </div>
+        <div className="nb-mediact">
+          <label className="ga-btn ga-btn--ghost nb-b">
+            ⬆ Upload WhatsApp photo
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files[0] && addFiles([e.target.files[0]], "wa")} />
+          </label>
+          {d.waImage && (
+            <button type="button" className="ga-btn ga-btn--ghost nb-b" onClick={() => set("waImage", "")}>
+              Remove
+            </button>
+          )}
+          <input className="ga-input nb-link" type="url" value={d.waImage || ""} onChange={(e) => set("waImage", e.target.value)} placeholder="…or paste a JPG / PNG link (https://…)" aria-label="WhatsApp invite photo link" />
         </div>
       </div>
       <div className="nb-files" id="nc-files">

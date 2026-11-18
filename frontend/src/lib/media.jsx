@@ -28,7 +28,7 @@ const webpOk = () => {
 };
 
 /** File → compressed File (ya wahi file, agar chhoti karne se fayda nahi / browser padh nahi paaya) */
-export async function compressImage(file, { maxSide = MAX_SIDE, quality = QUALITY } = {}) {
+export async function compressImage(file, { maxSide = MAX_SIDE, quality = QUALITY, jpeg = false } = {}) {
   if (!file || !COMPRESSIBLE.test(file.type || "") || typeof document === "undefined") return file;
   let bmp;
   try {
@@ -37,7 +37,9 @@ export async function compressImage(file, { maxSide = MAX_SIDE, quality = QUALIT
     return file; // e.g. HEIC on Chrome — original hi jaayega
   }
   const { width: w0, height: h0 } = bmp;
-  if (file.size <= SKIP_UNDER && Math.max(w0, h0) <= maxSide) {
+  // jpeg: keep a small JPG / PNG as it is (WhatsApp takes those); anything else is redrawn as JPG
+  const keepAsIs = jpeg ? /^image\/(jpeg|jpg|png)$/i.test(file.type || "") && file.size <= 4.5 * 1024 * 1024 && Math.max(w0, h0) <= maxSide : file.size <= SKIP_UNDER && Math.max(w0, h0) <= maxSide;
+  if (keepAsIs) {
     bmp.close && bmp.close();
     return file;
   }
@@ -52,9 +54,9 @@ export async function compressImage(file, { maxSide = MAX_SIDE, quality = QUALIT
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bmp, 0, 0, w, h);
   bmp.close && bmp.close();
-  const type = webpOk() ? "image/webp" : "image/jpeg";
+  const type = !jpeg && webpOk() ? "image/webp" : "image/jpeg";
   const blob = await new Promise((r) => c.toBlob(r, type, type === "image/jpeg" ? 0.88 : quality));
-  if (!blob || blob.size >= file.size) return file; // bada ho gaya → original
+  if (!blob || (blob.size >= file.size && !(jpeg && !/^image\/(jpeg|jpg|png)$/i.test(file.type || "")))) return file; // bada ho gaya → original
   const name = (file.name || "image").replace(/\.[^.]+$/, "") + (type === "image/webp" ? ".webp" : ".jpg");
   try {
     return new File([blob], name, { type, lastModified: Date.now() });
@@ -87,9 +89,9 @@ async function toR2(door, area, file, scope) {
  * area: campaign-files | review-proofs | post-media | payment-proofs (private)
  * fallback: { bucket, path } — R2 na chale to Supabase storage mein isi jagah (purana tareeka)
  */
-export async function uploadMedia(door, area, file0, { scope, fallback, compress = true } = {}) {
+export async function uploadMedia(door, area, file0, { scope, fallback, compress = true, jpeg = false } = {}) {
   const before = file0 ? file0.size : 0;
-  const file = compress ? await compressImage(file0) : file0;
+  const file = compress ? await compressImage(file0, jpeg ? { maxSide: 1600, jpeg: true } : undefined) : file0;
   try {
     const d = await toR2(door, area, file, scope);
     return { url: d.url, key: d.key, path: d.key, where: "r2", size: file.size, before, type: file.type };

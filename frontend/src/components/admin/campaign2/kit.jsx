@@ -104,7 +104,8 @@ export function sheetPhone(v) {
   if (digits.length < 10) return String(v || "");
   const last = digits.slice(-10),
     cc = digits.slice(0, -10);
-  return `${cc ? "+" + cc + " " : ""}${last.slice(0, 5)} ${last.slice(5)}`;
+  // No leading "+": Google Sheets / Excel read "+91 …" as a formula (#ERROR!) when pasted.
+  return `${cc ? cc + " " : ""}${last.slice(0, 5)} ${last.slice(5)}`;
 }
 export function downloadFile(name, rows) {
   try {

@@ -9,6 +9,7 @@ import { rpc, useRpc, errText } from "@/lib/supabase";
 import { coverOf } from "@/services/creator/helpers";
 import { useCampaign, useToast, campStatusOptions, delivChips, fmtMoney, fmtDate, daysLeft } from "@/components/admin/campaign/live";
 import { buildRows } from "@/components/admin/campaign/journey";
+import PhotoInvite from "@/components/admin/campaign2/PhotoInvite";
 
 /* Ideal creator profile → ek line (purane idealProfileHtml ka chhota roop) */
 function eligLine(ip) {
@@ -228,6 +229,8 @@ export default function WorkspaceOverview() {
                     referrerPolicy="no-referrer"
                   />
                   {!row.cover_url && <p className="wo-sub">This is the stock photo creators see — no campaign photo uploaded yet. Add your own with Edit brief.</p>}
+                  {row.wa_invite_image && <p className="wo-sub">WhatsApp invite photo: <a href={row.wa_invite_image} target="_blank" rel="noopener noreferrer">open ↗</a></p>}
+                  <PhotoInvite campaignId={row.id} />
                   {/^https?:\/\//i.test(row.product_link || "") && (
                     <p>
                       🎁 Product:{" "}
