@@ -302,6 +302,64 @@ export async function rejectionReasons() {
   return _reasons;
 }
 
+/* ---------- ✗ Reject — purane openReasonModal jaisa: reason chips + creator ko jaane wala message ----------
+ * Brief se match nahi (api.campaign_brief_match) → mismatch wale reasons pehle se chune + message khud likha hua.
+ * Team bas dekhe aur "Reject & send" dabaye. Creator ko: email + app (🔔 alerts) — "You were not selected… Reason: …"
+ */
+const BRIEF_CODES = /^(low_followers|high_followers|low_engagement|location_mismatch|gender_mismatch|age_mismatch|category_mismatch|language_mismatch|pet_mismatch|marital_mismatch|barter_not_open)$/;
+const KEY_CODE = { engagement: "low_engagement", location: "location_mismatch", gender: "gender_mismatch", age: "age_mismatch", category: "category_mismatch", pet: "pet_mismatch", marital: "marital_mismatch", barter: "barter_not_open" };
+const lc1 = (t) => String(t || "").charAt(0).toLowerCase() + String(t || "").slice(1);
+/** brief_match → { codes, text } — creator ke liye seedha message */
+export function autoReject(m) {
+  const bad = ((m && m.criteria) || []).filter((x) => !x.ok);
+  if (!bad.length) return { codes: [], text: "" };
+  const codes = [
+    ...new Set(
+      bad
+        .map((x) => (x.key === "followers" ? (/^up to/i.test(x.need || "") ? "high_followers" : "low_followers") : KEY_CODE[x.key]))
+        .filter(Boolean)
+    ),
+  ];
+  const text = "This campaign needs " + bad.map((x) => `${lc1(x.need)} (${lc1(String(x.have || "").replace(/^Yours?:\s*/i, "yours: "))})`).join("; ");
+  return { codes, text };
+}
+export async function rejectAsk(ask, { title, match, count = 1, campaign, okLabel } = {}) {
+  const reasons = await rejectionReasons();
+  const auto = count === 1 ? autoReject(match) : { codes: [], text: "" };
+  const labelsText = (codes) =>
+    codes
+      .map((c) => (reasons.find((r) => r.code === c) || {}).label)
+      .filter((l) => l && !/^other$/i.test(l))
+      .join(", ");
+  const first = auto.text || labelsText(auto.codes);
+  const v = await ask({
+    title: title || "Reject — why don't they fit the brief?",
+    text: auto.text ? "Picked from what doesn’t match the brief — check it and send. Edit the message if you like." : count > 1 ? `The same reason and message go to all ${count} creators.` : "Pick a reason — a ready message is written for you.",
+    ok: okLabel || (count > 1 ? `Reject ${count} & send` : "Reject & send"),
+    danger: true,
+    fields: [
+      { k: "codes", label: "Reason", chips: reasons.map((r) => ({ ...r, group: BRIEF_CODES.test(r.code) ? "Doesn’t match the brief" : "Other reasons" })), value: auto.codes, required: true },
+      { k: "note", label: "Message to the creator", area: true, required: true, value: first, placeholder: "e.g. The brand needs creators based in Jaipur for this campaign." },
+    ],
+    // reason badlo → message bhi (jab tak team ne khud nahi likha)
+    derive: (k, v, prev) => {
+      if (k !== "codes") return null;
+      const wasAuto = !String(prev.note || "").trim() || prev.note === prev._auto || prev.note === first;
+      const nx = auto.text && v.codes.every((c) => auto.codes.includes(c)) && v.codes.length === auto.codes.length ? auto.text : labelsText(v.codes);
+      return wasAuto ? { note: nx, _auto: nx } : null;
+    },
+    preview: (v) => (
+      <>
+        <b>Creator gets this · email + in the app (🔔)</b>
+        Thank you for applying to {campaign || "this campaign"}. You were not selected for this campaign. Reason: {String(v.note || "…").replace(/\.?\s*$/, "")}. Your profile stays active — new campaigns open every week.
+      </>
+    ),
+  });
+  if (!v) return null;
+  const note = String(v.note || "").trim();
+  return { code: (v.codes || [])[0] || "other", codes: v.codes || [], note: /[.!?]$/.test(note) ? note : note + "." };
+}
+
 /**
  * Popup jo kuch fields maangta hai aur promise lautata hai (reason, courier, post link…)
  *   const [askEl, ask] = useAsk();  const v = await ask({ title, fields: [{ k, label, type, options, required }] })
@@ -318,7 +376,12 @@ export function useAsk() {
     st?.resolve(val);
     setSt(null);
   };
-  const setV = (k, val) => setSt((s) => ({ ...s, v: { ...s.v, [k]: val } }));
+  const setV = (k, val) =>
+    setSt((s) => {
+      let v = { ...s.v, [k]: val };
+      if (s.derive) v = { ...v, ...(s.derive(k, v, s.v) || {}) };
+      return { ...s, v };
+    });
   const el = st ? (
     <div className="ga-overlay" onClick={() => close(null)}>
       <form
@@ -326,7 +389,7 @@ export function useAsk() {
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
-          const miss = (st.fields || []).find((f) => f.required && !String(st.v[f.k] || "").trim());
+          const miss = (st.fields || []).find((f) => f.required && (Array.isArray(st.v[f.k]) ? !st.v[f.k].length : !String(st.v[f.k] || "").trim()));
           if (miss) return setSt({ ...st, err: `${miss.label} is required.` });
           close(st.v);
         }}
@@ -338,7 +401,28 @@ export function useAsk() {
             <label className="ga-label" htmlFor={`jk-${f.k}`}>
               {f.label}
             </label>
-            {f.file ? (
+            {f.chips ? (
+              <div className="jk-chips">
+                {[...new Set(f.chips.map((c) => c.group || ""))].map((g) => (
+                  <div key={g || "x"}>
+                    {g && <p className="jk-grp">{g}</p>}
+                    <div className="jk-cw">
+                      {f.chips
+                        .filter((c) => (c.group || "") === g)
+                        .map((c) => {
+                          const on = (st.v[f.k] || []).includes(c.code);
+                          return (
+                            <button key={c.code} type="button" className={`jk-chip ${on ? "is-on" : ""}`} onClick={() => setV(f.k, on ? st.v[f.k].filter((x) => x !== c.code) : [...(st.v[f.k] || []), c.code])}>
+                              {on ? "✓ " : ""}
+                              {c.label}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : f.file ? (
               <>
                 <input
                   id={`jk-${f.k}`}
@@ -373,6 +457,7 @@ export function useAsk() {
             )}
           </div>
         ))}
+        {st.preview && <div className="jk-prev">{st.preview(st.v)}</div>}
         {st.err && <p className="jk-err">{st.err}</p>}
         <div className="jk-act">
           <button type="button" className="ga-btn ga-btn--ghost" onClick={() => close(null)}>
@@ -388,6 +473,13 @@ export function useAsk() {
           .jk-f { margin-top: 14px; }
           .jk-err { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
           .jk-act { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+          .jk-grp { margin: 8px 0 5px; font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #9aa2b4; }
+          .jk-cw { display: flex; flex-wrap: wrap; gap: 6px; }
+          .jk-chip { padding: 6px 11px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; color: var(--ad-text); cursor: pointer; }
+          .jk-chip.is-on { border-color: #d6453d; background: #fdecec; color: #b42335; font-weight: 700; }
+          .jk-prev { margin-top: 14px; padding: 11px 12px; border-radius: 12px; background: var(--ad-soft-2); font-size: 12.5px; line-height: 1.5; color: var(--ad-text); }
+          .jk-prev b { display: block; margin-bottom: 4px; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: #9aa2b4; }
+          .jk .ga-modal, .jk { max-height: 90vh; overflow-y: auto; }
         `}</style>
       </form>
     </div>
@@ -465,7 +557,7 @@ export async function runAction(key, row, ctx) {
     case "bpscreen":
       return call("api.screen_participation", { p_participation: P, p_eligible: true, p_reason: null }, `✓ ${who} meets the brief`);
     case "bpreject": {
-      const v = await reasonPick("Why doesn't this creator fit the brief?");
+      const v = await rejectAsk(ask, { title: `Reject ${who} — why don't they fit the brief?`, match: ctx.match, campaign: ctx.campaignName });
       if (!v) return;
       return call("api.screen_participation", { p_participation: P, p_eligible: false, p_reason: v.note || v.code }, `${who} marked not a fit`);
     }
@@ -474,7 +566,7 @@ export async function runAction(key, row, ctx) {
     case "bpbrand":
       return call("api.brand_decide_participation", { p_participation: P, p_confirm: true, p_reason: null }, `✅ Brand confirmed ${who}`);
     case "bpbrandno": {
-      const v = await reasonPick("The brand passed — tell the creator why");
+      const v = await rejectAsk(ask, { title: `The brand passed on ${who} — tell them why`, match: ctx.match, campaign: ctx.campaignName });
       if (!v) return;
       return call("api.brand_decide_participation", { p_participation: P, p_confirm: false, p_reason: v.note }, "Brand passed — creator told");
     }

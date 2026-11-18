@@ -7,7 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
-import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectionReasons } from "@/components/admin/campaign/journey";
+import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk } from "@/components/admin/campaign/journey";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 import WaPanel from "@/components/admin/campaign/WaPanel";
 
@@ -150,13 +150,13 @@ export default function WorkspaceCreators() {
   // ✗ Reject — Applied / eligible: "not a fit" (reason creator ko jaata hai) · brand ki list par: "brand passed"
   const reject = async (x) => {
     setBusy(x.id);
-    await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, ctx);
+    await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, { ...ctx, match: (bmatch.data || {})[x.pid], campaignName: camp?.name });
     setBusy("");
   };
   const act = async (x) => {
     if (!x.act) return;
     setBusy(x.id);
-    await runAction(x.act.key, x, ctx);
+    await runAction(x.act.key, x, { ...ctx, match: (bmatch.data || {})[x.pid], campaignName: camp?.name });
     setBusy("");
   };
 
@@ -169,8 +169,7 @@ export default function WorkspaceCreators() {
   const declinable = sel.map((rid) => all.find((x) => x.id === rid)).filter((x) => x && x.kind === "p" && ["applied", "eligible"].includes(x.x.stage));
   const declineSel = async () => {
     if (!declinable.length) return setToast("Tick creators who are on Applied first.");
-    const reasons = await rejectionReasons();
-    const v = await ask({ title: `Decline ${declinable.length} creator${declinable.length > 1 ? "s" : ""} — why don't they fit the brief?`, text: "The same reason and message go to each of them on WhatsApp, email and in the app.", ok: "Decline & send message", danger: true, fields: [{ k: "code", label: "Reason", options: reasons.map((r) => [r.code, r.label]), required: true }, { k: "note", label: "Message to the creator", area: true, required: true }] });
+    const v = await rejectAsk(ask, { title: `Reject ${declinable.length} creator${declinable.length > 1 ? "s" : ""} — why don't they fit the brief?`, count: declinable.length, campaign: camp?.name });
     if (!v) return;
     setBusy("decl");
     let ok = 0;

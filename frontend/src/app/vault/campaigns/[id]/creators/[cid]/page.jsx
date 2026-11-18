@@ -236,7 +236,7 @@ export default function WorkspaceCreator() {
           busy={busy === "act"}
           onAction={async () => {
             setBusy("act");
-            await runAction(x.act.key, x, { campaignId: id, ask: askFn, say: setToast, reload, router });
+            await runAction(x.act.key, x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
             setBusy("");
           }}
           onChat={() => document.getElementById("wcc-msg")?.focus()}
@@ -245,7 +245,7 @@ export default function WorkspaceCreator() {
             isP && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage)
               ? async () => {
                   setBusy("act");
-                  await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, { campaignId: id, ask: askFn, say: setToast, reload, router });
+                  await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
                   setBusy("");
                 }
               : null
@@ -385,7 +385,7 @@ export default function WorkspaceCreator() {
               ship={camp?.campaign_type !== "paid"}
               onAct={async (k) => {
                 setBusy("pp:" + k);
-                await runAction(k, x, { campaignId: id, ask: askFn, say: setToast, reload, router });
+                await runAction(k, x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
                 setBusy("");
               }}
             />
