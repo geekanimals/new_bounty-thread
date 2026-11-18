@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
 import { SettingsTabs, Panel, Table, useToast, fmtDate, emptyState } from "@/components/admin/settings/kit";
@@ -161,7 +162,17 @@ export default function SettingsTeam() {
       <Panel
         className="st-team"
         title="Team"
-        sub="People who run Geek OS with you."
+        sub={
+          <>
+            People who run Geek OS with you.
+            {team.rows.some((m) => m.role === "creator") && (
+              <>
+                {" "}
+                Creators ({team.rows.filter((m) => m.role === "creator").length}) are on the <Link href="/vault/creators">Creators</Link> page.
+              </>
+            )}
+          </>
+        }
         action={
           <button type="button" className="ga-btn ga-btn--primary" onClick={() => setModal("invite")}>
             Invite teammate
@@ -178,7 +189,7 @@ export default function SettingsTeam() {
             { label: "", w: 293 },
           ]}
           empty={emptyState({ loading: team.loading, error: team.error, reload: load, empty: "Just you so far." })}
-          rows={team.rows.map((m) => [
+          rows={team.rows.filter((m) => m.role !== "creator").map((m) => [
             <b key="n" title={m.email || ""}>{m.name || m.email}</b>,
             ROLE_LABEL[m.role] || m.role || "Member",
             fmtDate(m.created_at),

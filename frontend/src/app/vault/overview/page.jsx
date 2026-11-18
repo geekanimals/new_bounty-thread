@@ -324,26 +324,27 @@ export default function AdminOverview() {
               </Link>
             </div>
           </section>
+
+          <section className="ga-card ov-card ov-motion">
+            <div className="ov-card__head ov-card__head--c">
+              <h2 className="ga-h2">📣 Campaigns in motion</h2>
+              <span className="ov-sub">
+                {fmtNum(c.total)} campaigns · {fmtNum(c.barter)} barter · {fmtNum(c.paid)} paid · {fmtNum(c.barter_paid)} both
+              </span>
+            </div>
+            <div className="ov-people ov-motion__grid">
+              {MOTION.map((p) => (
+                <Link key={p.l} href={p.href} className="ov-p">
+                  <strong>{dash0 ? "—" : fmtNum(p.n)}</strong>
+                  <span>{p.l}</span>
+                  {p.s && <small>{p.s}</small>}
+                </Link>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
 
-      <section className="ga-card ov-card ov-motion">
-        <div className="ov-card__head ov-card__head--c">
-          <h2 className="ga-h2">📣 Campaigns in motion</h2>
-          <span className="ov-sub">
-            {fmtNum(c.total)} campaigns · {fmtNum(c.barter)} barter · {fmtNum(c.paid)} paid · {fmtNum(c.barter_paid)} both
-          </span>
-        </div>
-        <div className="ov-people ov-motion__grid">
-          {MOTION.map((p) => (
-            <Link key={p.l} href={p.href} className="ov-p">
-              <strong>{dash0 ? "—" : fmtNum(p.n)}</strong>
-              <span>{p.l}</span>
-              {p.s && <small>{p.s}</small>}
-            </Link>
-          ))}
-        </div>
-      </section>
 
       <style>{`
         .ov-att { margin-bottom: 20px; padding-bottom: 22px; }
@@ -358,8 +359,9 @@ export default function AdminOverview() {
         .ov-note b { color: var(--ad-ink); }
         .ov-bar { height: 8px; margin-top: 16px; border-radius: 999px; background: var(--ad-soft); overflow: hidden; }
         .ov-bar i { display: block; height: 100%; background: #6757f5; }
-        .ov-motion { margin-top: 20px; }
-        .ov-motion__grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+        .ov-motion__grid { grid-template-columns: 1fr 1fr; }
+        .ov-motion .ov-card__head { flex-wrap: wrap; }
+        .ov-motion .ov-card__head .ov-sub { margin-top: 0; flex-basis: 100%; }
         .ov-grid { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }
         .ov-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         .ov-card { padding: 22px 22px 30px; }

@@ -34,9 +34,12 @@ export function PageHead({ title, sub, eyebrow = "Geek OS / Super Admin", childr
 }
 
 export function Stats({ items }) {
+  // clickable tiles (filters) → purple = jo chuna hua hai; warna pehla tile
+  const pick = items.some((x) => x.onClick);
   return (
     <div className="ap-stats">
       {items.map((s, i) => {
+        const hero = pick ? !!s.on : i === 0;
         const inner = (
           <>
             <strong>{s.value}</strong>
@@ -45,15 +48,15 @@ export function Stats({ items }) {
           </>
         );
         return s.href ? (
-          <Link key={i} href={s.href} className={`ap-stat ${i === 0 ? "ap-stat--hero" : ""}`}>
+          <Link key={i} href={s.href} className={`ap-stat ${hero ? "ap-stat--hero" : ""}`}>
             {inner}
           </Link>
         ) : s.onClick ? (
-          <button key={i} type="button" onClick={s.onClick} aria-pressed={!!s.on} className={`ap-stat ap-stat--btn ${i === 0 ? "ap-stat--hero" : ""} ${s.on ? "is-on" : ""}`}>
+          <button key={i} type="button" onClick={s.onClick} aria-pressed={!!s.on} className={`ap-stat ap-stat--btn ${hero ? "ap-stat--hero" : ""}`}>
             {inner}
           </button>
         ) : (
-          <div key={i} className={`ap-stat ${i === 0 ? "ap-stat--hero" : ""}`}>
+          <div key={i} className={`ap-stat ${hero ? "ap-stat--hero" : ""}`}>
             {inner}
           </div>
         );

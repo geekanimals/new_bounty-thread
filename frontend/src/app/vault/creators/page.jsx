@@ -178,9 +178,7 @@ export default function AdminCreators() {
                 <th>Engagement</th>
                 <th>Per reel</th>
                 <th>Applied / ✓</th>
-                <th>City</th>
-                <th>Category</th>
-                <th>Instagram</th>
+                <th>City · category</th>
                 <th>Profile</th>
                 <th>Active</th>
                 <th>Action</th>
@@ -193,7 +191,7 @@ export default function AdminCreators() {
                     <Link href={`/vault/creators/${c.id}/profile`} className="cl-name">
                       {c.name}
                     </Link>
-                    <span className="cl-handle">
+                    <span className={`cl-handle ${c.ig ? "cl-ig" : ""}`}>
                       {c.handle}
                       {c.igCount > 1 ? ` · ${c.igCount} accounts` : ""}
                     </span>
@@ -205,10 +203,9 @@ export default function AdminCreators() {
                   <td>{c.eng}</td>
                   <td>{c.reel}</td>
                   <td>{c.applied}</td>
-                  <td>{c.city}</td>
-                  <td>{c.category}</td>
                   <td>
-                    <span className={`ga-badge ${c.ig ? "ga-badge--green" : ""}`}>{c.ig ? "Connected" : "Not connected"}</span>
+                    {c.city}
+                    <span className="cl-handle">{c.category}</span>
                   </td>
                   <td>
                     <span className={`ga-badge ${c.complete ? "ga-badge--violet" : "ga-badge--orange"}`}>{c.complete ? "Complete" : c.score}</span>
@@ -223,7 +220,7 @@ export default function AdminCreators() {
               ))}
               {!shown.length && (
                 <tr>
-                  <td colSpan={11} className="cl-empty">
+                  <td colSpan={9} className="cl-empty">
                     {error ? (
                       <>
                         {errText(error)}{" "}
@@ -312,6 +309,7 @@ export default function AdminCreators() {
         .cl-table .ga-table td { padding: 14px 11px; height: 67.5px; }
         .cl-name { display: block; font-weight: 800; color: var(--ad-ink); }
         .cl-name:hover { color: var(--ad-primary); }
+        .cl-ig { color: #16a34a; }
         .cl-handle { display: block; margin-top: 4px; font-size: 11px; font-weight: 500; color: #9aa1b3; }
         .cl-link { font-weight: 800; color: #6151ea; }
         .cl-empty { padding: 26px 11px; text-align: center; color: var(--ad-muted); }

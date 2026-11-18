@@ -213,7 +213,7 @@ export default function MessagingDelivery() {
         .md-card { padding: 22px 22px 18px; }
         .md-health { margin-bottom: 18px; }
         .md-mute { font-size: 12px; font-weight: 500; color: var(--ad-muted); }
-        .md-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: -14px; }
+        .md-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: -14px; }
         .md-check { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--ad-line); font-size: 12.5px; }
         .md-check.bad { border-color: #f3dfbd; background: #fff7ea; }
         .md-check b { display: block; font-weight: 800; color: var(--ad-ink); }

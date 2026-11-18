@@ -93,7 +93,7 @@ export default function AllUsers() {
       <PageHead title="All users" sub="Every account on Geek OS — creators, agencies, brands and admins." />
       <Stats
         items={[
-          { value: L(all.length), label: "Everyone", note: "Live" },
+          { value: L(all.length), label: "Everyone", note: f === "all" ? "● showing now" : "Live", onClick: () => (setF("all"), setPage(0)), on: f === "all" },
           { value: L(all.filter((u) => u.role === "creator").length), label: "Creators", href: "/vault/creators" },
           { value: L(all.filter((u) => u.role === "owner" || u.role === "brand").length), label: "Agencies & brands", href: "/vault/brands" },
           { value: L(all.filter((u) => isToday(u.joined_at)).length), label: "Joined today", onClick: () => (setF("joined"), setPage(0)), on: f === "joined" },
@@ -230,14 +230,15 @@ export default function AllUsers() {
 
       <style>{`
         .au-panel { padding-bottom: 26px; }
-        .au-top { display: flex; align-items: center; gap: 30px; }
-        .au-title { width: 102px; flex-shrink: 0; line-height: 1.35; }
-        .au-right { min-width: 0; flex: 1; }
+        .au-top { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+        .au-title { width: auto; line-height: 1.35; }
+        .au-right { min-width: 0; flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        .au-right .au-filters { flex-basis: 100%; }
         .au-filters { display: flex; flex-wrap: wrap; gap: 8px; }
         .au-filters .ga-tab { height: 37px; }
         .au-filters .ga-tab:not(.is-on) { color: #67718a; }
-        .au-sort { height: 43px; width: auto; margin-top: 25px; padding: 0 10px; }
-        .au-search { width: min(270px, 100%); height: 43px; margin-top: 25px; }
+        .au-sort { height: 43px; width: auto; margin-top: 6px; padding: 0 12px; }
+        .au-search { width: min(270px, 100%); height: 43px; margin-top: 6px; }
         .au-panel .sk-tw { margin-top: 27px; }
         .au-acts { display: inline-flex; align-items: center; gap: 22px; padding-left: 4px; }
         .au-del { font-size: 13px; filter: grayscale(1); opacity: .55; } /* Figma: grey bin */
