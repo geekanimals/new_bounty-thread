@@ -129,6 +129,7 @@ export default function WorkspaceContract() {
             {F({ label: "Content due (days after delivery)", v: k, set: setK, field: "due" })}
             {F({ label: "Ad rights (months)", v: k, set: setK, field: "rights" })}
             {F({ label: "Deliverables", v: k, set: setK, field: "deliver" })}
+            {F({ label: "Extra terms (optional)", v: k, set: setK, field: "extra" })}
           </div>
           <h3 className="wc-rules">Rules</h3>
           {RULES.map((r, i) => (
@@ -151,6 +152,9 @@ export default function WorkspaceContract() {
             {F({ label: "Hashtags & mentions", v: b, set: setB, field: "tags", long: true })}
             {F({ label: "Do’s", v: b, set: setB, field: "dos", long: true })}
             {F({ label: "Don’ts", v: b, set: setB, field: "donts", long: true })}
+            {F({ label: "Caption idea", v: b, set: setB, field: "caption", long: true })}
+            {F({ label: "Reference links", v: b, set: setB, field: "refs", long: true })}
+            {F({ label: "Posting note (time, collab, link in bio…)", v: b, set: setB, field: "note", long: true })}
           </div>
           <button type="button" className="ga-btn ga-btn--primary wc-save wc-save--b" disabled={!!busy || bt.loading} onClick={() => save("b")}>
             {busy === "b" ? "Saving…" : "Save brief"}

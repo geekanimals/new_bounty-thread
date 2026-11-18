@@ -16,6 +16,9 @@ const TABS = [
   { k: "paid", label: "Paid", href: "/vault/campaigns/paid", test: (c) => campInBucket(c.raw, "paid") },
   { k: "barter_paid", label: "Barter + Paid", href: "/vault/campaigns/barter-paid", test: (c) => campInBucket(c.raw, "barter_paid") },
   { k: "completed", label: "Completed", href: "/vault/campaigns/completed", test: (c) => c.status === "Completed" },
+  // purane app ke filter: ⭐ Stories (celebrity story barter) · ⏳ Awaiting approval
+  { k: "stories", label: "⭐ Stories", href: "/vault/campaigns/stories", test: (c) => c.raw?.barter_subtype === "celebrity_story" || (!c.raw?.barter_subtype && /celebrity/i.test(c.raw?.type || "")) },
+  { k: "approval", label: "⏳ Awaiting approval", href: "/vault/campaigns/approval", test: (c) => c.status === "Approval" || c.raw?.status === "Approval" },
 ];
 
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
@@ -112,6 +115,9 @@ export default function CampaignList({ filter = "all" }) {
                     <Link href={`/vault/campaigns/${c.id}/overview`} className="cl-open">
                       Open workspace →
                     </Link>
+                    <Link href={`/vault/campaigns/new/basics?edit=${c.id}`} className="cl-edit">
+                      ✏️ Edit
+                    </Link>
                     <span className="cl-risk">{c.risk}</span>
                   </td>
                 </tr>
@@ -191,6 +197,8 @@ export default function CampaignList({ filter = "all" }) {
         .cl-prog .ga-bar { height: 6px; background: #eceef6; }
         .cl-prog small { font-size: 12px; color: var(--ad-muted); }
         .cl-open { display: block; font-size: 13px; font-weight: 800; color: #6151ea; }
+        .cl-edit { display: inline-block; margin-top: 3px; font-size: 12px; font-weight: 800; color: #8a8f9c; }
+        .cl-edit:hover { color: #6151ea; }
         .cl-open:hover { color: var(--ad-primary-2); }
         .cl-risk { display: block; margin-top: 5px; font-size: 12px; color: var(--ad-muted); }
         .cl-empty { padding: 30px 10px; text-align: center; font-size: 13px; color: var(--ad-muted); }

@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import ReportTabs from "@/components/admin/campaign2/ReportTabs";
 import { Panel, MiniStats, Note, TableState, useToast, downloadFile, num } from "@/components/admin/campaign2/kit";
-import { useRpc } from "@/lib/supabase";
+import { useRpc, rpc, errText } from "@/lib/supabase";
+import { useAsk } from "@/components/admin/campaign/journey";
 
 /*
  * 📈 Campaign report — purane bpAnalyticsHtml / bpDownloadReport jaisa.
@@ -21,6 +23,31 @@ const KIND = { REELS: "Reel", REEL: "Reel", VIDEO: "Reel", IMAGE: "Post", CAROUS
 export default function CampaignReport() {
   const { id } = useParams();
   const [toast, show] = useToast();
+  const [q, setQ] = useState("");
+  const [askEl, ask] = useAsk();
+  // purana "📷 Add insights / Update" — Instagram se numbers na aaye to haath se (bp_record_metrics)
+  const addNums = async (r, p) => {
+    const NUMS = [["views", "Views / plays"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["shares", "Shares"], ["saves", "Saves"]];
+    const st = p.stats || {};
+    const v = await ask({
+      title: `Numbers for ${(r.creator || {}).name || "this creator"}’s ${String(p.media_type || "post").toLowerCase()}`,
+      text: "Copy them from the creator's Instagram insights (they can send you a screenshot). Leave a box empty if you don't have it. 12.4k works.",
+      ok: "Save numbers",
+      fields: NUMS.map(([k, l]) => ({ k, label: l, value: st.source === "public" || st[k] == null ? "" : String(st[k]) })),
+    });
+    if (!v) return;
+    const pl = {};
+    NUMS.forEach(([k]) => {
+      const m = String(v[k] || "").replace(/[,\s]/g, "").toLowerCase().match(/^([0-9]+(?:\.[0-9]+)?)(k|m|l)?$/);
+      if (m) pl[k] = Math.round(Number(m[1]) * (m[2] === "k" ? 1e3 : m[2] === "m" ? 1e6 : m[2] === "l" ? 1e5 : 1));
+    });
+    if (!Object.keys(pl).length) return show("Add at least one number.");
+    if (p.post_id) pl.post_id = p.post_id;
+    const { error: e } = await rpc("admin", "api.bp_record_metrics", { p_participation: r.participation_id, p_payload: pl });
+    if (e) return show(errText(e));
+    show("Numbers saved ✓");
+    reload();
+  };
   const { data, error, loading, reload } = useRpc("admin", "api.campaign_analytics", { p_campaign: id }, { skip: !id || id === "sample" });
   const a = data || {};
   const t = a.totals || {};
@@ -57,8 +84,10 @@ export default function CampaignReport() {
   // ek row har post ki (Figma)
   const posts = rows.flatMap((r) => {
     const nm = (r.creator || {}).name || (handleOf(r) ? "@" + handleOf(r) : "Creator");
-    return (r.posts || []).map((p, i) => ({ p, nm, key: `${r.participation_id || r.invite_id}-${i}` }));
+    return (r.posts || []).map((p, i) => ({ p, r, nm, key: `${r.participation_id || r.invite_id}-${i}` }));
   });
+  const qq = q.trim().toLowerCase();
+  const shownPosts = qq ? posts.filter(({ r, nm }) => `${nm} ${handleOf(r)} ${(r.creator || {}).city || ""}`.toLowerCase().includes(qq)) : posts;
 
   const download = () => {
     const c = a.campaign || {};
@@ -115,6 +144,7 @@ export default function CampaignReport() {
             </Note>
           </div>
         )}
+        <input className="ga-input rp-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 Filter these rows — name, @handle, city" aria-label="Filter report rows" />
         <div className="c2-tw">
           <table className="c2-t rp-t">
             <thead>
@@ -127,11 +157,12 @@ export default function CampaignReport() {
                 <th>Comments</th>
                 <th>Shares</th>
                 <th>Saves</th>
+                <th aria-label="Numbers" />
               </tr>
             </thead>
             <tbody>
-              <TableState cols={8} loading={loading && !data} error={!data && error} onRetry={reload} empty={data && !posts.length && "No posts yet — creators show up here as soon as their reel goes live."} />
-              {posts.map(({ p, nm, key }) => {
+              <TableState cols={9} loading={loading && !data} error={!data && error} onRetry={reload} empty={data && !posts.length && "No posts yet — creators show up here as soon as their reel goes live."} />
+              {shownPosts.map(({ p, r, nm, key }) => {
                 const s = p.stats || {},
                   k = KIND[String(p.media_type || "").toUpperCase()] || "Post";
                 return (
@@ -154,6 +185,15 @@ export default function CampaignReport() {
                     <td>{num(s.comments)}</td>
                     <td>{num(s.shares)}</td>
                     <td>{num(s.saves)}</td>
+                    <td>
+                      {r.participation_id ? (
+                        <button type="button" className="rp-ins" onClick={() => addNums(r, p)} title="Instagram didn't share the numbers? Type them from the creator's insights screenshot">
+                          {s.source === "screenshot" || s.source === "manual" ? "✏️ Update" : "📷 Add insights"}
+                        </button>
+                      ) : (
+                        <span className="rp-mute" title="Not registered on Geek OS yet">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -162,11 +202,16 @@ export default function CampaignReport() {
         </div>
       </Panel>
       {toast}
+      {askEl}
 
       <style>{`
         .rp-stats { margin-top: -8px; }
         .rp-note { margin-top: 16px; }
-        .rp-t { margin-top: 23px; }
+        .rp-t { margin-top: 12px; }
+        .rp-q { margin-top: 18px; width: min(340px, 100%); height: 42px; }
+        .rp-ins { border: 1px solid var(--ad-line-2); border-radius: 9px; background: #fff; padding: 6px 10px; font-size: 12px; font-weight: 800; color: #6657e9; white-space: nowrap; cursor: pointer; }
+        .rp-ins:hover { border-color: var(--ad-primary); }
+        .rp-mute { color: var(--ad-muted); }
         .rp-t td { height: 48px; padding-top: 6px; padding-bottom: 6px; }
       `}</style>
     </AdminShell>

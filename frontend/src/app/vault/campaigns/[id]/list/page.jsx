@@ -24,6 +24,9 @@ export default function CampaignBrandList() {
   const { data, error, loading, reload } = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !id || id === "sample" });
   const [busy, setBusy] = useState("");
   const list = ((data && data.creators) || []).filter(okFor);
+  const [q, setQ] = useState("");
+  const qq = q.trim().toLowerCase();
+  const shown = qq ? list.filter((x) => { const cr = x.creator || {}; return `${cr.name || ""} ${cr.username || ""} ${cr.city || ""} ${(cr.categories || []).join(" ")}`.toLowerCase().includes(qq); }) : list;
   const camp = (data && data.campaign) || {};
 
   const download = async () => {
@@ -61,6 +64,7 @@ export default function CampaignBrandList() {
           </button>
         }
       >
+        <input className="ga-input bl-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 Filter these rows — name, @handle, city, category" aria-label="Filter the list" />
         <div className="c2-tw">
           <table className="c2-t bl-t">
             <thead>
@@ -76,7 +80,7 @@ export default function CampaignBrandList() {
             </thead>
             <tbody>
               <TableState cols={7} loading={loading && !data} error={!data && error} onRetry={reload} empty={data && !list.length && "Nobody has cleared screening yet — screen the creators in the Creators tab first."} />
-              {list.map((x) => {
+              {shown.map((x) => {
                 const cr = x.creator || {},
                   st = label(x);
                 return (
@@ -109,7 +113,8 @@ export default function CampaignBrandList() {
       {toast}
 
       <style>{`
-        .bl-t { margin-top: -6px; }
+        .bl-t { margin-top: 8px; }
+        .bl-q { width: min(360px, 100%); height: 42px; margin-top: -4px; }
         .bl-t td { height: 57px; padding-top: 8px; padding-bottom: 8px; }
         .bl-t td:nth-child(1) { white-space: normal; min-width: 200px; max-width: 280px; }
         .bl-t td:nth-child(5) { white-space: normal; min-width: 130px; max-width: 200px; line-height: 1.35; }

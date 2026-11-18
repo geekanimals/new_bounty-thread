@@ -538,6 +538,11 @@ export async function runAction(key, row, ctx) {
  * Ek creator ki row (Figma 033/034): avatar, naam, tags, WhatsApp/followers/city, step bar, kiski baari, action button.
  * href diya ho to naam row ko open karta hai.
  */
+// row ke links (purane uc-wa / uc-mail / ig-h jaisa)
+const rawPhone = (c) => String(c.x?.phone || c.i?.phone || "").replace(/\D/g, "") || "";
+const emailOf = (c) => c.x?.email || c.x?.creator?.email || c.i?.email || "";
+const igOf = (c) => String(c.handle || "").replace(/^@/, "").trim();
+
 export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, busy }) {
   const pct = Math.max(4, Math.round((c.step / 12) * 100));
   return (
@@ -563,10 +568,33 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         <p className="jr-meta">
           {c.phone ? (
             <>
-              🟢 WhatsApp {c.phone} <span className="ga-badge ga-badge--green">ON</span> ·{" "}
+              {rawPhone(c) ? (
+                <a className="jr-lnk" href={`https://wa.me/${rawPhone(c)}`} target="_blank" rel="noopener noreferrer" title="Open their WhatsApp">
+                  🟢 WhatsApp {c.phone}
+                </a>
+              ) : (
+                <>🟢 WhatsApp {c.phone}</>
+              )}{" "}
+              <span className="ga-badge ga-badge--green">ON</span> ·{" "}
             </>
           ) : (
             "No WhatsApp · "
+          )}
+          {emailOf(c) && (
+            <>
+              <a className="jr-lnk" href={`mailto:${emailOf(c)}`} title="Email them">
+                ✉️ {emailOf(c)}
+              </a>{" "}
+              ·{" "}
+            </>
+          )}
+          {igOf(c) && (
+            <>
+              <a className="jr-lnk" href={`https://instagram.com/${igOf(c)}`} target="_blank" rel="noopener noreferrer" title={`Open @${igOf(c)} on Instagram`}>
+                @{igOf(c)} ↗
+              </a>{" "}
+              ·{" "}
+            </>
           )}
           👥 {c.followers} followers · 📍 {c.city}
         </p>
@@ -608,6 +636,8 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         .jr-handle { margin-right: 2px; font-size: 12px; font-weight: 700; color: var(--ad-muted); }
         .jr-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: #8791a7; }
         .jr-meta .ga-badge { height: 22px; padding: 0 9px; }
+        .jr-lnk { color: inherit; text-decoration: none; }
+        .jr-lnk:hover { color: var(--ad-primary); text-decoration: underline; }
         .jr-step { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ad-ink); }
         .jr-step .ga-bar { width: 160px; height: 6px; flex-shrink: 0; background: #eceef6; }
         .jr-turn { margin-top: 8px; font-size: 12px; line-height: 1.35; color: #8791a7; }
