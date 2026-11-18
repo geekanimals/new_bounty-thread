@@ -382,6 +382,13 @@ export async function sidekickApply(card, h = false) {
   let profile = null;
   try {
     const p = await myApplyProfiles();
+    // ek se zyada Instagram account — creator khud chune (Discover page ka "Pick the profile" popup)
+    if (p.length > 1)
+      return {
+        ok: false,
+        text: T(`Aapke ${p.length} Instagram accounts jude hain — kis account se apply karna hai, wo chuno.`, `You have ${p.length} Instagram accounts connected — pick which one to apply with.`, h),
+        href: `/creator/discover/${card.id}`,
+      };
     profile = (p[0] && p[0].handle) || null;
   } catch {
     profile = null;

@@ -51,7 +51,27 @@ export default function NewCampaignReview() {
           {d.reward.trim() || "Reward not specified"} · ₹{d.value || "—"} · {n("rights")} month(s) usage rights
         </p>
         <p>
-          Eligibility: {d.locations.trim() || "Any location"} · Min followers {d.minF || "Any"}
+          Dates: {d.startDate || "—"} → {d.endDate || (d.deadline ? `${d.deadline} days from launch` : "—")}
+          {d.type !== "Barter" && ` · Budget ₹${d.budget || "—"} · pay within ${d.payDue || 7} days`}
+        </p>
+        <p>
+          Eligibility:{" "}
+          {[
+            d.locations.trim() || "Any location",
+            d.gender ? { female: "Female", male: "Male", other: "Other" }[d.gender] : "",
+            d.minF || d.maxF ? `${d.minF || "0"}–${d.maxF || "∞"} followers` : "",
+            d.cats ? d.cats : "",
+            d.minEng ? `${d.minEng}%+ engagement` : "",
+            d.ageMin || d.ageMax ? `age ${d.ageMin || "?"}–${d.ageMax || "?"}` : "",
+            d.pet === "yes" ? `pet${d.petType ? ` (${d.petType})` : ""}` : d.pet === "no" ? "no pet" : "",
+            d.marital ? (d.marital === "single" ? "unmarried" : "married") : "",
+            d.barterOpen ? "open to barter" : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+        <p>
+          Photo: {d.cover ? "added" : "stock photo"} · Files: {(Array.isArray(d.files) ? d.files : []).length}
         </p>
         <p>
           Tracking: {d.tracking ? "Enabled" : "Off"}

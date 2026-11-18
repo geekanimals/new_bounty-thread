@@ -48,10 +48,37 @@ export const DEFAULT_DRAFT = {
   locations: "",
   minF: "",
   maxF: "",
-  igReq: "Verified Instagram connection",
+  igReq: "verified", // ideal_profile.instagram — verified / handle / none (intel.ci_eligibility check karta hai)
   tracking: true,
   url: "",
   code: "",
+  // purane campaign form ke fields (openCampaignModal) — sab backend mein save hote hain
+  // link & coupon tracking (purana tk_*): mode none / common / per_creator
+  tkMode: "none",
+  tkPrefix: "",
+  tkDisc: "",
+  tkUtm: true,
+  tkSay: false,
+  tkShop: false,
+  startDate: "",
+  endDate: "",
+  budget: "",
+  payDue: "7",
+  other: "",
+  productLink: "",
+  cover: "",
+  files: [],
+  // eligibility (ideal_profile) — intel.ci_eligibility apply par yahi check karta hai, campaign_matches matching mein
+  gender: "",
+  cats: "",
+  minEng: "",
+  ageMin: "",
+  ageMax: "",
+  pet: "",
+  petType: "",
+  marital: "",
+  barterOpen: "",
+  audNotes: "",
 };
 
 /* public.campaigns row → draft (Edit brief: ?edit=<id>) — purane openCampaignModal ke same fields */
@@ -96,6 +123,30 @@ function draftFromRow(c) {
     tracking: !!tk.enabled,
     url: tk.dest_url || c.product_link || "",
     code: tk.common_code || "",
+    tkMode: tk.mode || (tk.common_code ? "common" : "none"),
+    tkPrefix: tk.prefix || "",
+    tkDisc: tk.discount || "",
+    tkUtm: tk.utm !== false,
+    tkSay: !!tk.say_code,
+    tkShop: !!tk.shopify_code,
+    startDate: c.start_date || "",
+    endDate: c.end_date || "",
+    budget: c.budget != null ? String(c.budget) : "",
+    payDue: String(ct.pay_due_days ?? 7),
+    productLink: c.product_link || "",
+    cover: c.cover_url || "",
+    files: Array.isArray(c.attachments) ? c.attachments : [],
+    igReq: ip.instagram || "verified",
+    gender: ip.gender || "",
+    cats: (ip.categories || []).join(", "),
+    minEng: ip.min_engagement != null ? String(ip.min_engagement) : "",
+    ageMin: ip.age_min != null ? String(ip.age_min) : "",
+    ageMax: ip.age_max != null ? String(ip.age_max) : "",
+    pet: ip.pet || "",
+    petType: ip.pet_type || "",
+    marital: ip.marital || "",
+    barterOpen: ip.barter || "",
+    audNotes: ip.audience_notes || "",
     _row: c,
   };
 }
@@ -182,14 +233,59 @@ export async function saveCampaign(d, { draft = false } = {}) {
   const locs = String(d.locations || "").split(",").map((x) => x.trim()).filter(Boolean);
   if (locs.some((x) => /^any$/i.test(x))) ideal.locations = ["Any"];
   else if (locs.length) ideal.locations = locs;
-  const prev = (d._row && d._row.ideal_profile) || {};
+  const csvL = (v) => String(v || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const NUMCHK = [
+    ["minEng", "Avg engagement", 0, 100],
+    ["ageMin", "Creator age from", 13, 90],
+    ["ageMax", "Creator age to", 13, 90],
+  ];
+  for (const [k, l, lo, hi] of NUMCHK) {
+    const v = num(d[k]);
+    if (String(d[k] ?? "").trim() !== "" && (v == null || v < lo || v > hi)) throw new Error(`${l} must be a number between ${lo} and ${hi}.`);
+  }
+  if (num(d.ageMin) != null && num(d.ageMax) != null && num(d.ageMax) < num(d.ageMin)) throw new Error("Creator age to must be more than age from.");
+  // purane form jaisa: khali / "Any" = koi rule nahi (us key ko hata do)
+  const isAny = (v) => /^(any|anyone|all|everyone|-|no limit)$/i.test(String(v || "").trim());
+  const EL = {
+    gender: d.gender || null,
+    categories: csvL(d.cats).some(isAny) ? null : csvL(d.cats).length ? csvL(d.cats) : null,
+    min_engagement: num(d.minEng),
+    age_min: num(d.ageMin),
+    age_max: num(d.ageMax),
+    pet: d.pet || null,
+    pet_type: String(d.petType || "").trim() && !isAny(d.petType) ? String(d.petType).trim().slice(0, 40) : null,
+    marital: d.marital || null,
+    barter: d.barterOpen || null,
+    audience_notes: String(d.audNotes || "").trim().slice(0, 500) || null,
+    // purane draft mein label ho sakta hai — key mein badlo
+    instagram: (() => {
+      const v = String(d.igReq || "").toLowerCase();
+      const k = v.startsWith("verified") ? "verified" : v.startsWith("any") || v === "handle" ? "handle" : v.startsWith("no") || v === "none" ? null : v || null;
+      return k;
+    })(),
+  };
+  const prev0 = (d._row && d._row.ideal_profile) || {};
+  const prev = { ...prev0 };
+  Object.entries(EL).forEach(([k, v]) => {
+    if (v == null) delete prev[k];
+    else ideal[k] = v;
+  });
   const dest = String(d.url || "").trim();
   if (d.tracking && dest && !/^https?:\/\//i.test(dest)) throw new Error("The shop link must start with https://");
   const code = String(d.code || "").toUpperCase().replace(/\s+/g, "");
-  if (d.tracking && code && !/^[A-Z0-9_-]{2,30}$/.test(code)) throw new Error("Coupon code: 2–30 letters / numbers, no spaces.");
+  const tkMode = ["none", "common", "per_creator"].includes(d.tkMode) ? d.tkMode : code ? "common" : "none";
+  const tkPre = String(d.tkPrefix || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+  if (d.tracking && tkMode === "common" && !/^[A-Z0-9_-]{2,30}$/.test(code)) throw new Error("Type the coupon code for every creator (2–30 letters / numbers, no spaces).");
   const status = draft && !d.editId ? "Draft" : d.status === "Shortlist" ? "Shortlist completed" : d.status;
   let end = d._row ? d._row.end_date : null;
   if (num(d.deadline) != null && !d._row?.end_date) end = new Date(Date.now() + num(d.deadline) * 86400000).toISOString().slice(0, 10);
+  if (d.endDate) end = d.endDate; // End date (purane form jaisa) — deadline sirf tab jab date na di ho
+  const start = d.startDate || (d._row && d._row.start_date) || null;
+  if (start && end && end < start) throw new Error("End date must be after the start date.");
+  const plink = String(d.productLink || "").trim();
+  if (plink && !/^https?:\/\//i.test(plink)) throw new Error("The product link must start with https://");
+  const cover = String(d.cover || "").trim();
+  if (cover && !/^https:\/\//i.test(cover)) throw new Error("The campaign photo link must start with https://");
   const row = {
     name: String(d.name).trim(),
     brand: String(d.brand).trim(),
@@ -199,8 +295,11 @@ export async function saveCampaign(d, { draft = false } = {}) {
     type: legacyTypeFor(t, st),
     objective: d.objective,
     status,
-    budget: t === "barter" ? null : (d._row && d._row.budget) ?? null,
-    product_link: t === "paid" ? null : dest || (d._row && d._row.product_link) || null,
+    budget: t === "barter" ? null : num(d.budget),
+    product_link: t === "paid" ? null : plink || dest || (d._row && d._row.product_link) || null,
+    start_date: start,
+    cover_url: cover || null,
+    attachments: Array.isArray(d.files) ? d.files : [],
     product_value: t === "paid" ? null : num(d.value),
     platforms: "Instagram",
     hashtags: [...tags.tags, ...tags.ments].join(" ") || null,
@@ -216,6 +315,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
       deliverables: delivText,
       ad_rights_months: Math.min(24, Math.max(0, parseInt(d.rights) || 0)),
       content_days: Math.min(60, Math.max(1, parseInt(d.due) || 7)),
+      pay_due_days: t === "barter" ? null : Math.min(90, Math.max(1, parseInt(d.payDue) || 7)),
     },
     video_brief: {
       ...((d._row && d._row.video_brief) || {}),
@@ -228,9 +328,14 @@ export async function saveCampaign(d, { draft = false } = {}) {
       ...((d._row && d._row.tracking) || {}),
       enabled: !!d.tracking,
       dest_url: dest || null,
-      mode: code ? "common" : ((d._row && d._row.tracking && d._row.tracking.mode) || "none"),
-      common_code: code || null,
-      utm: d._row && d._row.tracking ? d._row.tracking.utm !== false : true,
+      discount: String(d.tkDisc || "").trim().slice(0, 80) || null,
+      mode: tkMode,
+      common_code: tkMode === "common" ? code : null,
+      prefix: tkMode === "per_creator" ? tkPre || null : null,
+      auto_codes: tkMode === "per_creator" && !!tkPre,
+      utm: d.tkUtm !== false,
+      shopify_code: tkMode !== "none" && !!d.tkShop,
+      say_code: !!d.tracking && tkMode !== "none" && !!d.tkSay,
     },
   };
   if (!d._row) {
@@ -248,6 +353,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
   const save = (r) => (d.editId ? sb.from("campaigns").update(r).eq("id", d.editId) : sb.from("campaigns").insert(r));
   let { error } = await save(row);
   // purana app: database purana ho to naye columns chhod ke dobara (cover_url / brand_id / tracking / terms)
+  if (error && /cover_url/i.test(error.message || "")) ({ error } = await save((delete row.cover_url, row)));
   if (error && /brand_id/i.test(error.message || "")) ({ error } = await save((delete row.brand_id, row)));
   if (error && /tracking/i.test(error.message || "")) ({ error } = await save((delete row.tracking, row)));
   if (error && /contract_terms|video_brief/i.test(error.message || "")) ({ error } = await save((delete row.contract_terms, delete row.video_brief, row)));
@@ -256,6 +362,78 @@ export async function saveCampaign(d, { draft = false } = {}) {
   const { data: fresh } = await sb.from("campaigns").select("id,name").eq("name", row.name).order("created_at", { ascending: false }).limit(1);
   const made = Array.isArray(fresh) ? fresh[0] : fresh;
   return { id: made && made.id };
+}
+
+/** Campaign photo / attachment upload — purane form jaisa (storage bucket campaign-files, <org>/…) */
+export async function uploadCampaignFile(file, kind = "file") {
+  const sb = sbFor("admin");
+  const { data: u } = await sb.auth.getUser();
+  const uid = u && u.user && u.user.id;
+  const { data: me } = uid ? await sb.from("members").select("org_id").eq("id", uid).maybeSingle() : { data: null };
+  const org = me && me.org_id;
+  if (!org) throw new Error("Your workspace isn't set up yet — can't upload files.");
+  if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name} is over 10 MB.`);
+  const rnd = Math.random().toString(36).slice(2, 8);
+  let path;
+  if (kind === "cover") {
+    const ext = (String(file.type).split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "jpg";
+    path = `${org}/cover/${Date.now()}-${rnd}.${ext}`;
+  } else {
+    path = `${org}/${Date.now()}-${rnd}-${file.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`;
+  }
+  const up = await sb.storage.from("campaign-files").upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (up.error) throw new Error(`Couldn't upload ${file.name}: ${up.error.message}`);
+  const url = sb.storage.from("campaign-files").getPublicUrl(path).data.publicUrl;
+  return { name: file.name, url, type: file.type || "", size: file.size, path };
+}
+
+/** Brief se eligibility padho — purane eligFromBrief jaisa (sirf khali boxes bharta hai) */
+const ELIG_CITIES = ["Delhi", "New Delhi", "Delhi NCR", "Mumbai", "Navi Mumbai", "Thane", "Bengaluru", "Bangalore", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh", "Indore", "Gurugram", "Gurgaon", "Noida", "Ghaziabad", "Kochi", "Goa", "Surat", "Bhopal", "Nagpur", "Patna", "Kanpur", "Ludhiana", "Coimbatore", "Visakhapatnam", "Vadodara", "Dehradun", "Guwahati", "Bhubaneswar", "Ranchi", "Raipur", "Mysuru", "Mysore", "Udaipur", "Jodhpur", "Amritsar", "Varanasi", "Agra", "Nashik", "Mangaluru", "Mangalore", "Thiruvananthapuram", "Madurai", "Vijayawada", "Rajkot", "Srinagar", "Jammu", "Shimla", "Siliguri", "Aurangabad", "Kota", "Ajmer", "Meerut", "Allahabad", "Prayagraj"];
+export function eligFromBrief(text) {
+  const t = String(text || "");
+  const lo = t.toLowerCase();
+  const out = {};
+  const kn = (n, u) => {
+    n = parseFloat(String(n).replace(/,/g, ""));
+    u = String(u || "").toLowerCase();
+    return Math.round(n * (u === "k" ? 1e3 : u === "l" || u.startsWith("lakh") || u.startsWith("lac") ? 1e5 : u === "m" ? 1e6 : 1));
+  };
+  let m = lo.match(/(\d[\d,.]*)\s*(k|l|lakh|lac|m)?\s*(?:-|–|to)\s*(\d[\d,.]*)\s*(k|l|lakh|lac|m)?\s*\+?\s*followers?/);
+  if (m) {
+    out.min_followers = kn(m[1], m[2] || m[4]);
+    out.max_followers = kn(m[3], m[4]);
+  } else if ((m = lo.match(/(?:under|below|up to|upto|less than|max(?:imum)?)\s*(\d[\d,.]*)\s*(k|l|lakh|lac|m)?\s*followers?/))) out.max_followers = kn(m[1], m[2]);
+  else if ((m = lo.match(/(\d[\d,.]*)\s*(k|l|lakh|lac|m)?\s*\+?\s*(?:or more\s*)?followers?/))) out.min_followers = kn(m[1], m[2]);
+  if ((m = lo.match(/(?:age[d]?\s*(?:group)?\s*:?\s*)?(\d{2})\s*(?:-|–|to)\s*(\d{2})\s*(?:yrs?|years?|y\/o)?/)) && (/age|yrs?|years?|y\/o/.test(m[0]) || /age/.test(lo))) {
+    const a = +m[1];
+    const b = +m[2];
+    if (a >= 13 && b <= 90 && a < b) {
+      out.age_min = a;
+      out.age_max = b;
+    }
+  }
+  const fem = /\b(female|women|woman|girls?|ladies|moms?|mothers?|mommy|she\/her)\b/.test(lo);
+  const mal = /\b(male|men|man|boys?|dads?|fathers?|he\/him)\b/.test(lo);
+  if (fem && !mal) out.gender = "female";
+  else if (mal && !fem) out.gender = "male";
+  if (/\b(unmarried|single)\b/.test(lo)) out.marital = "single";
+  else if (/\b(married|couples?|newly ?weds?)\b/.test(lo)) out.marital = "married";
+  if ((m = lo.match(/\b(dog|cat|pet)\s*(?:parents?|owners?|lovers?|moms?|dads?)\b/))) {
+    out.pet = "yes";
+    if (m[1] !== "pet") out.pet_type = m[1];
+  }
+  const seg = [];
+  const re = /(?:based (?:in|out of)|located in|creators? (?:in|from)|influencers? (?:in|from)|from|cit(?:y|ies)\s*:|locations?\s*:)\s*([^.\n;]{2,80})/gi;
+  let r;
+  while ((r = re.exec(t))) seg.push(r[1]);
+  const cities = [];
+  seg.forEach((x) =>
+    ELIG_CITIES.forEach((c) => {
+      if (new RegExp("\\b" + c.replace(/ /g, "\\s+") + "\\b", "i").test(x) && !cities.includes(c)) cities.push(c);
+    })
+  );
+  if (cities.length) out.locations = cities.filter((c) => !(c === "Delhi" && (cities.includes("Delhi NCR") || cities.includes("New Delhi"))));
+  return out;
 }
 
 /** Brand CRM list (purana loadBrandCache → api.brand_list) */
@@ -277,9 +455,15 @@ export function Field({ label, k, d, set, placeholder, type = "text", options, a
       </label>
       {options ? (
         <select id={id} className="ga-input nc-input" value={d[k]} onChange={(e) => set(k, e.target.value)}>
-          {options.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
+          {options.map((o) =>
+            Array.isArray(o) ? (
+              <option key={o[0]} value={o[0]}>
+                {o[1]}
+              </option>
+            ) : (
+              <option key={o}>{o}</option>
+            )
+          )}
         </select>
       ) : area ? (
         <textarea id={id} className="ga-input nc-input nc-area" value={d[k]} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} />

@@ -14,6 +14,7 @@ export default function NewCampaignDeliverables() {
         <Field label="Stories" k="stories" d={d} set={set} type="number" />
         <Field label="Feed posts" k="posts" d={d} set={set} type="number" />
         <Field label="Carousels" k="carousels" d={d} set={set} type="number" />
+        <Field full label="Anything else each creator does (optional)" k="other" d={d} set={set} placeholder="e.g. 1 Google review with photos" />
       </div>
       <p className="nc-sec">Commercial value</p>
       <div className="nc-grid">
@@ -21,11 +22,13 @@ export default function NewCampaignDeliverables() {
         <Field label="Product value ₹" k="value" d={d} set={set} type="number" placeholder="e.g. 2000" />
         <Field label="Content due after delivery (days)" k="due" d={d} set={set} type="number" />
         <Field label="Usage / ad rights (months)" k="rights" d={d} set={set} type="number" />
+        {d.type !== "Paid" && <Field full label="Product link (optional)" k="productLink" d={d} set={set} type="url" placeholder="https://brand.example/product" />}
       </div>
       <div className="nd-sum">
         <p className="nd-sum__t">Creator-facing summary</p>
         <p className="nd-sum__v">
           {n("reels")} Reel(s) · {n("stories")} Story(ies) · {n("posts")} Post(s) · {n("carousels")} Carousel(s)
+          {d.other ? ` · ${d.other}` : ""}
         </p>
         <p className="nd-sum__n">Use explicit licensing scope and fee, especially for paid amplification and perpetual usage.</p>
       </div>

@@ -285,3 +285,31 @@ export function saveConsent(v) {
   ls.set(CONSENT_KEY, v);
   track("consent", { choice: v }, "consent");
 }
+
+/* =====================================================================
+ * Pets — purane profile.js jaisa (har pet: naam, type, birthday)
+ * ===================================================================== */
+export const PET_TYPES = [
+  ["dog", "Dog"],
+  ["cat", "Cat"],
+  ["bird", "Bird"],
+  ["fish", "Fish"],
+  ["rabbit", "Rabbit"],
+  ["hamster", "Hamster"],
+  ["small_mammal", "Small mammal"],
+  ["reptile", "Reptile"],
+  ["horse", "Horse"],
+  ["other", "Other"],
+];
+/** api.get_my_pets → { data, error } */
+export function getMyPets() {
+  return api("get_my_pets", {});
+}
+/** api.add_pet(p_name, p_type, p_birth_date) */
+export function addPet(name, type, birthDate) {
+  return profileCall("add_pet", { p_name: name, p_type: type, p_birth_date: birthDate || null });
+}
+/** api.delete_pet(p_pet_id) */
+export function deletePet(petId) {
+  return profileCall("delete_pet", { p_pet_id: petId });
+}

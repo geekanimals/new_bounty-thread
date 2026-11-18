@@ -378,7 +378,8 @@ const TERMK = { barter: "Barter", paid: "Paid", hybrid: "Hybrid", discuss: "Open
 export function termsOf(cp) {
   cp = cp || {};
   const was = new Set();
-  const m = /^open to:\s*(.+)$/i.exec(String(cp.notes || "").trim());
+  // pehli line "Open to: …" — uske neeche creator ke apne barter notes ho sakte hain
+  const m = /^open to:\s*(.+)$/i.exec(String(cp.notes || "").trim().split("\n")[0]);
   if (m) {
     m[1]
       .split(",")
@@ -391,6 +392,14 @@ export function termsOf(cp) {
   else if (cp.accepts_barter === false) was.add("paid");
   if (/open to discuss/i.test(cp.notes || "")) was.add("discuss");
   return [...was];
+}
+/** commercial_preference.notes se creator ke apne notes ("Open to: …" line ke bina) */
+export function barterNotesOf(cp) {
+  return String((cp && cp.notes) || "")
+    .split("\n")
+    .filter((l) => !/^open to:/i.test(l.trim()))
+    .join("\n")
+    .trim();
 }
 /** ["barter", …] → commercial_preference patch */
 export function termsPatch(on) {

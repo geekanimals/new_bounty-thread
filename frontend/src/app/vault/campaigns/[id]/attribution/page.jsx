@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
@@ -28,6 +29,7 @@ export default function CampaignAttribution() {
   const [toast, show] = useToast();
   const { data, error, loading, reload } = useRpc("admin", "api.track_report", { p_campaign: id }, { skip: !id || id === "sample" });
   const camp = useCampaign(id);
+  const [missing, setMissing] = useState(false);
   const [sort, setSort] = useState("clicks");
   const [q, setQ] = useState("");
   const [edit, setEdit] = useState(false);
@@ -61,9 +63,10 @@ export default function CampaignAttribution() {
   const nsOrders = notSplit.reduce((a, s) => a + (+s.orders || 0), 0);
   const nsSales = notSplit.reduce((a, s) => a + (+s.amount || 0), 0);
 
+  const noCode = mode === "none" ? [] : L.filter((x) => !x.code);
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return L.filter((x) => !t || [x.handle, x.name, x.code, x.slug, x.stage].join(" ").toLowerCase().includes(t)).sort((a, b) =>
+    return L.filter((x) => !missing || !x.code).filter((x) => !t || [x.handle, x.name, x.code, x.slug, x.stage].join(" ").toLowerCase().includes(t)).sort((a, b) =>
       sort === "name"
         ? String(a.handle || "").localeCompare(String(b.handle || ""))
         : sort === "orders"
@@ -74,7 +77,7 @@ export default function CampaignAttribution() {
               ? new Date(b.last_click || 0) - new Date(a.last_click || 0)
               : (+b.clicks || 0) - (+a.clicks || 0)
     );
-  }, [L, q, sort]);
+  }, [L, q, sort, missing]);
 
   const copy = async (x) => {
     await copyText(linkOf(x.slug));
@@ -93,6 +96,32 @@ export default function CampaignAttribution() {
     if (v && L.some((l) => l.link_id !== x.link_id && l.own_code === v) && !window.confirm(`${v} is already another creator's code. Use it for both? (orders on it then can't be split by creator)`)) return;
     const { error: e } = await rpc("admin", "api.track_link_set", { p_link: x.link_id, p_code: v || null });
     show(e ? errText(e) : v ? `Code saved ✓ ${v}` : "Code removed");
+    if (!e) reload(true);
+  };
+
+  // purane trk features: har creator ka alag shop link, naya link, code copy, galat sale hatao
+  const setDest = async (x, v0) => {
+    const v = String(v0 || "").trim();
+    if ((x.dest_url || "") === v) return;
+    if (v && !/^https?:\/\/\S+$/i.test(v)) return show("The link must start with https://");
+    const { error: e } = await rpc("admin", "api.track_link_set_dest", { p_link: x.link_id, p_url: v || null });
+    show(e ? errText(e) : v ? `✓ @${x.handle || ""}'s link opens this now` : "Uses the campaign link again");
+    if (!e) reload(true);
+  };
+  const regen = async (x) => {
+    if (!window.confirm("Make a new link for this creator? The old link stops working — send them the new one.")) return;
+    const { data: r, error: e } = await rpc("admin", "api.track_link_regen", { p_link: x.link_id });
+    show(e ? errText(e) : `🔄 New link: ${linkOf(r?.slug || x.slug).replace(/^https?:\/\//, "")}`);
+    if (!e) reload(true);
+  };
+  const copyCode = async (x) => {
+    await copyText(x.code);
+    show(`Copied ${x.code}`);
+  };
+  const delSale = async (sid) => {
+    if (!window.confirm("Remove this entry?")) return;
+    const { error: e } = await rpc("admin", "api.track_sale_delete", { p_sale: sid });
+    show(e ? errText(e) : "Removed");
     if (!e) reload(true);
   };
 
@@ -152,17 +181,27 @@ export default function CampaignAttribution() {
             {mode === "common" && cfg.common_code ? ` (${cfg.common_code})` : ""}
             {cfg.discount ? ` · ${cfg.discount}` : ""} · {cfg.utm === false ? "UTM off" : "UTM on (utm_source=geek)"}
             {cfg.shopify_code ? " · Shopify code auto-applied" : ""} ·{" "}
-            {!edit && d.can_edit && (
-              <button
-                type="button"
-                className="at-change"
-                onClick={() => {
-                  setDraft(dest);
-                  setEdit(true);
-                }}
-              >
-                ✏️ Change
-              </button>
+            {d.can_edit && (
+              <Link href={`/vault/campaigns/new/eligibility?edit=${camp.c?.id || id}#tracking`} className="at-change">
+                ✏️ Change tracking settings
+              </Link>
+            )}
+            {cfg.prefix ? ` · auto codes: ${cfg.prefix}+handle` : ""}
+            {cfg.say_code && (
+              <span className="at-say">
+                {" "}
+                · 🎟️ Said in the video —{" "}
+                {noCode.length ? (
+                  <>
+                    <b>{noCode.length} without a code</b>{" "}
+                    <button type="button" className="at-miss" onClick={() => setMissing(!missing)}>
+                      {missing ? "Show everyone" : "Show who has no code"}
+                    </button>
+                  </>
+                ) : (
+                  <b>everyone has a code ✓</b>
+                )}
+              </span>
             )}
           </Note>
         )}
@@ -197,6 +236,7 @@ export default function CampaignAttribution() {
               <tr>
                 <th>Creator</th>
                 <th>Geek link</th>
+                <th>Opens</th>
                 <th>Code</th>
                 <th>Clicks</th>
                 <th>Unique</th>
@@ -209,7 +249,7 @@ export default function CampaignAttribution() {
             </thead>
             <tbody>
               <TableState
-                cols={10}
+                cols={11}
                 loading={loading && !data}
                 error={!data && error}
                 onRetry={reload}
@@ -225,16 +265,46 @@ export default function CampaignAttribution() {
                     <button type="button" className="c2-link" onClick={() => copy(x)}>
                       Copy
                     </button>
+                    {d.can_edit && (
+                      <button type="button" className="at-regen" onClick={() => regen(x)} title="Make a new link — the old one stops working">
+                        🔄
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    {d.can_edit ? (
+                      <input
+                        key={x.link_id + (x.dest_url || "")}
+                        className="at-urlin"
+                        defaultValue={x.dest_url || ""}
+                        placeholder={dest ? "Campaign link (default)" : "https://brand.com/…"}
+                        spellCheck={false}
+                        onBlur={(e) => setDest(x, e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                        aria-label={`Where @${x.handle || ""}'s link opens`}
+                      />
+                    ) : x.dest_url ? (
+                      <a className="c2-link" href={x.dest_url} target="_blank" rel="noopener noreferrer">
+                        {String(x.dest_url).replace(/^https?:\/\//, "").slice(0, 40)}
+                      </a>
+                    ) : (
+                      <span className="at-mute">campaign link</span>
+                    )}
                   </td>
                   <td>
                     {mode === "none" && !x.own_code ? (
                       "—"
                     ) : d.can_edit ? (
-                      <button type="button" className="at-code" onClick={() => setCode(x)} title="Change code">
+                      <button type="button" className={`at-code ${x.code ? "" : "at-nocode"}`} onClick={() => setCode(x)} title="Change code">
                         {x.code || "add code"}
                       </button>
                     ) : (
                       x.code || "no code yet"
+                    )}
+                    {x.code && (
+                      <button type="button" className="at-cc" onClick={() => copyCode(x)} title="Copy code">
+                        ⧉
+                      </button>
                     )}
                   </td>
                   <td>{num(x.clicks)}</td>
@@ -249,12 +319,68 @@ export default function CampaignAttribution() {
             </tbody>
           </table>
         </div>
+        {(d.sales || []).length > 0 && (
+          <details className="at-sales">
+            <summary>
+              🧾 Orders &amp; sales entered ({d.sales.length}){nsOrders ? ` · ${num(nsOrders)} orders on a shared code (not split by creator)` : ""}
+            </summary>
+            <div className="c2-tw">
+              <table className="c2-t">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Creator</th>
+                    <th>Code</th>
+                    <th>Order</th>
+                    <th>Orders</th>
+                    <th>Amount</th>
+                    <th>From</th>
+                    <th aria-label="Remove" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.sales.map((sl, i) => (
+                    <tr key={sl.sale_id || i}>
+                      <td>{sl.ordered_on || String(sl.created_at || "").slice(0, 10)}</td>
+                      <td>{sl.handle ? `@${sl.handle}` : <span className="at-mute">not split</span>}</td>
+                      <td>{sl.code || "—"}</td>
+                      <td>{sl.order_ref || "—"}</td>
+                      <td>{num(sl.orders)}</td>
+                      <td>{inr(sl.amount)}</td>
+                      <td className="at-mute">
+                        {sl.source === "csv" ? "Report" : "Typed"}
+                        {sl.by ? ` · ${sl.by}` : ""}
+                      </td>
+                      <td>
+                        {d.can_add_sales && sl.sale_id && (
+                          <button type="button" className="at-del" onClick={() => delSale(sl.sale_id)} title="Remove">
+                            ✕
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
       </Panel>
       {modal && <TrackModal kind={modal} campaign={id} data={d} onClose={() => setModal(null)} onDone={(m) => (setModal(null), show(m), reload(true))} />}
       {toast}
 
       <style>{`
-        .at-change { padding: 0; border: 0; background: none; font-size: 12px; color: inherit; }
+        .at-change { padding: 0; border: 0; background: none; font-size: 12px; font-weight: 800; color: inherit; text-decoration: underline; }
+        .at-miss { margin-left: 4px; padding: 2px 8px; border-radius: 7px; border: 1px solid #f0cf94; background: #fff; font-size: 11.5px; font-weight: 800; color: #986016; cursor: pointer; }
+        .at-regen, .at-cc, .at-del { margin-left: 6px; padding: 0 4px; border: 0; background: none; font-size: 13px; color: var(--ad-muted); cursor: pointer; }
+        .at-regen:hover, .at-cc:hover { color: var(--ad-primary); }
+        .at-del:hover { color: #dc2626; }
+        .at-urlin { width: 170px; height: 30px; padding: 0 8px; border: 1px solid var(--ad-line); border-radius: 8px; font-size: 12px; color: var(--ad-ink); background: #fff; }
+        .at-urlin:focus { outline: none; border-color: var(--ad-primary); }
+        .at-mute { color: var(--ad-muted); }
+        .at-nocode { color: #b45309 !important; font-weight: 800; }
+        .at-sales { margin-top: 18px; font-size: 13px; }
+        .at-sales summary { cursor: pointer; font-weight: 800; color: var(--ad-ink); }
         .at-change:hover { text-decoration: underline; }
         .at-edit { display: inline-flex; gap: 6px; vertical-align: middle; }
         .at-edit input { height: 24px; padding: 0 8px; border: 1px solid #f0cf94; border-radius: 7px; font-size: 12px; background: #fff; color: var(--ad-ink); outline: none; }

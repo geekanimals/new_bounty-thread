@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
-import { useCreator, saveSection, reloadProfile, ackTerms, termsOf, termsPatch, ratesOf, saveRate } from "@/services/creator";
+import { useCreator, saveSection, reloadProfile, ackTerms, termsOf, termsPatch, ratesOf, saveRate, barterNotesOf } from "@/services/creator";
 
 const RATE_TYPE = { reel: "IG Reel", story: "IG Story", post: "IG Static Post" };
 import { COLLAB_TYPES } from "@/components/creator/data";
@@ -19,6 +19,8 @@ export default function Terms() {
   const [busy, setBusy] = useState(false);
   const [collab, setCollab] = useState([]);
   const [rates, setRates] = useState({ reel: "", story: "", post: "", product: "" });
+  // purane "Barter preferences" ke baaki fields (commercial_preference)
+  const [bp, setBp] = useState({ scope: "", cats: "", excl: "", travel: false, notes: "" });
   const [tick, setTick] = useState(false);
   const [toast, setToast] = useState("");
   const [err, setErr] = useState("");
@@ -31,6 +33,7 @@ export default function Terms() {
     const r = ratesOf(c.profile);
     setCollab(termsOf(cp));
     setRates({ reel: r["IG Reel"] ? String(r["IG Reel"]) : "", story: r["IG Story"] ? String(r["IG Story"]) : "", post: r["IG Static Post"] ? String(r["IG Static Post"]) : "", product: cp.min_product_value != null ? String(Math.round(cp.min_product_value)) : "" });
+    setBp({ scope: cp.barter_preference || "", cats: (cp.preferred_categories || []).join(", "), excl: (cp.excluded_categories || []).join(", "), travel: !!cp.travel_ready, notes: barterNotesOf(cp) });
     if (c.meta?.bx_terms_ack) setTick(true);
   }, [c]);
 
@@ -49,6 +52,14 @@ export default function Terms() {
       const patch = { ...termsPatch(collab) };
       const min = String(rates.product || "").replace(/[^\d.]/g, "");
       patch.min_product_value = min === "" ? null : Number(min);
+      const list = (v) => String(v || "").split(",").map((x) => x.trim()).filter(Boolean);
+      if (collab.includes("barter") || collab.includes("hybrid")) {
+        patch.barter_preference = bp.scope || null;
+        patch.preferred_categories = list(bp.cats);
+        patch.excluded_categories = list(bp.excl);
+        patch.travel_ready = !!bp.travel;
+        if (bp.notes.trim()) patch.notes = `${patch.notes}\n${bp.notes.trim()}`;
+      }
       await saveSection("commercial_preference", patch);
       const old = ratesOf(c.profile);
       for (const k of ["reel", "story", "post"]) {
@@ -118,6 +129,35 @@ export default function Terms() {
         </label>
         <input id="tr-prod" className="pf-input tr-prod" placeholder="Any" inputMode="numeric" value={rates.product} onChange={(e) => setRates({ ...rates, product: e.target.value.replace(/[^\d]/g, "").slice(0, 7) })} />
 
+        {(collab.includes("barter") || collab.includes("hybrid")) && (
+          <div className="tr-bp">
+            <p className="tr-label">Barter preferences</p>
+            <label className="tr-sub" htmlFor="tr-scope">
+              Scope
+            </label>
+            <select id="tr-scope" className="pf-input" value={bp.scope} onChange={(e) => setBp({ ...bp, scope: e.target.value })}>
+              <option value="">Any relevant brand</option>
+              <option value="top_established_only">Top / established brands only</option>
+              <option value="selected_brands_only">Selected brands only</option>
+            </select>
+            <label className="tr-sub" htmlFor="tr-cats">
+              Preferred categories (comma separated)
+            </label>
+            <input id="tr-cats" className="pf-input" value={bp.cats} onChange={(e) => setBp({ ...bp, cats: e.target.value })} placeholder="e.g. Beauty, Food" />
+            <label className="tr-sub" htmlFor="tr-excl">
+              Categories not accepted (comma separated)
+            </label>
+            <input id="tr-excl" className="pf-input" value={bp.excl} onChange={(e) => setBp({ ...bp, excl: e.target.value })} placeholder="e.g. Alcohol, Gambling" />
+            <label className="tr-chk">
+              <input type="checkbox" checked={bp.travel} onChange={(e) => setBp({ ...bp, travel: e.target.checked })} /> Accept travel / visit barters
+            </label>
+            <label className="tr-sub" htmlFor="tr-notes">
+              Notes / conditions
+            </label>
+            <textarea id="tr-notes" className="pf-input tr-notes" rows={3} value={bp.notes} onChange={(e) => setBp({ ...bp, notes: e.target.value })} placeholder="Anything brands should know before sending a product" />
+          </div>
+        )}
+
         <label className="tr-tick">
           <input type="checkbox" checked={tick} onChange={(e) => setTick(e.target.checked)} />
           <i aria-hidden="true">{tick && <Check size={13} />}</i>
@@ -137,6 +177,10 @@ export default function Terms() {
       )}
 
       <style>{`
+        .tr-bp { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+        .tr-sub { margin-top: 8px; font-size: 12.5px; font-weight: 600; color: #6b5a3a; }
+        .tr-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; color: #1d1a14; }
+        .tr-notes { height: auto; min-height: 80px; padding: 10px 14px; resize: vertical; }
         /* Figma: DM Sans form card — header line, safed inputs, "Private" chip */
         .pf-back { display: inline-block; margin: 4px 0 26px; font-size: 14px; font-weight: 700; color: var(--bx-ink); }
         .pf-back:hover { color: var(--bx-red); }
