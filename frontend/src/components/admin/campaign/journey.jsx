@@ -5,6 +5,7 @@
  * Har creator ki row, uski next step, kiski baari (turn) aur action button — purane bpNext / ucStepMsg jaisa.
  */
 import { useState } from "react";
+import { uploadMedia } from "@/lib/media";
 import Link from "next/link";
 import { rpc, invoke, errText, sbFor } from "@/lib/supabase";
 import { BP_FAIL, effIndex, stepLabel, inviteStepRank, INVITE_STEPS, fmtNum, fmtDate, maskPhone, initials } from "@/components/admin/campaign/live";
@@ -513,9 +514,13 @@ export async function uploadInsightsProof(file) {
   if (!me || !me.org_id) throw new Error("Your account has no workspace for uploads — type the numbers instead.");
   const ext = (String(file.type).split("/")[1] || "png").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "png";
   const path = `${me.org_id}/proof/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const up = await sb.storage.from("campaign-files").upload(path, file, { contentType: file.type || "image/png", upsert: false });
-  if (up.error) throw new Error("Couldn't upload the screenshot: " + up.error.message);
-  return sb.storage.from("campaign-files").getPublicUrl(path).data.publicUrl;
+  // compress → R2 (purana campaign-files bucket sirf fallback)
+  try {
+    const up = await uploadMedia("admin", "campaign-files", file, { scope: "proof", fallback: { bucket: "campaign-files", path } });
+    return up.url;
+  } catch (e) {
+    throw new Error("Couldn't upload the screenshot: " + e.message);
+  }
 }
 
 /**

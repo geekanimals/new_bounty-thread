@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { uploadMedia } from "@/lib/media";
 import { useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
@@ -80,9 +81,8 @@ export default function ReviewScreens() {
   const upOne = async (file, c, kind) => {
     const ext = (file.name.match(/\.[^.]+$/) || [".jpg"])[0].toLowerCase();
     const path = `a/${data.campaign_id}/${c.key}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}${ext}`;
-    const { error: e } = await sbFor("admin").storage.from("review-proofs").upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
-    if (e) throw new Error(e.message || "upload failed");
-    return { participation_id: c.participation_id || null, invite_id: c.invite_id || null, kind, path };
+    const up = await uploadMedia("admin", "review-proofs", file, { scope: data.campaign_id, fallback: { bucket: "review-proofs", path } });
+    return { participation_id: c.participation_id || null, invite_id: c.invite_id || null, kind, path: up.path };
   };
   const uploadBatch = async () => {
     const go = batch.filter((b) => b.key && b.kind);

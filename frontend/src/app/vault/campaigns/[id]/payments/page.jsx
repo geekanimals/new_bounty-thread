@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { privateLink } from "@/lib/media";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
@@ -136,9 +137,11 @@ export default function CampaignPayments() {
     after(msg, e);
   };
   const openProof = async (path) => {
-    const { data: u, error: e } = await sbFor("admin").storage.from("payment-proofs").createSignedUrl(path, 600);
-    if (e || !u) return show("Couldn't open the screenshot: " + errText(e));
-    window.open(u.signedUrl, "_blank", "noopener");
+    try {
+      window.open(await privateLink("admin", path), "_blank", "noopener");
+    } catch (er) {
+      show("Couldn't open the screenshot: " + errText(er));
+    }
   };
   const rowDetail = (r) => {
     const p = r.payment || {};

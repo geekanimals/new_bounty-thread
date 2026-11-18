@@ -5,6 +5,7 @@
  * save_payment_details (UPI / bank) · payment-proofs bucket (Geek team ka screenshot).
  */
 import { useRpc } from "@/lib/supabase";
+import { privateLink } from "@/lib/media";
 import { DOOR, sb, api } from "./core";
 
 /** Har participation ka flow { [participation_id]: { paid, needs_product, payment… } } — { data, loading, error, reload } */
@@ -26,6 +27,15 @@ export const savePaymentDetails = ({ participation, method, name, accountNo, ifs
 
 /** Payment screenshot ke 10 min wale links (dekhna + download) → { url, dl, pdf } | null */
 export async function paymentProofLinks(path) {
+  if (String(path || "").startsWith("private/")) {
+    // R2 (private) — 10 min links from the media-upload function
+    try {
+      const [url, dl] = await Promise.all([privateLink(DOOR, path), privateLink(DOOR, path, "payment-proofs", { download: true })]);
+      return { url, dl: dl || url, pdf: /\.pdf$/i.test(path) };
+    } catch {
+      return null;
+    }
+  }
   const bucket = sb().storage.from("payment-proofs");
   const [a, d] = await Promise.all([bucket.createSignedUrl(path, 600), bucket.createSignedUrl(path, 600, { download: true })]);
   if (a.error || !a.data) return null;

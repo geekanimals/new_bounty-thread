@@ -6,6 +6,7 @@
  * Sab calls door "brand" se, purane args ke saath.
  */
 import { useEffect, useState, useCallback } from "react";
+import { uploadMedia } from "@/lib/media";
 import { useRpc } from "@/lib/supabase";
 import { DOOR, api, sb } from "./core";
 import { loadAnalytics, loadTopPosts, fetchPostThumbs } from "./dashboard";
@@ -105,10 +106,13 @@ export async function sendCampaignRequest(row, files = [], onStep) {
       if (onStep) onStep(`Uploading ${file.name}…`);
       const safe = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
       const path = `${org}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
-      const up = await sb().storage.from("campaign-files").upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
-      if (up.error) return { data: null, error: { message: `Couldn't upload ${file.name}: ${up.error.message}` } };
-      const { data: pub } = sb().storage.from("campaign-files").getPublicUrl(path);
-      attachments.push({ name: file.name, url: pub.publicUrl, type: file.type || "", size: file.size, path });
+      let up;
+      try {
+        up = await uploadMedia(DOOR, "campaign-files", file, { scope: "brand-request", fallback: { bucket: "campaign-files", path } });
+      } catch (e) {
+        return { data: null, error: { message: `Couldn't upload ${file.name}: ${e.message}` } };
+      }
+      attachments.push({ name: file.name, url: up.url, type: up.type || file.type || "", size: up.size, path: up.path });
     }
   }
   const brands = (b.portal && b.portal.brands) || [];

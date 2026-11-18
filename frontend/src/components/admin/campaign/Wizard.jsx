@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { uploadMedia } from "@/lib/media";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
@@ -403,7 +404,8 @@ export async function uploadCampaignFile(file, kind = "file") {
   const { data: me } = uid ? await sb.from("members").select("org_id").eq("id", uid).maybeSingle() : { data: null };
   const org = me && me.org_id;
   if (!org) throw new Error("Your workspace isn't set up yet — can't upload files.");
-  if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name} is over 10 MB.`);
+  // photos are compressed before upload — only other files need the size limit
+  if (!/^image\//.test(file.type || "") && file.size > 20 * 1024 * 1024) throw new Error(`${file.name} is over 20 MB.`);
   const rnd = Math.random().toString(36).slice(2, 8);
   let path;
   if (kind === "cover") {
@@ -412,10 +414,13 @@ export async function uploadCampaignFile(file, kind = "file") {
   } else {
     path = `${org}/${Date.now()}-${rnd}-${file.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`;
   }
-  const up = await sb.storage.from("campaign-files").upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
-  if (up.error) throw new Error(`Couldn't upload ${file.name}: ${up.error.message}`);
-  const url = sb.storage.from("campaign-files").getPublicUrl(path).data.publicUrl;
-  return { name: file.name, url, type: file.type || "", size: file.size, path };
+  let up;
+  try {
+    up = await uploadMedia("admin", "campaign-files", file, { scope: kind === "cover" ? "cover" : "files", fallback: { bucket: "campaign-files", path } });
+  } catch (e) {
+    throw new Error(`Couldn't upload ${file.name}: ${e.message}`);
+  }
+  return { name: file.name, url: up.url, type: up.type || file.type || "", size: up.size, path: up.path, ...(up.key ? { r2: true } : {}) };
 }
 
 /** Brief se eligibility padho — purane eligFromBrief jaisa (sirf khali boxes bharta hai) */

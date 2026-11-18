@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { uploadMedia, privateLink } from "@/lib/media";
 import { rpc, sbFor, errText } from "@/lib/supabase";
 import { inr, when } from "@/components/admin/campaign2/kit";
 
@@ -114,9 +115,11 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
     onDone(msg);
   };
   const openProof = async (path) => {
-    const { data, error } = await sbFor("admin").storage.from("payment-proofs").createSignedUrl(path, 600);
-    if (error || !data) return setErr("Couldn't open the screenshot: " + errText(error));
-    window.open(data.signedUrl, "_blank", "noopener");
+    try {
+      window.open(await privateLink("admin", path), "_blank", "noopener");
+    } catch (er) {
+      setErr("Couldn't open the screenshot: " + errText(er));
+    }
   };
   const copy = async (v) => {
     try {
@@ -133,9 +136,13 @@ export default function PayModal({ modal, days, connected, onClose, onDone }) {
     if (file.size > 10 * 1024 * 1024) throw new Error("The screenshot must be under 10 MB.");
     const ext = (String(file.name || "").match(/\.([a-z0-9]{2,5})$/i) || [, "png"])[1].toLowerCase();
     const path = `${r.participation_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await sbFor("admin").storage.from("payment-proofs").upload(path, file, { contentType: file.type || "image/png", upsert: false });
-    if (error) throw new Error("Couldn't upload the screenshot: " + (error.message || error));
-    return path;
+    // R2 (private) — compress ke saath; R2 na chale to purana payment-proofs bucket
+    try {
+      const up = await uploadMedia("admin", "payment-proofs", file, { scope: r.participation_id, fallback: { bucket: "payment-proofs", path, private: true } });
+      return up.path;
+    } catch (er) {
+      throw new Error("Couldn't upload the screenshot: " + (er.message || er));
+    }
   };
 
   const save = async (e) => {

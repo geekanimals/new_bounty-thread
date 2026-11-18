@@ -6,7 +6,8 @@
  * Chuna hua Page / ad account localStorage mein (purane geek_fb_page / geek_fb_act).
  */
 import { useEffect, useState } from "react";
-import { fn, sb } from "./core";
+import { uploadMedia } from "@/lib/media";
+import { fn, sb, DOOR } from "./core";
 import { startFacebookLink, refreshFacebook } from "./account";
 import { useBrand, getBrand, reloadPortal, canAct } from "./auth";
 
@@ -115,13 +116,15 @@ export const fbDeleteComment = (pageId, commentId) => fbCall({ action: "delete_c
 export async function fbPublish({ pageId, message, link, file, imageUrl, at }) {
   let img = String(imageUrl || "").trim();
   if (file) {
-    if (file.size > 8 * 1024 * 1024) return { data: null, error: { message: "The photo must be under 8 MB." } };
+    if (!/^image\//.test(file.type || "") && file.size > 8 * 1024 * 1024) return { data: null, error: { message: "The photo must be under 8 MB." } };
     const org = (getBrand().member || {}).org_id;
     if (!org) return { data: null, error: { message: "Your workspace isn't ready to upload files." } };
     const path = org + "/facebook/" + Date.now() + "-" + file.name.replace(/[^\w.\-]+/g, "_").slice(-60);
-    const up = await sb().storage.from("campaign-files").upload(path, file, { contentType: file.type, upsert: false });
-    if (up.error) return { data: null, error: { message: "Couldn't upload the photo: " + up.error.message } };
-    img = sb().storage.from("campaign-files").getPublicUrl(path).data.publicUrl;
+    try {
+      img = (await uploadMedia(DOOR, "post-media", file, { scope: "facebook", fallback: { bucket: "campaign-files", path } })).url;
+    } catch (e) {
+      return { data: null, error: { message: "Couldn't upload the photo: " + e.message } };
+    }
   }
   const sec = at ? Math.floor(at.getTime() / 1000) : 0;
   return fbCall({ action: "publish", page_id: pageId, message: message || "", link: String(link || "").trim(), image_url: img, schedule_at: sec || undefined });
