@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import MsgLinksReport from "@/components/admin/msg/MsgLinksReport";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
 import { SettingsTabs, Panel, Table, useToast, fmtDateTime, emptyState } from "@/components/admin/settings/kit";
@@ -97,6 +98,7 @@ export default function SettingsLinks() {
 
       {open && <LinkStats link={open} base={base} onClose={() => setOpen(null)} say={say} onChange={list.reload} />}
       {toast}
+      <MsgLinksReport />
       <style>{`
         .sl-form { display: flex; gap: 8px; margin-top: 18px; }
         .sl-form .ga-input { width: 270px; height: 43px; }

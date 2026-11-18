@@ -4,6 +4,7 @@ import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { Stats } from "@/components/admin/ui";
 import MsgHead from "@/components/admin/msg/MsgHead";
+import WaUpdateCard from "@/components/admin/msg/WaUpdateCard";
 import PTable from "@/components/admin/brand/PTable";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { fmtWhen, fmtDateTime, useToast } from "@/components/admin/brand/util";
@@ -45,6 +46,7 @@ export default function MessagingDelivery() {
   return (
     <AdminShell>
       <MsgHead />
+      <WaUpdateCard />
       <Stats
         items={[
           { value: loading ? "—" : recent.length, label: "All messages", note: `Latest ${recent.length}` },

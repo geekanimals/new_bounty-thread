@@ -65,14 +65,28 @@ function mergeRepeats(all, pv) {
     a._merged = true;
   });
 }
-// sheet aur Geek OS mein alag details → Figma mein chunne ka UI nahi, isliye Geek OS wala rakho (sheet ka value nahi bhejte)
+// sheet aur Geek OS mein alag details → purane jaisa har row mein chuno: "Keep Geek OS" (default) ya "Use the sheet" (bulk_apply_choice)
 const DIFF = [["addr", ["address", "city", "state", "pincode"]], ["ship", ["courier", "tracking"]], ["video", ["video_link"]]];
+const DIFF_LABEL = { addr: "🏠 Address", ship: "🚚 Courier & tracking", video: "🎬 Video link" };
+/** is row mein kaun se groups Geek OS se alag hain → [{ g, site, sheet }] */
+function diffsOf(d, ex, kind) {
+  const v = (ex && ex.vals) || {};
+  const out = [];
+  DIFF.forEach(([g, ks]) => {
+    if (kind === "paid" && g !== "video") return;
+    const site = (k) => (k === "video_link" ? v.video : v[k]);
+    if (ks.some((k) => String(d[k] || "").trim() && site(k) && norm(d[k]) !== norm(site(k)) && !(k === "pincode" && norm(site(k)) && norm(d.address).includes(norm(site(k))))))
+      out.push({ g, site: ks.map(site).filter(Boolean).join(" · "), sheet: ks.map((k) => d[k]).filter(Boolean).join(" · ") });
+  });
+  return out;
+}
 const norm = (v) => String(v || "").toLowerCase().replace(/https?:\/\/(www\.)?/, "").replace(/[^a-z0-9]+/g, "");
-function keepSite(d, ex, kind) {
+function keepSite(d, ex, kind, pick = {}) {
   const v = (ex && ex.vals) || {};
   let n = 0;
   DIFF.forEach(([g, ks]) => {
     if (kind === "paid" && g !== "video") return;
+    if (pick[g] === "sheet") return;
     const site = (k) => (k === "video_link" ? v.video : v[k]);
     if (ks.some((k) => String(d[k] || "").trim() && site(k) && norm(d[k]) !== norm(site(k)) && !(k === "pincode" && norm(site(k)) && norm(d.address).includes(norm(site(k)))))) {
       ks.forEach((k) => (d[k] = ""));
@@ -92,6 +106,7 @@ export default function BulkUploadCheck() {
   const [none, setNone] = useState(false);
   const [pv, setPv] = useState(null); // bulk_preview (array) ya { error }
   const [ex, setEx] = useState([]); // bulk_existing
+  const [picks, setPicks] = useState({}); // { rowIndex: { addr: "sheet" | "site" } }
   const [msg, setMsg] = useState("");
   const [all, setAll] = useState("");
   const [busy, setBusy] = useState(false);
@@ -205,7 +220,7 @@ export default function BulkUploadCheck() {
     if (p.already) return { main: `Already in${p.live_stage ? ` · ${String(p.live_stage).replace(/_/g, " ")}` : ""} — nothing new in this row · skipped` };
     const main = p.on_platform ? (p.stage ? `Already in · ${String(p.stage).replace(/_/g, " ")} → ${stLabel(st)}` : `On Geek OS${p.who ? ` · ${p.who}` : ""} — added now → ${stLabel(st)}`) : `New — joins on ${stLabel(st)} after sign-up`;
     const m0 = stMsg(st);
-    const m = m0 === "no message" && !p.on_platform && stRank(st) >= 4 ? "Invite (geek_campaign_access)" : m0;
+    const m = m0 === "no message" && !p.on_platform && stRank(st) >= 4 ? "Campaign invite" : m0;
     const via = [p.phone ? "WhatsApp" : null, p.email ? "email" : null].filter(Boolean).join(" + ");
     const warn = [p.phone_bad && "number looks wrong", p.email_bad && "email looks wrong"].filter(Boolean).join(" · ");
     const ig = p.ig && (p.ig.followers || p.ig.name) ? `📸 ${p.ig.name ? p.ig.name + " · " : ""}${p.ig.followers ? Number(p.ig.followers).toLocaleString("en-IN") + " followers" : ""}` : p.handle && p.ig_missing ? `📸 @${p.handle} — Instagram didn't return this profile; check the handle` : "";
@@ -217,7 +232,18 @@ export default function BulkUploadCheck() {
     if (!ready || busy) return;
     const rows0 = up.rows.map((r) => rowData(up, r, kind));
     let kept = 0;
-    rows0.forEach((d, i) => (kept += keepSite(d, ex[i], kind)));
+    // "Use the sheet" chune groups — upload ke baad Geek OS par likhe jaate hain (purana bulk_apply_choice)
+    const useSheet = [];
+    rows0.forEach((d, i) => {
+      const pk = picks[i] || {};
+      diffsOf(d, ex[i], kind).forEach(({ g }) => {
+        if (pk[g] !== "sheet") return;
+        const o = { group: g, phone: d.phone, email: d.email, handle: d.handle };
+        (DIFF.find((x) => x[0] === g) || [, []])[1].forEach((k) => (o[k] = d[k]));
+        useSheet.push(o);
+      });
+    });
+    rows0.forEach((d, i) => (kept += keepSite(d, ex[i], kind, picks[i])));
     mergeRepeats(rows0, P);
     const why = up.rows.map((r, i) => block[i] || (P[i] && P[i].already && !rows0[i]._merged ? "Already in this campaign — nothing new in the row" : null));
     up.rows.forEach((r, i) => {
@@ -231,6 +257,13 @@ export default function BulkUploadCheck() {
         return { row: sheetLine(up, i), name: x.name, handle: x.handle, phone: x.phone, email: x.email, status: r.status || "registered", reason: why[i] };
       })
       .filter(Boolean);
+    if (!rows.length && useSheet.length) {
+      setBusy(true);
+      const ap = await rpc("admin", "api.bulk_apply_choice", { p_campaign: id, p_rows: useSheet });
+      setBusy(false);
+      if (ap.error) return setErr(errText(ap.error));
+      return show(`✓ Updated ${(ap.data && ap.data.applied) || 0} detail(s) from the sheet`);
+    }
     if (!rows.length) return show("Nothing new to upload — fix the rows above first");
     setBusy(true);
     setErr("");
@@ -257,6 +290,10 @@ export default function BulkUploadCheck() {
     if (codes.length) {
       const cr = await rpc("admin", "api.track_codes_bulk", { p_campaign: id, p_rows: codes, p_overwrite: true });
       notes.push(cr.error ? `🎟️ Codes not saved: ${errText(cr.error)}` : `🎟️ ${(cr.data && cr.data.set) || 0} coupon code${((cr.data && cr.data.set) || 0) !== 1 ? "s" : ""} saved${cr.data && cr.data.skipped ? ` · ${cr.data.skipped} not matched` : ""}`);
+    }
+    if (useSheet.length) {
+      const ap = await rpc("admin", "api.bulk_apply_choice", { p_campaign: id, p_rows: useSheet });
+      notes.push(ap.error ? `🔀 Sheet details not applied: ${errText(ap.error)}` : `🔀 ${(ap.data && ap.data.applied) || 0} detail(s) taken from the sheet`);
     }
     if (kept) notes.push(`🔀 ${kept} detail${kept > 1 ? "s" : ""} differed from Geek OS — Geek OS kept`);
     const held = [d.posted_without_link ? `${d.posted_without_link} without the post link` : "", d.without_video ? `${d.without_video} without the video link` : "", d.without_courier ? `${d.without_courier} without courier + tracking` : ""].filter(Boolean);
@@ -388,6 +425,21 @@ export default function BulkUploadCheck() {
                           {w.warn && <span className="uc-pill uc-pill--warn">{w.warn}</span>}
                           {w.sends && <small>{w.sends}</small>}
                           {w.ig && <small>{w.ig}</small>}
+                          {diffsOf(d, ex[i], kind).map(({ g, site, sheet }) => {
+                            const cur = (picks[i] || {})[g] || "site";
+                            const setP = (v) => setPicks((pp) => ({ ...pp, [i]: { ...(pp[i] || {}), [g]: v } }));
+                            return (
+                              <span key={g} className="uc-diff">
+                                <b>🔀 {DIFF_LABEL[g]} differs</b>
+                                <label>
+                                  <input type="radio" checked={cur === "site"} onChange={() => setP("site")} /> Keep Geek OS: <i>{site}</i>
+                                </label>
+                                <label>
+                                  <input type="radio" checked={cur === "sheet"} onChange={() => setP("sheet")} /> Use the sheet: <i>{sheet}</i>
+                                </label>
+                              </span>
+                            );
+                          })}
                         </>
                       )}
                     </td>
@@ -457,7 +509,10 @@ export default function BulkUploadCheck() {
           .uc-msg { gap: 6px; }
           .uc-act .ga-btn { width: 100%; }
         }
-      `}</style>
+              .uc-diff { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; padding: 7px 9px; border-radius: 9px; background: #fff7e8; border: 1px solid #f6dfb4; font-size: 12px; color: #6b4a12; }
+        .uc-diff label { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
+        .uc-diff i { font-style: normal; color: var(--ad-ink); word-break: break-word; }
+`}</style>
     </AdminShell>
   );
 }

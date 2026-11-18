@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import BrandPanel, { useBrand } from "@/components/admin/brand/BrandPanel";
 import PTable from "@/components/admin/brand/PTable";
+import PortalExtras from "@/components/admin/brand/PortalExtras";
 import { invoke, useRpc, errText } from "@/lib/supabase";
 import { fmtDateTime, useToast } from "@/components/admin/brand/util";
 
@@ -225,6 +226,7 @@ function BrandLogins() {
             Open brand portal ↗
           </a>
         </div>
+        <PortalExtras b={b} portal={portal} say={say} />
       </section>
 
       {toast && <div className="ga-toast">{toast}</div>}

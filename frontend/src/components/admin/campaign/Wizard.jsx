@@ -151,6 +151,33 @@ function draftFromRow(c) {
   };
 }
 
+/** Brand ka campaign request (brand portal) → wizard draft — purane openCampaignModal({ prefill, requestId }) jaisa.
+ *  Draft sessionStorage mein; save hone par request "converted" (admin_campaign_request_converted). */
+export function startDraftFromRequest(q, brand) {
+  const f = q.form || {};
+  const row = {
+    ...f,
+    name: f.name || q.name || "",
+    brand: brand.name || f.brand || "",
+    brand_id: brand.brand_id || f.brand_id || null,
+    campaign_type: f.campaign_type || q.campaign_type || "barter",
+    brief: f.brief || q.brief || "",
+    start_date: f.start_date || q.starts_on || null,
+    end_date: f.end_date || q.ends_on || null,
+    creators: f.creators || q.creators_needed || null,
+    deliverables: f.deliverables || q.deliverables || "",
+    status: "Draft",
+  };
+  const dr = draftFromRow(row);
+  const n = { ...dr, editId: "", _row: null, _prefill: { contract_terms: f.contract_terms || {}, video_brief: f.video_brief || {}, tracking: f.tracking || {}, ideal_profile: f.ideal_profile || {} }, requestId: q.request_id, status: "Draft" };
+  try {
+    window.sessionStorage.setItem(KEY, JSON.stringify(n));
+  } catch {
+    /* ignore */
+  }
+  return n;
+}
+
 /** Draft state — steps ke beech sessionStorage mein bachta hai. ?edit=<id> ho to us campaign se bharta hai */
 export function useDraft() {
   const [d, setD] = useState(DEFAULT_DRAFT);
@@ -264,7 +291,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
       return k;
     })(),
   };
-  const prev0 = (d._row && d._row.ideal_profile) || {};
+  const prev0 = (d._row && d._row.ideal_profile) || (d._prefill && d._prefill.ideal_profile) || {};
   const prev = { ...prev0 };
   Object.entries(EL).forEach(([k, v]) => {
     if (v == null) delete prev[k];
@@ -309,7 +336,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
     creators: num(d.target) != null && num(d.target) >= 0 ? num(d.target) : 0,
     ideal_profile: { ...prev, ...ideal, ...(locs.length ? {} : { locations: prev.locations }) },
     contract_terms: {
-      ...((d._row && d._row.contract_terms) || {}),
+      ...((d._row && d._row.contract_terms) || (d._prefill && d._prefill.contract_terms) || {}),
       product: t === "paid" ? null : String(d.reward || "").trim() || null,
       product_value: t === "paid" ? null : num(d.value),
       deliverables: delivText,
@@ -318,14 +345,14 @@ export async function saveCampaign(d, { draft = false } = {}) {
       pay_due_days: t === "barter" ? null : Math.min(90, Math.max(1, parseInt(d.payDue) || 7)),
     },
     video_brief: {
-      ...((d._row && d._row.video_brief) || {}),
+      ...((d._row && d._row.video_brief) || (d._prefill && d._prefill.video_brief) || {}),
       what_to_shoot: String(d.brief || "").trim() || null,
       key_messages: String(d.message || "").trim() || null,
       dos: String(d.dos || "").trim() || null,
       donts: String(d.donts || "").trim() || null,
     },
     tracking: {
-      ...((d._row && d._row.tracking) || {}),
+      ...((d._row && d._row.tracking) || (d._prefill && d._prefill.tracking) || {}),
       enabled: !!d.tracking,
       dest_url: dest || null,
       discount: String(d.tkDisc || "").trim().slice(0, 80) || null,
@@ -359,6 +386,8 @@ export async function saveCampaign(d, { draft = false } = {}) {
   if (error && /contract_terms|video_brief/i.test(error.message || "")) ({ error } = await save((delete row.contract_terms, delete row.video_brief, row)));
   if (error) throw new Error(errText(error));
   if (d.editId) return { id: d.editId };
+  // brand ke request se bana — request "converted" (purana admin_campaign_request_converted)
+  if (d.requestId) await rpc("admin", "api.admin_campaign_request_converted", { p_request: d.requestId, p_campaign_name: row.name });
   const { data: fresh } = await sb.from("campaigns").select("id,name").eq("name", row.name).order("created_at", { ascending: false }).limit(1);
   const made = Array.isArray(fresh) ? fresh[0] : fresh;
   return { id: made && made.id };
