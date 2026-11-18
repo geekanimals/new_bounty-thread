@@ -7,7 +7,8 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
-import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk } from "@/components/admin/campaign/journey";
+import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, matchState, autoReject } from "@/components/admin/campaign/journey";
+import { downloadFile, loadScript, XLSX_SRC } from "@/components/admin/campaign2/kit";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 import WaPanel from "@/components/admin/campaign/WaPanel";
 
@@ -50,6 +51,7 @@ export default function WorkspaceCreators() {
   const [who, setWho] = useState("Everyone");
   const [size, setSize] = useState("Any size");
   const [posted, setPosted] = useState("Posted or not");
+  const [fit, setFit] = useState("Brief match: all");
   const [sel, setSel] = useState([]);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useToast(3200);
@@ -76,6 +78,14 @@ export default function WorkspaceCreators() {
     if (size === "Macro · 200K+") r = r.filter((x) => x.followersN >= 200000);
     if (posted === "Posted") r = r.filter((x) => x.posted);
     if (posted === "Not posted") r = r.filter((x) => !x.posted);
+    // screening: brief se match (api.campaign_brief_match — abhi ki eligibility se, live)
+    if (fit !== "Brief match: all") {
+      const k = { "✓ Matches the brief": "ok", "✗ Doesn’t match": "no", "? Info missing in profile": "missing" }[fit];
+      r = r.filter((x) => {
+        const ms = x.pid ? matchState((bmatch.data || {})[x.pid]) : null;
+        return fit === "Not checked (not on Geek OS / past screening)" ? !ms : ms && ms.k === k;
+      });
+    }
     r = [...r];
     const views = (x) => (x.x?.posts || []).reduce((t, p) => t + (+(p.stats?.views || p.stats?.plays || p.stats?.reach) || 0), 0);
     if (sort === "Sort: furthest step") r.sort((a, b) => b.step - a.step || b.sortStep - a.sortStep);
@@ -85,7 +95,83 @@ export default function WorkspaceCreators() {
     if (sort === "Followers: low → high") r.sort((a, b) => a.followersN - b.followersN);
     if (sort === "Most views") r.sort((a, b) => views(b) - views(a));
     return r;
-  }, [all, box, q, sort, who, size, posted]);
+  }, [all, box, q, sort, who, size, posted, fit, bmatch.data]);
+
+  // screening chips: kitne match / nahi / info missing (Applied wale)
+  const fitN = useMemo(() => {
+    const m = { ok: 0, no: 0, missing: 0 };
+    all.forEach((x) => {
+      const ms = x.pid && x.applied && !x.failed ? matchState((bmatch.data || {})[x.pid]) : null;
+      if (ms) m[ms.k]++;
+    });
+    return m;
+  }, [all, bmatch.data]);
+
+  // ⬇ list jaisi filter hai waisi hi — Excel / CSV
+  const sheetRows = () => {
+    const head = ["Name", "Instagram", "WhatsApp", "Email", "City", "Followers", "Step", "Brief match", "What doesn't match / missing", "Next"];
+    return [
+      head,
+      ...rows.map((x) => {
+        const m = x.pid ? (bmatch.data || {})[x.pid] : null;
+        const ms = matchState(m);
+        return [x.name, x.handle, String(x.x?.phone || x.i?.phone || ""), x.x?.email || x.x?.creator?.email || x.i?.email || "", x.city === "—" ? "" : x.city, x.followersN || "", `${x.step}/12 · ${x.stepNote || ""}`, ms ? ms.label.replace(/^\S+\s/, "") : "Not checked", ms && ms.k !== "ok" ? autoReject(m).text.replace(/^This campaign needs /, "") : "", x.next || ""];
+      }),
+    ];
+  };
+  const fname = (ext) => `${(camp?.name || "campaign").replace(/[^\w]+/g, "-")}-${BOXES[box].l.toLowerCase().replace(/\s+/g, "-")}${fit !== "Brief match: all" ? "-" + fit.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase() : ""}.${ext}`;
+  const dlCsv = () => (rows.length ? (downloadFile(fname("csv"), sheetRows()), setToast(`⬇ ${rows.length} creators — CSV`)) : setToast("Nothing in this view"));
+  const dlXlsx = async () => {
+    if (!rows.length) return setToast("Nothing in this view");
+    setBusy("xlsx");
+    try {
+      await loadScript(XLSX_SRC);
+      const X = window.XLSX;
+      const ws = X.utils.aoa_to_sheet(sheetRows());
+      ws["!cols"] = [22, 20, 16, 24, 14, 10, 22, 16, 50, 26].map((w) => ({ wch: w }));
+      const wb = X.utils.book_new();
+      X.utils.book_append_sheet(wb, ws, "Creators");
+      X.writeFile(wb, fname("xlsx"));
+      setToast(`⬇ ${rows.length} creators — Excel`);
+    } catch (e) {
+      setToast(e.message);
+    }
+    setBusy("");
+  };
+
+  // 📤 Send to brand — super admin jinhe chune wahi brand ko dikhte hain (applied → meets brief → brand's list)
+  const sendable = sel.map((rid) => all.find((x) => x.id === rid)).filter((x) => x && x.kind === "p" && ["applied", "eligible"].includes(x.x?.stage));
+  const sendToBrand = async () => {
+    if (!sendable.length) return setToast("Tick creators who are on Applied first.");
+    const notFit = sendable.filter((x) => (matchState((bmatch.data || {})[x.pid]) || {}).k === "no").length;
+    const v = await ask({
+      title: `Send ${sendable.length} creator${sendable.length > 1 ? "s" : ""} to the brand?`,
+      text: `They move to the brand's list — the brand sees only the creators you send (plus how many applied in total) and can approve only these.${notFit ? ` ⚠️ ${notFit} of them don't match the brief.` : ""}`,
+      ok: `📤 Send ${sendable.length} to the brand`,
+      fields: [],
+    });
+    if (!v) return;
+    setBusy("brand");
+    let ok = 0;
+    const bad = [];
+    for (const x of sendable) {
+      if (x.x.stage === "applied") {
+        const a = await rpc("admin", "api.screen_participation", { p_participation: x.pid, p_eligible: true, p_reason: null });
+        if (a.error) {
+          bad.push(`${x.handle || x.name}: ${errText(a.error)}`);
+          continue;
+        }
+      }
+      const b = await rpc("admin", "api.advance_participation", { p_participation: x.pid, p_to: "sent_to_brand", p_reason: "added to the brand's list" });
+      if (b.error) bad.push(`${x.handle || x.name}: ${errText(b.error)}`);
+      else ok++;
+    }
+    setBusy("");
+    setToast(`📤 ${ok} sent to the brand${bad.length ? ` · ${bad.length} not sent — ${bad[0]}` : ""}`);
+    setSel([]);
+    reload();
+    bmatch.reload(true);
+  };
 
   const allIds = rows.map((r) => r.id);
   const allOn = allIds.length > 0 && allIds.every((x) => sel.includes(x));
@@ -249,6 +335,7 @@ export default function WorkspaceCreators() {
             [who, setWho, ["Everyone", "Our turn", "Creator’s turn", "On Geek OS", "Not yet on Geek"], "Who"],
             [size, setSize, ["Any size", "Nano · under 10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K+"], "Follower size"],
             [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
+            [fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "? Info missing in profile", "Not checked (not on Geek OS / past screening)"], "Brief match"],
           ].map(([v, set, opts, label]) => (
             <select key={label} className="ga-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
               {opts.map((o) => (
@@ -267,6 +354,9 @@ export default function WorkspaceCreators() {
           <button type="button" className="ga-btn ga-btn--ghost wcr-wa" disabled={busy === "wa"} onClick={waSelected} title="Tick creators — or open it and pick who replied in the last 24 hours">
             {busy === "wa" ? "Sending…" : `💬 WhatsApp to selected (${sel.length})`}
           </button>
+          <button type="button" className="ga-btn ga-btn--primary wcr-brand" disabled={!sendable.length || busy === "brand"} onClick={sendToBrand} title="Only the creators you send here are shown to the brand">
+            {busy === "brand" ? "Sending…" : `📤 Send to brand (${sendable.length})`}
+          </button>
           <button type="button" className="wcr-txt" disabled={!declinable.length || busy === "decl"} onClick={declineSel}>
             ✖ Decline selected ({declinable.length})
           </button>
@@ -283,6 +373,36 @@ export default function WorkspaceCreators() {
               </button>
             </>
           )}
+        </div>
+        <div className="wcr-screen">
+          <span className="wcr-screen__l">Screening (Applied):</span>
+          {[
+            ["✓ Matches the brief", fitN.ok, "ok"],
+            ["✗ Doesn’t match", fitN.no, "no"],
+            ["? Info missing in profile", fitN.missing, "missing"],
+          ].map(([l, c, k]) => (
+            <button
+              key={k}
+              type="button"
+              className={`wcr-fit wcr-fit--${k} ${fit === l ? "is-on" : ""}`}
+              onClick={() => {
+                setFit(fit === l ? "Brief match: all" : l);
+                if (fit !== l) setBox(BOXES.findIndex((b) => b.l === "Applied"));
+              }}
+            >
+              {l} · {c}
+            </button>
+          ))}
+          <span className="wcr-screen__sp" />
+          <button type="button" className="wcr-txt" disabled={busy === "xlsx"} onClick={dlXlsx} title="Exactly the list below, as it is filtered">
+            {busy === "xlsx" ? "Preparing…" : `⬇ Excel (${rows.length})`}
+          </button>
+          <button type="button" className="wcr-txt" onClick={dlCsv} title="Exactly the list below, as it is filtered">
+            ⬇ CSV ({rows.length})
+          </button>
+          <Link href={`/vault/campaigns/${c.id}/upload`} className="wcr-txt" title="Paste a Google Sheet link — new creators are added, the ones already here are skipped">
+            📄 Add from a sheet link
+          </Link>
         </div>
         <div className="wcr-chips">
           {needN > 0 && (
@@ -362,6 +482,13 @@ export default function WorkspaceCreators() {
         .wcr-card { padding: 22px 22px 22px; }
         .wcr-list { margin-top: 20px; padding-bottom: 30px; }
         .wcr-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .wcr-screen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--ad-soft-2); }
+        .wcr-screen__l { font-size: 12px; font-weight: 700; color: var(--ad-muted); }
+        .wcr-screen__sp { flex: 1; }
+        .wcr-fit { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        .wcr-fit--ok { color: #0b9b6c; } .wcr-fit--no { color: #d6453d; } .wcr-fit--missing { color: #b46b00; }
+        .wcr-fit.is-on { border-color: currentColor; box-shadow: 0 0 0 2px rgba(103,87,245,.12); background: #fff; }
+        .wcr-brand { height: 38px; padding: 0 14px; font-size: 13px; }
         .wcr-chips:empty { display: none; }
         .wcr-need { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #f3c27a; background: #fff6e6; font-size: 13px; font-weight: 800; color: #a15c00; cursor: pointer; }
         .wcr-need.is-on { background: var(--ad-primary); border-color: var(--ad-primary); color: #fff; }

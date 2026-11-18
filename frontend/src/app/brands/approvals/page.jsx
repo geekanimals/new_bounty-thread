@@ -75,9 +75,25 @@ export default function ApprovalsPage() {
       ) : a.error ? (
         <BrError error={a.error} onRetry={a.reload} />
       ) : !a.toApprove.length ? (
-        <BrEmpty title="No creators waiting" text="When creators join your campaigns, they show up here for your OK. Nothing to approve right now." />
+        <BrEmpty
+          title="No creators waiting"
+          text={(() => {
+            const t = Object.values(a.appliedCounts || {}).reduce((m, x) => m + (Number(x.applied) || 0), 0);
+            return t ? `${t} creator${t === 1 ? " has" : "s have"} applied — the Geek team is screening them and will send you the best matches to approve.` : "When the Geek team shortlists creators for your campaigns, they show up here for your OK. Nothing to approve right now.";
+          })()}
+        />
       ) : (
         <>
+          {(() => {
+            const ids = camp ? [camp] : Object.keys(a.appliedCounts || {});
+            const t = ids.reduce((m, k) => m + (Number((a.appliedCounts[k] || {}).applied) || 0), 0);
+            return t > 0 ? (
+              <p className="ap-applied">
+                📥 <b>{t} applied</b> {camp ? "to this campaign" : "across your campaigns"} · the Geek team screened them and shortlisted <b>{list.length}</b> for you to approve.
+                <style>{`.ap-applied { margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: #f5f3ff; border: 1px solid #e3dfff; font-size: 13px; color: #4b4380; }`}</style>
+              </p>
+            ) : null;
+          })()}
           {/* Selection bar */}
           <div className="br-card ap-bar">
             <div className="ap-bar__left">

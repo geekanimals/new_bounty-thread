@@ -19,6 +19,8 @@ export function useApprovals() {
     loading: !b.ready || (b.loggedIn && !b.portal && !b.portalError),
     error: b.portalError,
     toApprove: p.to_approve || [],
+    // campaign_id → { applied, shared } — kitne apply hue / Geek team ne kitne bheje (sirf ginti, naam nahi)
+    appliedCounts: p.applied_counts || {},
     videos: p.videos || [],
     requests: p.requests || [],
     brands: p.brands || [],

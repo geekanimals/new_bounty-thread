@@ -71,6 +71,8 @@ function CreatorsTab({ d, c, reload }) {
     return !s || String(cr.name || "").toLowerCase().includes(s) || String(cr.username || "").toLowerCase().includes(s);
   });
   const count = (f) => rows.filter((r) => f.test(key(r))).length;
+  const appliedN = Number(d.applied_count) || 0,
+    screeningN = Number(d.screening_count) || 0;
 
   // purana data-bpxok (campaign ke andar bhi)
   const approve = async (r) => {
@@ -103,6 +105,13 @@ function CreatorsTab({ d, c, reload }) {
 
   return (
     <>
+      {appliedN > 0 && (
+        <p className="cc-applied">
+          📥 <b>{appliedN} applied</b>
+          {screeningN > 0 ? ` · ${screeningN} being screened by the Geek team` : ""} · you see the creators the Geek team shortlists for you.
+          <style>{`.cc-applied { margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; background: #f5f3ff; border: 1px solid #e3dfff; font-size: 13px; color: #4b4380; }`}</style>
+        </p>
+      )}
       <div className="cc-bar">
         <div className="br-seg">
           {FILTERS.map((f) => (
