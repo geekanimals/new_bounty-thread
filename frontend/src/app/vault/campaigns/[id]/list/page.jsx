@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import ReportTabs from "@/components/admin/campaign2/ReportTabs";
-import { Panel, TableState, useToast, downloadXlsx } from "@/components/admin/campaign2/kit";
+import { Panel, TableState, useToast, downloadXlsx, sheetPhone } from "@/components/admin/campaign2/kit";
 import { useRpc, rpc, errText } from "@/lib/supabase";
 import { stageIndex, fmtNum } from "@/components/admin/campaign/live";
 
@@ -22,6 +22,8 @@ export default function CampaignBrandList() {
   const { id } = useParams();
   const [toast, show] = useToast();
   const { data, error, loading, reload } = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !id || id === "sample" });
+  // sheet upload / contact / profile — WhatsApp, email, city, followers jo card mein nahi
+  const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !id || id === "sample" });
   const [busy, setBusy] = useState("");
   const list = ((data && data.creators) || []).filter(okFor);
   const [q, setQ] = useState("");
@@ -30,10 +32,13 @@ export default function CampaignBrandList() {
   const camp = (data && data.campaign) || {};
 
   const download = async () => {
-    const cols = ["#", "Creator", "Instagram", "Followers", "Engagement %", "City", "Categories", "Applied with", "Status", "Applied on"];
+    const cols = ["#", "Creator", "Instagram", "WhatsApp", "Email", "Followers", "Engagement %", "City", "Categories", "Applied with", "Status", "Applied on"];
+    const ex = extras.data || {};
     const rows = list.map((x, i) => {
       const cr = x.creator || {};
-      return [i + 1, cr.name || "", cr.username ? "@" + cr.username : "", cr.followers ?? "", cr.engagement ?? "", cr.city || "", (cr.categories || []).join("; "), x.applied_profile ? "@" + x.applied_profile : "", label(x), x.applied_at ? new Date(x.applied_at).toLocaleDateString("en-IN") : ""];
+      const e = ex[x.participation_id] || {};
+      const h = cr.username || e.handle;
+      return [i + 1, cr.name || e.name || "", h ? "@" + String(h).replace(/^@/, "") : "", sheetPhone(e.phone || ""), e.email || "", cr.followers ?? e.followers ?? "", cr.engagement ?? "", cr.city || e.city || "", (cr.categories || []).join("; "), x.applied_profile ? "@" + x.applied_profile : "", label(x), x.applied_at ? new Date(x.applied_at).toLocaleDateString("en-IN") : ""];
     });
     try {
       await downloadXlsx(`${String(camp.name || "campaign").replace(/[^\w-]+/g, "_")}_final_list.xlsx`, [cols, ...rows], "Final list");
