@@ -168,7 +168,15 @@ export function buildRows({ tracker, people, progress, kind }) {
       sortStep: effIndex(x),
     };
   });
-  const invs = (people?.invites || []).map((i) => {
+  // jo invite wala creator join kar chuka (participant ban gaya) use dobara "Invited" mein mat gino —
+  // dono list alag RPC se aati hain, ek purani (cache) ho to wahi banda do jagah dikh jata tha
+  const d10 = (v) => String(v || "").replace(/\D/g, "").slice(-10);
+  const hd = (v) => String(v || "").trim().replace(/^@/, "").toLowerCase();
+  const joinedPh = new Set(parts.map((r) => d10(r.x.phone)).filter((v) => v.length === 10));
+  const joinedHd = new Set(parts.flatMap((r) => [hd(r.x.applied_profile), hd(r.x.creator?.username)]).filter(Boolean));
+  const joinedMem = new Set(parts.map((r) => r.x.member_id || r.x.owner_member_id).filter(Boolean));
+  const invList = (people?.invites || []).filter((i) => !((i.member_id && joinedMem.has(i.member_id)) || joinedPh.has(d10(i.phone)) || (hd(i.handle) && joinedHd.has(hd(i.handle)))));
+  const invs = invList.map((i) => {
     const st = i.status === "invited" ? "registered" : i.status || "registered";
     const miss = i.needs || [];
     const reg = !!i.registered;
