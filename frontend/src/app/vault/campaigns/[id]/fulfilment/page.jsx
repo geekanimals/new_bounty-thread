@@ -159,7 +159,9 @@ export default function WorkspaceFulfilment() {
         .wf-table td { height: 57.5px; padding: 8px 11px; }
         .wf-det { font-size: 13px; font-weight: 800; color: #6151ea; white-space: nowrap; }
         .wf-table td:nth-child(3), .wf-table td:nth-child(5) { white-space: nowrap; }
-        .wf-table td:nth-child(4) { min-width: 160px; }
+        .wf-table td:nth-child(4) { min-width: 120px; }
+        .wf-table th:nth-child(5), .wf-table td:nth-child(5) { width: 1%; }
+        .wf-table th:last-child, .wf-table td:last-child { width: 1%; text-align: right; }
         .wf-cards { display: none; }
         .wf-empty { padding: 24px; text-align: center; font-size: 13px; color: var(--ad-muted); }
         @media (max-width: 640px) {

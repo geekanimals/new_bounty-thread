@@ -170,6 +170,8 @@ export default function AdminLayout({ children }) {
           position: sticky; right: 0; z-index: 1; background-color: #fff; box-shadow: -1px 0 0 var(--ad-line);
         }
         .ga-table tr > th:last-child { background-color: var(--ad-soft-2) !important; }
+        /* jin tables ka header white hai, unka aakhri (chipka) header bhi white — alag grey dabba na dikhe */
+        :is(.cl-table, .cpa, .cpc, .cu2-table, .cuu, .db-table, .ds-table, .fm-table, .wf-wrap) .ga-table tr > th:last-child { background-color: #fff !important; }
         :is(.ga-table-wrap, .ds-table, .db-table, .cl-table, .cpa-wrap, .cpc-wrap, .cu2-table, .wf-wrap, .fm-table, .cl-wrap, .pt-wrap, .apl-wrap, .lg-wrap, .sk-tw, .c2-tw, .us-gtw, .cuu-wrap) table tr > td:last-child { overflow: visible !important; }
         :is(.ga-table-wrap, .ds-table, .db-table, .cl-table, .cpa-wrap, .cpc-wrap, .cu2-table, .wf-wrap, .fm-table, .cl-wrap, .pt-wrap, .apl-wrap, .lg-wrap, .sk-tw, .c2-tw, .us-gtw, .cuu-wrap) table tr > td:last-child > :is(span, div) { flex-wrap: wrap; row-gap: 4px; }
 

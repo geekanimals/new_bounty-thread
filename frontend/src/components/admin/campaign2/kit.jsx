@@ -13,6 +13,7 @@ import { errText } from "@/lib/supabase";
 export function SubTabs({ items, active }) {
   return (
     <nav className="c2-sub" aria-label="Section" data-scroll>
+      <Kit />
       {items.map((t) => (
         <Link key={t.href} href={t.href} className={`ga-tab ${active === t.k ? "is-on" : ""}`}>
           {t.label}
@@ -268,7 +269,7 @@ export async function downloadXlsx(name, rows, sheet = "Sheet1") {
 export function Kit() {
   return (
     <style>{`
-      .c2-sub { display: flex; gap: 8px; margin: -9px 0 17px; overflow-x: auto; scrollbar-width: none; }
+      .c2-sub { display: flex; gap: 8px; margin: -9px 0 20px; overflow-x: auto; scrollbar-width: none; }
       .c2-sub::-webkit-scrollbar { display: none; }
       .c2-sub .ga-tab { height: 36px; flex-shrink: 0; }
       .c2-sub .ga-tab:not(.is-on) { color: #67718a; background: var(--ad-soft-2); }
