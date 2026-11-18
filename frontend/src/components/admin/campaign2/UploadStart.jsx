@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { useToast, downloadFile, downloadXlsx, TableState, when } from "@/components/admin/campaign2/kit";
+import { useToast, downloadFile, downloadXlsx, TableState, when, sheetPhone } from "@/components/admin/campaign2/kit";
 import { useRpc, rpc, errText } from "@/lib/supabase";
 import UploadHistory from "@/components/admin/campaign2/UploadHistory";
 import { UploadCard, MsgOff, saveUpload, buildUpload, readUploadFile, readPasted, readSheetLink, statusesFor, useUploadKind, KIND_LABEL } from "@/components/admin/campaign2/upload";
 
 // 📄 Campaign sheet ke columns — purane SH_COLS jaisa (bulk upload wale hi columns, wapas upload ho sake)
-const SH_COLS = [["Name", "name"], ["Instagram", "instagram"], ["WhatsApp", "whatsapp"], ["Email", "email"], ["City", "city"], ["Status", "status"], ["Address", "address"], ["State", "state"], ["PIN code", "pincode"], ["Courier", "courier"], ["Tracking", "tracking"], ["Video link", "video_link"], ["Post link", "post_link"]];
+const SH_COLS = [["Name", "name"], ["Instagram", "instagram"], ["WhatsApp", "whatsapp"], ["Email", "email"], ["City", "city"], ["Followers", "followers"], ["Status", "status"], ["Address", "address"], ["State", "state"], ["PIN code", "pincode"], ["Courier", "courier"], ["Tracking", "tracking"], ["Video link", "video_link"], ["Post link", "post_link"]];
 const SHIP = ["Address", "State", "PIN code", "Courier", "Tracking"];
 // Paid / Barter + Paid: payment ke columns bhi (bulk upload inhe padhta hai — fee, advance, bank / UPI). Barter mein nahi.
 // Khaali template (purane "⬇ Excel template / CSV template / Copy for Google Sheets" jaisa) — columns + example rows
@@ -81,7 +81,7 @@ export async function downloadSheetRows(id, keys, kind, fmt = "xlsx", data = nul
   const list = ((d && d.rows) || []).filter((r) => want.has(r.key));
   if (!list.length) return 0;
   const cols = [...SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
-  const aoa = [cols.map((c) => c[0]), ...list.map((r) => cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : r[k] == null ? "" : String(r[k]))))];
+  const aoa = [cols.map((c) => c[0]), ...list.map((r) => cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : k === "whatsapp" ? sheetPhone(r[k]) : r[k] == null ? "" : String(r[k]))))];
   const nm = `${String((d && d.campaign) || "campaign").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "campaign"}-selected`;
   if (fmt === "csv") downloadFile(nm + ".csv", aoa);
   else await downloadXlsx(nm + ".xlsx", aoa, "Creators");

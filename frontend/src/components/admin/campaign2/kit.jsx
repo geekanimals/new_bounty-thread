@@ -96,6 +96,16 @@ export async function copyText(text) {
 }
 
 /* rows → CSV file download (Excel bhi khol leta hai) */
+/** sheet ke liye number: "+91 92668 04080" — space ki wajah se Excel / Sheets ise formula (=+91…) ya 9.19E+11 nahi banate; wapas upload bhi ho jaata hai */
+export function sheetPhone(v) {
+  const d = String(v || "").replace(/[^\d+]/g, "");
+  if (!d) return "";
+  const digits = d.replace(/\D/g, "");
+  if (digits.length < 10) return String(v || "");
+  const last = digits.slice(-10),
+    cc = digits.slice(0, -10);
+  return `${cc ? "+" + cc + " " : ""}${last.slice(0, 5)} ${last.slice(5)}`;
+}
 export function downloadFile(name, rows) {
   try {
     const csv = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
