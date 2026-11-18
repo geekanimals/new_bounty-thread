@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Stats } from "@/components/admin/ui";
+import { SubTabs } from "@/components/admin/campaign2/kit";
 import { useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast, fmtDate } from "@/components/admin/campaign/live";
 
@@ -60,6 +61,13 @@ export default function WorkspaceFulfilment() {
   return (
     <AdminShell>
       <WorkspaceHead id={id} campaign={camp} />
+      <SubTabs
+        active="shipping"
+        items={[
+          { k: "shipping", label: "📦 Shipping", href: `/vault/campaigns/${id}/fulfilment` },
+          { k: "payments", label: "💰 Payments", href: `/vault/campaigns/${id}/payments` },
+        ]}
+      />
       <Stats
         items={[
           { value: v(all.length), label: "All shipments", note: "This campaign" },

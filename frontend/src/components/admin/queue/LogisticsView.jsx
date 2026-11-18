@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
 import Drawer from "@/components/admin/queue/Drawer";
-import { useRpc } from "@/lib/supabase";
+import { useRpc, sbFor } from "@/lib/supabase";
 import { SHIP_STATUSES, SHIP_STEPS, SHIP_STATUS } from "@/components/admin/queue/queueData";
 import { act, errText, useToast, who, ago, fmtDate } from "@/components/admin/queue/live";
 import { safeUrl } from "@/lib/supabasePublic";
@@ -30,6 +30,16 @@ export default function LogisticsView({ openId }) {
   const [form, setForm] = useState(null);
   const [toastNode, toast] = useToast();
   const fileRef = useRef(null);
+  const [imp, setImp] = useState(null); // { rows:[{s, courier, tracking, url}], miss:[], busy, done }
+  const [batches, setBatches] = useState(null);
+  useEffect(() => {
+    // purane Logistics ka "Barter batches" (public.barter_items)
+    sbFor("admin")
+      .from("barter_items")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data: b }) => setBatches(b || []));
+  }, []);
 
   const all = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const rows = useMemo(() => {
@@ -77,11 +87,11 @@ export default function LogisticsView({ openId }) {
 
       <Stats
         items={[
-          { value: all.length, label: "All shipments", note: "Every barter product" },
-          { value: n((s) => s.status === "pending"), label: "To send", note: "Needs handoff" },
-          { value: n((s) => s.status === "shipped"), label: "In transit", note: "Tracking active" },
-          { value: n((s) => s.status === "delivered"), label: "Received", note: "Confirmed by creator" },
-          { value: n((s) => !s.has_address), label: "No address", note: "Resolve before shipping" },
+          { value: all.length, label: "All shipments", note: st === "" ? "● showing now" : "Every barter product", onClick: () => setSt(""), on: st === "" },
+          { value: n((s) => s.status === "pending" && s.has_address), label: "To send", note: st === "To send" ? "● showing now" : "Needs handoff", onClick: () => setSt("To send"), on: st === "To send" },
+          { value: n((s) => s.status === "shipped"), label: "In transit", note: st === "In transit" ? "● showing now" : "Tracking active", onClick: () => setSt("In transit"), on: st === "In transit" },
+          { value: n((s) => s.status === "delivered"), label: "Received", note: st === "Received" ? "● showing now" : "Confirmed by creator", onClick: () => setSt("Received"), on: st === "Received" },
+          { value: n((s) => !s.has_address && s.status === "pending"), label: "No address", note: st === "No address" ? "● showing now" : "Resolve before shipping", onClick: () => setSt("No address"), on: st === "No address" },
         ]}
       />
 
@@ -96,10 +106,29 @@ export default function LogisticsView({ openId }) {
             type="file"
             accept=".csv,.xlsx"
             hidden
-            onChange={(e) => {
-              // purane app mein tracking ek-ek creator par (barter process) ya campaign bulk upload se aata tha
-              toast("Coming soon — add tracking per creator, or use the campaign's Bulk upload");
+            onChange={async (e) => {
+              const f = e.target.files && e.target.files[0];
               e.target.value = "";
+              if (!f) return;
+              if (!/\.csv$/i.test(f.name)) return toast("Save the sheet as CSV first (File → Download → CSV).", true);
+              const text = await f.text();
+              const lines = text.split(/\r?\n/).filter((l) => l.trim());
+              const split = (l) => (l.match(/("([^"]|"")*"|[^,]*)(,|$)/g) || []).map((c) => c.replace(/,$/, "").replace(/^"|"$/g, "").replace(/""/g, '"').trim());
+              const H = split(lines[0] || "").map((h) => h.toLowerCase());
+              const col = (...k) => H.findIndex((h) => k.some((x) => h.includes(x)));
+              const ci = { h: col("instagram", "handle", "username"), c: col("courier"), t: col("tracking", "awb", "docket"), u: col("link", "url") };
+              if (ci.h < 0 || ci.c < 0) return toast("The CSV needs an Instagram handle column and a Courier column.", true);
+              const rows = [];
+              const miss = [];
+              lines.slice(1).forEach((l) => {
+                const v = split(l);
+                const h = (v[ci.h] || "").replace(/^https?:\/\/(www\.)?instagram\.com\//, "").replace(/[/?#].*$/, "").replace(/^@/, "").toLowerCase();
+                if (!h) return;
+                const ship = all.find((x) => x.status === "pending" && x.has_address && ((x.creator && x.creator.username) || "").toLowerCase() === h);
+                if (!ship || !(v[ci.c] || "").trim()) return miss.push("@" + h);
+                rows.push({ s: ship, courier: v[ci.c].trim(), tracking: ci.t >= 0 ? v[ci.t] || "" : "", url: ci.u >= 0 ? v[ci.u] || "" : "" });
+              });
+              setImp({ rows, miss, busy: false, done: 0 });
             }}
           />
         </div>
@@ -133,6 +162,8 @@ export default function LogisticsView({ openId }) {
                   <th>Product</th>
                   <th>Status</th>
                   <th>Courier</th>
+                  <th>Sent</th>
+                  <th>Received</th>
                   <th>Last update</th>
                   <th aria-label="Details" />
                 </tr>
@@ -143,13 +174,22 @@ export default function LogisticsView({ openId }) {
                   const last = s.delivered_at || s.shipped_at;
                   return (
                     <tr key={s.shipment_id} onClick={() => router.push(`/vault/logistics/${s.shipment_id}`)}>
-                      <td>{who(s.creator)}</td>
-                      <td>{s.campaign || "—"}</td>
+                      <td>
+                        {who(s.creator)}
+                        {s.creator && s.creator.username && s.creator.name ? <small className="lg-sub">@{s.creator.username}</small> : null}
+                        {!s.has_address && <small className="lg-sub">⚠️ no address on file</small>}
+                      </td>
+                      <td>
+                        {s.campaign || "—"}
+                        {(s.brand || s.org_name) && <small className="lg-sub">{s.brand || s.org_name}</small>}
+                      </td>
                       <td>{s.product || "—"}</td>
                       <td>
                         <span className={`ga-badge ga-badge--${status === "To send" || status === "No address" ? "orange" : status === "Received" ? "green" : "violet"}`}>{status}</span>
                       </td>
                       <td>{s.courier ? `${s.courier}${s.tracking_ref ? ` · ${s.tracking_ref}` : ""}` : "—"}</td>
+                      <td>{s.shipped_at ? fmtDate(s.shipped_at) : "—"}</td>
+                      <td>{s.delivered_at ? fmtDate(s.delivered_at) : "—"}</td>
                       <td>{last ? ago(last) : status === "No address" ? "Needs verification" : "Awaiting pickup"}</td>
                       <td>
                         <Link href={`/vault/logistics/${s.shipment_id}`} className="lg-more" onClick={(e) => e.stopPropagation()}>
@@ -165,6 +205,71 @@ export default function LogisticsView({ openId }) {
           {data && !rows.length && <p className="lg-empty">{all.length ? "No shipments match these filters." : "No products shipped yet."}</p>}
         </div>
       </section>
+
+      {batches && batches.length > 0 && (
+        <section className="ga-card lg lg-batches">
+          <h2 className="ga-h2">Barter batches</h2>
+          {batches.map((b) => {
+            const lab = { Requested: "To ship", Matched: "To ship", Shipped: "In transit", "Content Live": "Delivered", Completed: "Delivered" }[b.stage] || b.stage || "To ship";
+            return (
+              <div key={b.id} className="lg-batch">
+                <span>
+                  <b>{b.product || b.creator || "Barter item"}</b>
+                  <small className="lg-sub">{b.creator || "—"}</small>
+                </span>
+                <span className={`ga-badge ga-badge--${lab === "Delivered" ? "green" : lab === "In transit" ? "violet" : "orange"}`}>{lab}</span>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      {imp && (
+        <div className="ga-overlay" onClick={() => !imp.busy && setImp(null)}>
+          <div className="ga-modal lg-imp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Import tracking">
+            <h2 className="ga-h2">⇧ Import tracking</h2>
+            <p className="lg-sub">
+              {imp.rows.length} parcel(s) matched to creators waiting for their product. Saving marks them <b>In transit</b> — each creator can track their parcel.
+            </p>
+            {imp.miss.length > 0 && <p className="lg-sub">Skipped {imp.miss.length} (no waiting shipment with an address, or no courier): {imp.miss.slice(0, 12).join(", ")}{imp.miss.length > 12 ? "…" : ""}</p>}
+            <div className="lg-implist">
+              {imp.rows.map((r) => (
+                <div key={r.s.shipment_id}>
+                  <b>{who(r.s.creator)}</b> · {r.s.campaign} — {r.courier}
+                  {r.tracking ? ` · ${r.tracking}` : ""}
+                </div>
+              ))}
+            </div>
+            {imp.busy && <p className="lg-sub">Saving {imp.done}/{imp.rows.length}…</p>}
+            <div className="lg-fact">
+              <button type="button" className="ga-btn ga-btn--ghost" disabled={imp.busy} onClick={() => setImp(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ga-btn ga-btn--primary"
+                disabled={imp.busy || !imp.rows.length}
+                onClick={async () => {
+                  setImp((v) => ({ ...v, busy: true }));
+                  let ok = 0;
+                  const bad = [];
+                  for (const r of imp.rows) {
+                    const { error: e2 } = await act.recordCourier(r.s.participation_id, { product: r.s.product || null, courier: r.courier, tracking_ref: r.tracking.trim() || null, tracking_url: r.url.trim() || null });
+                    if (e2) bad.push(who(r.s.creator));
+                    else ok++;
+                    setImp((v) => ({ ...v, done: ok + bad.length }));
+                  }
+                  setImp(null);
+                  toast(`✓ Tracking saved for ${ok}${bad.length ? ` · failed: ${bad.join(", ")}` : ""}`, bad.length > 0);
+                  reload(true);
+                }}
+              >
+                Save {imp.rows.length} tracking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {open && (
         <Drawer eyebrow="Shipment" title="Fulfilment record" closeHref="/vault/logistics">
@@ -289,6 +394,11 @@ export default function LogisticsView({ openId }) {
         .lg-form { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--ad-line); }
         .lg-form .ga-label { margin-top: 12px; }
         .lg-ferr { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--ad-red); }
+        .lg-sub { display: block; margin-top: 3px; font-size: 11.5px; color: var(--ad-muted); }
+        .lg-batches { margin-top: 18px; }
+        .lg-batch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--ad-line); font-size: 13px; }
+        .lg-imp { padding: 22px; max-width: 560px; }
+        .lg-implist { max-height: 260px; overflow: auto; margin-top: 10px; font-size: 12.5px; display: grid; gap: 6px; }
         .lg-fact { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 
         @media (max-width: 640px) {

@@ -48,6 +48,10 @@ export function Stats({ items }) {
           <Link key={i} href={s.href} className={`ap-stat ${i === 0 ? "ap-stat--hero" : ""}`}>
             {inner}
           </Link>
+        ) : s.onClick ? (
+          <button key={i} type="button" onClick={s.onClick} aria-pressed={!!s.on} className={`ap-stat ap-stat--btn ${i === 0 ? "ap-stat--hero" : ""} ${s.on ? "is-on" : ""}`}>
+            {inner}
+          </button>
         ) : (
           <div key={i} className={`ap-stat ${i === 0 ? "ap-stat--hero" : ""}`}>
             {inner}
@@ -60,7 +64,9 @@ export function Stats({ items }) {
           display: flex; flex-direction: column; min-height: 120px; padding: 23px 19px 18px; border-radius: 18px;
           background: #fff; border: 1px solid var(--ad-line); box-shadow: 0 8px 24px rgba(30,37,73,.02); transition: transform .15s, box-shadow .15s;
         }
-        a.ap-stat:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -18px rgba(30,37,73,.35); }
+        .ap-stat--btn { text-align: left; font: inherit; cursor: pointer; }
+        .ap-stat--btn.is-on { border-color: #6757f5; box-shadow: 0 0 0 2px rgba(103,87,245,.18); }
+        a.ap-stat:hover, .ap-stat--btn:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -18px rgba(30,37,73,.35); }
         .ap-stat strong { font-family: var(--ad-head); font-size: 28px; font-weight: 800; letter-spacing: -1px; line-height: 1.15; color: var(--ad-ink); }
         .ap-stat span { margin-top: 12px; font-size: 12px; color: var(--ad-muted); }
         .ap-stat small { margin-top: 6px; font-size: 11px; color: var(--ad-faint); }
