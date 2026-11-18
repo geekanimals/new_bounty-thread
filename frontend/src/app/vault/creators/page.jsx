@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
-import { useCreatorsList, creatorCounts, rowOf, matchQ, csv, CSV_COLS, cap1, errText } from "@/components/admin/creator/live";
+import { useCreatorsList, creatorCounts, rowOf, matchQ, csv, CSV_COLS, errText, CARD_FILTERS, CARD_SORTS, filterOptions, agoTxt } from "@/components/admin/creator/live";
 
 const PER = 24;
 
@@ -15,6 +15,9 @@ export default function AdminCreators() {
   const [q, setQ] = useState("");
   const [ig, setIg] = useState("All");
   const [cat, setCat] = useState("All categories");
+  const [sort, setSort] = useState("Newest first");
+  const [f, setF] = useState({});
+  const [more, setMore] = useState(false);
   const [page, setPage] = useState(0);
   const [toast, setToast] = useState("");
 
@@ -26,6 +29,8 @@ export default function AdminCreators() {
         setQ(v.q || "");
         setIg(v.ig || "All");
         setCat(v.cat || "All categories");
+        if (v.sort && CARD_SORTS[v.sort]) setSort(v.sort);
+        if (v.f && typeof v.f === "object") setF(v.f);
       }
     } catch {
       /* ignore */
@@ -37,16 +42,27 @@ export default function AdminCreators() {
     setTimeout(() => setToast(""), 2200);
   };
 
-  const cats = useMemo(() => ["All categories", ...[...new Set(all.flatMap((c) => (c.categories || []).map((x) => cap1(String(x).toLowerCase()))))].sort()], [all]);
+  // purana "Save view" (ig / cat) bhi chalta rahe — ab woh filters ka hissa hai
+  const fx = useMemo(() => {
+    const o = { ...f };
+    if (ig !== "All" && !o.Instagram) o.Instagram = ig;
+    if (cat !== "All categories" && !o.Category) o.Category = cat;
+    return o;
+  }, [f, ig, cat]);
+  const onN = Object.values(fx).filter((v) => v && v !== "Any").length;
   const list = useMemo(() => {
     const t = q.trim();
-    return all.filter(
-      (c) =>
-        matchQ(c, t) &&
-        (ig === "All" || (ig === "Connected" ? !!c.ig_username : !c.ig_username)) &&
-        (cat === "All categories" || (c.categories || []).some((x) => String(x).toLowerCase() === cat.toLowerCase()))
-    );
-  }, [all, q, ig, cat]);
+    return all
+      .filter((c) => matchQ(c, t))
+      .filter((c) => CARD_FILTERS.every(([k, , test]) => !fx[k] || fx[k] === "Any" || test(c, fx[k])))
+      .sort(CARD_SORTS[sort] || CARD_SORTS["Newest first"]);
+  }, [all, q, fx, sort]);
+  const setFilter = (k, v) => {
+    if (k === "Instagram") setIg("All");
+    if (k === "Category") setCat("All categories");
+    setF((o) => ({ ...o, [k]: v }));
+    setPage(0);
+  };
   const pages = Math.max(1, Math.ceil(list.length / PER));
   const p = Math.min(page, pages - 1);
   const shown = list.slice(p * PER, p * PER + PER).map(rowOf);
@@ -96,24 +112,20 @@ export default function AdminCreators() {
             }}
             aria-label="Search creators"
           />
-          <select className="ga-input cl-sel" value={ig} onChange={(e) => (setIg(e.target.value), setPage(0))} aria-label="Instagram">
-            {["All", "Connected", "Not connected"].map((o) => (
-              <option key={o} value={o}>
-                Instagram: {o}
-              </option>
-            ))}
-          </select>
-          <select className="ga-input cl-sel" value={cat} onChange={(e) => (setCat(e.target.value), setPage(0))} aria-label="Category">
-            {cats.map((o) => (
+          <select className="ga-input cl-sel" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
+            {Object.keys(CARD_SORTS).map((o) => (
               <option key={o}>{o}</option>
             ))}
           </select>
+          <button type="button" className={`cl-save ${more ? "is-on" : ""}`} onClick={() => setMore(!more)}>
+            ⚙️ Filters{onN ? ` (${onN})` : ""} {more ? "▴" : "▾"}
+          </button>
           <button
             type="button"
             className="cl-save"
             onClick={() => {
               try {
-                localStorage.setItem("geek_acr_view_list", JSON.stringify({ q, ig, cat }));
+                localStorage.setItem("geek_acr_view_list", JSON.stringify({ q, ig: "All", cat: "All categories", sort, f: fx }));
               } catch {
                 /* ignore */
               }
@@ -124,16 +136,53 @@ export default function AdminCreators() {
           </button>
         </div>
 
+        {(more || onN > 0) && (
+          <div className="cl-fx">
+            {more &&
+              CARD_FILTERS.map(([label, opts]) => (
+                <label key={label} className={`cl-f ${fx[label] && fx[label] !== "Any" ? "is-on" : ""}`}>
+                  <span>{label}</span>
+                  <select value={fx[label] || "Any"} onChange={(e) => setFilter(label, e.target.value)}>
+                    {(opts || filterOptions(all, label)).map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            <p className="cl-fxfoot">
+              <b>{list.length.toLocaleString("en-IN")}</b> of {all.length.toLocaleString("en-IN")} creators match
+              {onN > 0 && (
+                <button
+                  type="button"
+                  className="cl-save"
+                  onClick={() => {
+                    setF({});
+                    setIg("All");
+                    setCat("All categories");
+                    setPage(0);
+                  }}
+                >
+                  ✕ Clear {onN} filter{onN > 1 ? "s" : ""}
+                </button>
+              )}
+            </p>
+          </div>
+        )}
+
         <div className="cl-table">
           <table className="ga-table">
             <thead>
               <tr>
                 <th>Creator</th>
                 <th>Followers</th>
+                <th>Engagement</th>
+                <th>Per reel</th>
+                <th>Applied / ✓</th>
                 <th>City</th>
                 <th>Category</th>
                 <th>Instagram</th>
                 <th>Profile</th>
+                <th>Active</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -144,19 +193,27 @@ export default function AdminCreators() {
                     <Link href={`/vault/creators/${c.id}/profile`} className="cl-name">
                       {c.name}
                     </Link>
-                    <span className="cl-handle">{c.handle}</span>
+                    <span className="cl-handle">
+                      {c.handle}
+                      {c.igCount > 1 ? ` · ${c.igCount} accounts` : ""}
+                    </span>
+                    <Contact c={c.raw} />
                   </td>
                   <td>
                     <b>{c.followers}</b>
                   </td>
+                  <td>{c.eng}</td>
+                  <td>{c.reel}</td>
+                  <td>{c.applied}</td>
                   <td>{c.city}</td>
                   <td>{c.category}</td>
                   <td>
                     <span className={`ga-badge ${c.ig ? "ga-badge--green" : ""}`}>{c.ig ? "Connected" : "Not connected"}</span>
                   </td>
                   <td>
-                    <span className={`ga-badge ${c.complete ? "ga-badge--violet" : "ga-badge--orange"}`}>{c.complete ? "Complete" : "Incomplete"}</span>
+                    <span className={`ga-badge ${c.complete ? "ga-badge--violet" : "ga-badge--orange"}`}>{c.complete ? "Complete" : c.score}</span>
                   </td>
+                  <td className="cl-handle">{agoTxt(c.raw.last_seen)}</td>
                   <td>
                     <Link href={`/vault/creators/${c.id}/profile`} className="cl-link">
                       View 360° →
@@ -166,7 +223,7 @@ export default function AdminCreators() {
               ))}
               {!shown.length && (
                 <tr>
-                  <td colSpan={7} className="cl-empty">
+                  <td colSpan={11} className="cl-empty">
                     {error ? (
                       <>
                         {errText(error)}{" "}
@@ -231,6 +288,15 @@ export default function AdminCreators() {
       {toast && <div className="ga-toast">✓ {toast}</div>}
 
       <style>{`
+        .cl-save.is-on { text-decoration: underline; }
+        .cl-fx { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; padding: 14px; border-radius: 14px; border: 1px dashed var(--ad-line-2, #dfe3ee); }
+        .cl-f { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; color: var(--ad-muted); }
+        .cl-f select { height: 36px; min-width: 130px; padding: 0 8px; border-radius: 10px; border: 1px solid var(--ad-line); background: #fff; font-size: 12.5px; color: var(--ad-text); }
+        .cl-f.is-on select { border-color: #6657e9; color: #4b3fb5; font-weight: 700; }
+        .cl-fxfoot { flex-basis: 100%; display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ad-muted); }
+        .cl-ct { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 11px; }
+        .cl-ct a { color: #5b6478; }
+        .cl-ct a:hover { color: #6657e9; }
         .cl-retry { border: 0; background: none; font-weight: 800; color: #6657e9; }
         .cl-csv { background: transparent; color: #6657e9; padding: 0 8px; }
         .cl-card { padding: 22px 22px 26px; }
@@ -275,5 +341,23 @@ export default function AdminCreators() {
         }
       `}</style>
     </AdminShell>
+  );
+}
+
+/* WhatsApp + email har creator par (purane app jaisa) — tap = open, profile nahi */
+function Contact({ c }) {
+  if (!c) return null;
+  const wa = c.whatsapp || c.phone || "";
+  const em = c.email && !/@creators\.bountythreads\.app$/i.test(c.email) ? c.email : "";
+  if (!wa && !em) return null;
+  return (
+    <span className="cl-ct">
+      {wa && (
+        <a href={`https://wa.me/${String(wa).replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">
+          📱 {wa}
+        </a>
+      )}
+      {em && <a href={`mailto:${em}`}>✉️ {em}</a>}
+    </span>
   );
 }

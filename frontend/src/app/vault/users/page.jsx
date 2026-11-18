@@ -18,11 +18,21 @@ const startOfToday = () => {
 const isToday = (t) => !!t && new Date(t) >= startOfToday();
 const FILTERS = [
   { k: "all", label: "All", fn: () => true },
+  { k: "creator", label: "🎨 Creators", fn: (u) => u.role === "creator" },
+  { k: "biz", label: "🏢 Agencies & brands", fn: (u) => u.role === "owner" || u.role === "brand" },
+  { k: "joined", label: "🆕 Joined today", fn: (u) => isToday(u.joined_at) },
+  { k: "signed", label: "🟢 Signed in today", fn: (u) => isToday(u.last_sign_in_at) },
   { k: "complete", label: "✅ Profile complete", fn: (u) => u.role === "creator" && u.profile_complete },
   { k: "incomplete", label: "🧩 Incomplete", fn: (u) => u.role === "creator" && u.profile_complete === false },
   { k: "never", label: "💤 Never signed in", fn: (u) => !u.last_sign_in_at },
   { k: "pending", label: "⏳ Pending approval", fn: (u) => u.status === "pending" },
 ];
+const U_SORTS = {
+  new: ["Newest first", (a, b) => new Date(b.joined_at || 0) - new Date(a.joined_at || 0)],
+  seen: ["Recently active", (a, b) => new Date(b.last_seen || b.last_sign_in_at || 0) - new Date(a.last_seen || a.last_sign_in_at || 0)],
+  logins: ["Most logins", (a, b) => (b.logins || 0) - (a.logins || 0)],
+  name: ["Name A → Z", (a, b) => String(a.name || "~").localeCompare(String(b.name || "~"))],
+};
 const nameOf = (u) => (u.name && u.name !== "Creator" ? u.name : "") || (u.ig_username ? `@${u.ig_username}` : "") || (u.email && !FAKE_EMAIL.test(u.email) ? u.email : "") || u.whatsapp || "Name not added";
 const profileHref = (u) => (u.role === "creator" ? `/vault/creators/${u.member_id}/profile` : u.role === "brand" ? "/vault/brands" : "/vault/settings/workspaces");
 
@@ -44,6 +54,7 @@ export default function AllUsers() {
   const all = useMemo(() => res.data || [], [res.data]);
   const [f, setF] = useState("all");
   const [q, setQ] = useState("");
+  const [sort, setSort] = useState("new");
   const [page, setPage] = useState(0);
   const [del, setDel] = useState(null);
   const [typed, setTyped] = useState("");
@@ -58,7 +69,7 @@ export default function AllUsers() {
     return all
       .filter(fn)
       .filter((u) => !t || [u.name, u.ig_username, u.whatsapp, u.email, u.org_name, u.last_city, u.last_region, u.role].filter(Boolean).join(" ").toLowerCase().includes(t))
-      .sort((a, b) => new Date(b.joined_at || 0) - new Date(a.joined_at || 0));
+      .sort(U_SORTS[sort][1]);
   }, [all, f, q]);
   const pages = Math.max(1, Math.ceil(rows.length / PER));
   const pg = Math.min(page, pages - 1);
@@ -85,8 +96,8 @@ export default function AllUsers() {
           { value: L(all.length), label: "Everyone", note: "Live" },
           { value: L(all.filter((u) => u.role === "creator").length), label: "Creators", href: "/vault/creators" },
           { value: L(all.filter((u) => u.role === "owner" || u.role === "brand").length), label: "Agencies & brands", href: "/vault/brands" },
-          { value: L(all.filter((u) => isToday(u.joined_at)).length), label: "Joined today" },
-          { value: L(count("incomplete")), label: "Profile incomplete" },
+          { value: L(all.filter((u) => isToday(u.joined_at)).length), label: "Joined today", onClick: () => (setF("joined"), setPage(0)), on: f === "joined" },
+          { value: L(count("incomplete")), label: "Profile incomplete", onClick: () => (setF("incomplete"), setPage(0)), on: f === "incomplete" },
         ]}
       />
 
@@ -124,6 +135,13 @@ export default function AllUsers() {
               }}
               aria-label="Search users"
             />
+            <select className="ga-input au-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort users">
+              {Object.entries(U_SORTS).map(([k, [l]]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <Table
@@ -218,6 +236,7 @@ export default function AllUsers() {
         .au-filters { display: flex; flex-wrap: wrap; gap: 8px; }
         .au-filters .ga-tab { height: 37px; }
         .au-filters .ga-tab:not(.is-on) { color: #67718a; }
+        .au-sort { height: 43px; width: auto; margin-top: 25px; padding: 0 10px; }
         .au-search { width: min(270px, 100%); height: 43px; margin-top: 25px; }
         .au-panel .sk-tw { margin-top: 27px; }
         .au-acts { display: inline-flex; align-items: center; gap: 22px; padding-left: 4px; }

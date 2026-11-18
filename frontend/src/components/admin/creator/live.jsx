@@ -152,7 +152,27 @@ export const matchQ = (c, q) => {
 
 /* Cards page ke 12 filters — Figma ke labels, purane app ke rules */
 export const CARD_FILTERS = [
-  ["Profile", ["Any", "Complete", "Incomplete"], (c, v) => (v === "Complete" ? !!c.complete : !c.complete)],
+  ["Show", ["Any", "Travelling now", "Manages other pages"], (c, v) => (v === "Travelling now" ? !!c.travel_city : (c.pages || 0) > 0)],
+  ["Followers", ["Any", "Nano · 1K–10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K–1M", "Mega · 1M+", "Under 1K", "No numbers yet"], (c, v) => {
+    const f = Number(c.followers);
+    if (v === "No numbers yet") return c.followers == null;
+    if (c.followers == null) return false;
+    return { "Nano · 1K–10K": f >= 1e3 && f < 1e4, "Micro · 10K–50K": f >= 1e4 && f < 5e4, "Mid · 50K–200K": f >= 5e4 && f < 2e5, "Macro · 200K–1M": f >= 2e5 && f < 1e6, "Mega · 1M+": f >= 1e6, "Under 1K": f < 1e3 }[v];
+  }],
+  ["Category", null, (c, v) => (c.categories || []).some((x) => String(x).toLowerCase() === v.toLowerCase())],
+  ["Gender", ["Any", "Female", "Male", "Other"], (c, v) => String(c.gender || "").toLowerCase() === v.toLowerCase()],
+  ["Age", ["Any", "18–24", "25–34", "35–44", "45+", "Not given"], (c, v) =>
+    v === "Not given" ? c.age == null : c.age != null && { "18–24": c.age < 25, "25–34": c.age >= 25 && c.age < 35, "35–44": c.age >= 35 && c.age < 45, "45+": c.age >= 45 }[v]],
+  ["Mom / parent", ["Any", "👩 Moms", "👨 Dads", "👶 Any parent", "Not a parent"], (c, v) =>
+    v === "Not a parent" ? !c.parent : !!c.parent && (v === "👶 Any parent" || (v === "👩 Moms" ? c.gender !== "male" : c.gender === "male"))],
+  ["Pet", ["Any", "🐾 Has a pet", "🐶 Dog", "🐱 Cat", "No pet"], (c, v) =>
+    v === "No pet" ? !c.has_pet && !c.pets : v === "🐾 Has a pet" ? !!(c.has_pet || c.pets > 0) : new RegExp(v === "🐶 Dog" ? "dog" : "cat", "i").test((c.pet_types || []).join(" "))],
+  ["Profile", ["Any", "Complete", "Incomplete", "0–25%", "25–50%", "50–75%", "75–99%"], (c, v) => {
+    if (v === "Complete") return !!c.complete;
+    if (v === "Incomplete") return !c.complete;
+    const pct = c.total ? (100 * (c.done || 0)) / c.total : 0;
+    return !c.complete && { "0–25%": pct < 25, "25–50%": pct >= 25 && pct < 50, "50–75%": pct >= 50 && pct < 75, "75–99%": pct >= 75 }[v];
+  }],
   ["Instagram", ["Any", "Connected", "Not connected", "2+ accounts"], (c, v) => (v === "Connected" ? !!c.ig_username : v === "Not connected" ? !c.ig_username : (c.ig_accounts || []).length > 1)],
   ["Barter & rates", ["Any", "Open to barter", "Reel rate added", "No rate yet"], (c, v) => (v === "Open to barter" ? !!c.accepts_barter : v === "Reel rate added" ? !!c.reel_rate : !c.reel_rate)],
   ["WhatsApp", ["Any", "ON", "OFF"], (c, v) => (v === "ON" ? !!c.wa_verified : !c.wa_verified)],
@@ -175,6 +195,7 @@ export function filterOptions(all, label) {
   const uniq = (f) => [...new Set(all.flatMap(f).filter(Boolean).map((x) => cap1(String(x).trim())))].sort((a, b) => a.localeCompare(b));
   if (label === "State") return ["Any", ...uniq((c) => [c.state])];
   if (label === "Language") return ["Any", ...uniq((c) => c.languages || [])];
+  if (label === "Category") return ["Any", ...uniq((c) => (c.categories || []).map((x) => String(x).toLowerCase()))];
   return ["Any"];
 }
 
@@ -187,7 +208,17 @@ export const CARD_SORTS = {
   "Most applied": (a, b) => (b.applied || 0) - (a.applied || 0),
   "Recently active": (a, b) => new Date(b.last_seen || 0) - new Date(a.last_seen || 0),
   "Name A–Z": (a, b) => String(a.name || "").localeCompare(String(b.name || "")),
+  // purane app ke baaki sort
+  "Followers: low → high": (a, b) => nilN(a.followers, 9e12) - nilN(b.followers, 9e12),
+  "Engagement: low → high": (a, b) => nilN(a.engagement, 9e9) - nilN(b.engagement, 9e9),
+  "Per reel: low → high": (a, b) => nilN(a.reel_rate, 9e12) - nilN(b.reel_rate, 9e12),
+  "Most approved": (a, b) => (b.approved || 0) - (a.approved || 0),
+  "Profile: most complete": (a, b) => pctOf(b) - pctOf(a),
+  "Profile: least complete": (a, b) => pctOf(a) - pctOf(b),
+  "Location A–Z": (a, b) => String(a.city || "~").localeCompare(String(b.city || "~")),
 };
+const nilN = (v, big) => (v == null || v === "" ? big : +v);
+const pctOf = (c) => (c.complete ? 101 : c.total ? ((c.done || 0) / c.total) * 100 : 0);
 
 /* ---------- Creator 360° (drawer) ---------- */
 const L = { prefer_not_to_say: "Prefer not to say", single: "Unmarried", married: "Married", divorced: "Divorced", widowed: "Widowed", non_binary: "Non-binary", female: "Female", male: "Male", other: "Other" };

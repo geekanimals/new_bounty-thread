@@ -4,7 +4,7 @@ import { useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import MsgHead from "@/components/admin/msg/MsgHead";
 import PTable from "@/components/admin/brand/PTable";
-import { rpc, useRpc, errText } from "@/lib/supabase";
+import { rpc, invoke, useRpc, errText } from "@/lib/supabase";
 import { ago, fmtDateTime, useToast } from "@/components/admin/brand/util";
 
 const MENU = [
@@ -37,6 +37,9 @@ export default function WhatsAppBot() {
   const [pause, setPause] = useState(false);
   const [num, setNum] = useState("");
   const [toast, say] = useToast();
+  const [tryQ, setTryQ] = useState("");
+  const [tryState, setTryState] = useState("");
+  const [tryOut, setTryOut] = useState(null);
 
   const save = async (patch, msg) => {
     const r = await rpc("admin", "admin_bot_settings", { p_enabled: null, p_delay: null, p_pause_hours: null, p_use_ai: null, ...patch });
@@ -76,6 +79,16 @@ export default function WhatsAppBot() {
     const r = await rpc("admin", "admin_bot_preview", { p_phone: n });
     if (r.error) return setSeen({ error: errText(r.error) });
     setSeen(r.data || {});
+  };
+  // 🧪 Try the bot — exact reply jo bot bhejega (kuch bhi WhatsApp par nahi jaata) · edge fn wa-bot-preview
+  const tryBot = async (e) => {
+    e.preventDefault();
+    const n = clean(seeNum);
+    if (n.replace(/\D/g, "").length < 10 || !tryQ.trim()) return say("Type the creator’s WhatsApp number above and a question.");
+    setTryOut({ loading: true });
+    const r = await invoke("admin", "wa-bot-preview", { phone: n, question: tryQ.trim(), state: tryState });
+    if (r.error || !r.data || r.data.error) return setTryOut({ error: (r.data && r.data.error) || errText(r.error) || "Couldn’t build the reply" });
+    setTryOut(r.data);
   };
   const seenText = (c) => {
     const camps = c.campaigns || [];
@@ -152,6 +165,32 @@ export default function WhatsAppBot() {
               </span>
             </button>
           </div>
+          <div className="mb-tune">
+            <label>
+              Reply after
+              <select className="ga-input" value={Number(S.reply_delay_min) || 0} onChange={(e) => save({ p_delay: Number(e.target.value) })} disabled={loading}>
+                {[0, 1, 2, 3, 5, 10, 15, 30].map((v) => (
+                  <option key={v} value={v}>
+                    {v ? `${v} min` : "Right away"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Quiet after a team reply
+              <select className="ga-input" value={Number(S.team_pause_hours) || 0} onChange={(e) => save({ p_pause_hours: Number(e.target.value) })} disabled={loading}>
+                {[0, 1, 2, 4, 6, 8, 12, 24, 48].map((v) => (
+                  <option key={v} value={v}>
+                    {v ? `${v} h` : "Don’t stay quiet"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mb-ai">
+              <input type="checkbox" checked={!!S.use_ai} onChange={(e) => save({ p_use_ai: e.target.checked }, e.target.checked ? "Natural (AI) wording on ✓" : "Standard wording")} disabled={loading} />
+              Natural replies (AI rewrites in the creator’s words — facts stay from the app)
+            </label>
+          </div>
         </section>
 
         <section className="ga-card mb-card mb-side">
@@ -170,12 +209,47 @@ export default function WhatsAppBot() {
                 </button>
               </form>
               {seen && <pre className="mb-sees">{seen.loading ? "Checking…" : seen.error ? seen.error : seenText(seen)}</pre>}
+              <form className="mb-try" onSubmit={tryBot}>
+                <b>🧪 Try the bot</b> <small>— the exact reply it would send to that number. Nothing is sent on WhatsApp.</small>
+                <input className="ga-input" value={tryQ} onChange={(e) => setTryQ(e.target.value)} placeholder="Question, e.g. mera parcel kab aayega?" aria-label="Question" />
+                <select className="ga-input" value={tryState} onChange={(e) => setTryState(e.target.value)} aria-label="Where the chat is">
+                  <option value="">New chat → menu first</option>
+                  <option value="menu">Menu already sent</option>
+                  <option value="help">After option 1 / 5 (a question)</option>
+                  <option value="campaign">After option 3 (campaign)</option>
+                </select>
+                <button type="submit" className="ga-btn ga-btn--primary">
+                  Show reply
+                </button>
+              </form>
+              {tryOut && (
+                <div className="mb-tryout">
+                  {tryOut.loading ? (
+                    "Building the reply from live data…"
+                  ) : tryOut.error ? (
+                    tryOut.error
+                  ) : tryOut.no_reply ? (
+                    `🤫 No reply — ${tryOut.no_reply}. The bot answers only after the creator picks 1–5 from the menu.`
+                  ) : (
+                    <>
+                      {tryOut.quiet && <p>⏸ {tryOut.quiet} — this is what it would send otherwise:</p>}
+                      {tryOut.ack && <p>Short “team will reply” message: {tryOut.ack}</p>}
+                      <pre className="mb-sees">{tryOut.reply}</pre>
+                      <small>
+                        {tryOut.registered ? "Registered number" : "Not registered on this number"}
+                        {tryOut.steps ? ` · + ${tryOut.steps === "register" ? "4" : "1"} screenshot(s) after this` : ""}
+                        {tryOut.handoff ? " · 🙋 the team gets an alert" : ""} · {tryOut.ai ? "natural (AI) wording" : "standard wording"}
+                      </small>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
           <PTable
             minW={400}
             rowH={48}
-            cols={[{ label: "When", w: "26.5%" }, { label: "Creator", w: "44.5%" }, { label: "Asked", w: "29%" }]}
+            cols={[{ label: "When", w: "18%" }, { label: "Creator", w: "30%" }, { label: "Asked", w: "26%" }, { label: "Bot", w: "26%" }]}
             rows={L.map((j) => [
               <span key="w" title={fmtDateTime(j.at)}>
                 {ago(j.at) || "—"}
@@ -185,6 +259,13 @@ export default function WhatsAppBot() {
               </b>,
               <span key="a" title={[j.question, j.reply ? `Bot: ${j.reply}` : j.reason].filter(Boolean).join("\n\n")}>
                 {j.question || "—"}
+              </span>,
+              <span key="b" title={[j.reply, j.reason].filter(Boolean).join("\n\n")}>
+                <span className={`ga-badge ga-badge--${j.handoff ? "orange" : j.status === "sent" ? "green" : j.status === "failed" ? "red" : j.status === "skipped" ? "" : "orange"}`}>
+                  {j.handoff ? "🙋 team needed" : { sent: "replied", skipped: "quiet", failed: "failed", queued: "waiting", working: "replying…" }[j.status] || j.status || "—"}
+                </span>
+                {j.images ? <small className="mb-why"> +{j.images} screenshots</small> : null}
+                {j.reason ? <small className="mb-why">{j.reason}</small> : null}
               </span>,
             ])}
             empty={loading ? "Loading…" : "No messages yet."}
@@ -217,6 +298,17 @@ export default function WhatsAppBot() {
       </div>
       {toast && <div className="ga-toast">{toast}</div>}
       <style>{`
+        .mb-tune { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 14px; }
+        .mb-tune label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 700; color: var(--ad-muted); }
+        .mb-tune .ga-input { height: 38px; min-width: 150px; padding: 0 10px; }
+        .mb-tune .mb-ai { flex-direction: row; align-items: center; gap: 8px; font-weight: 600; flex-basis: 100%; }
+        .mb-try { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; }
+        .mb-try small { color: var(--ad-muted); }
+        .mb-try .ga-input { height: 38px; flex: 1 1 200px; }
+        .mb-try .ga-btn { height: 38px; }
+        .mb-tryout { margin-top: 8px; font-size: 12.5px; color: var(--ad-text); }
+        .mb-tryout small { color: var(--ad-muted); }
+        .mb-why { display: block; margin-top: 3px; font-size: 11px; color: var(--ad-muted); white-space: normal; }
         .mb-err { margin: 0 0 14px; font-size: 13px; color: var(--ad-red); }
         .mb-err button { border: 0; background: none; padding: 0; font-weight: 800; color: #6657e9; }
         .mb-ask { margin-top: 12px; padding: 12px 14px; border-radius: 13px; background: var(--ad-soft-2); border: 1px solid var(--ad-line); font-size: 13px; }

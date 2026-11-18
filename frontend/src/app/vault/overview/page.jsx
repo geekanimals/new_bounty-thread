@@ -69,6 +69,9 @@ export default function AdminOverview() {
   const W = live.data || {},
     wc = W.campaigns || {},
     wco = W.content || {},
+    wap = W.applications || {},
+    msg = W.messages || {},
+    ig = W.instagram || {},
     B = W.barter || {};
   const actions = N(t.accounts_pending) + N(t.applications_pending) + N(t.campaigns_awaiting) + N(t.contracts_to_send) + N(t.content_to_review);
   const toSend = Math.max(0, N(B.total) - N(B.shipped) - N(B.delivered)),
@@ -97,6 +100,23 @@ export default function AdminOverview() {
     [c.approved, "Approved"],
   ];
   const dash0 = dash.loading && !dash.data;
+  // purane Command centre ke "Needs your attention" + "Campaigns in motion"
+  const TODO = [
+    ["accounts_pending", "🏢", "Agency / brand accounts", "waiting for approval", "/vault/action-queue/signups"],
+    ["applications_pending", "📝", "Creator applications", "to approve or decline", "/vault/applications"],
+    ["campaigns_awaiting", "📣", "Campaigns", "waiting for approval", "/vault/campaigns/approval"],
+    ["contracts_to_send", "✍️", "Contracts to send", "approved, no contract yet", "/vault/action-queue/contracts"],
+    ["content_to_review", "🎬", "Content to review", "posts / videos submitted", "/vault/action-queue/content"],
+    ["creators_incomplete", "👤", "Unfinished profiles", "profile not complete yet", "/vault/creators"],
+  ].filter((x) => N(t[x[0]]) > 0);
+  const MOTION = [
+    { n: wc.live != null ? wc.live : c.live, l: "Live now", s: `of ${fmtNum(c.total)} campaigns`, href: "/vault/campaigns/live" },
+    { n: c.applications, l: "Applications", s: `${fmtNum(t.applications_pending)} waiting for you`, href: "/vault/applications" },
+    { n: c.approved, l: "Creators approved", s: `${pct(c.approved, c.applications)}% of applications`, href: "/vault/applications" },
+    { n: wap.invited, l: "Invites out", s: "waiting to join", href: "/vault/campaigns" },
+    { n: wco.published, l: "Posts published", s: wco.due_7d ? `${fmtNum(wco.due_7d)} due in 7 days` : "live on Instagram", href: "/vault/reports" },
+    { n: B.delivered, l: "Products delivered", s: "barter shipments", href: "/vault/logistics" },
+  ];
 
   return (
     <AdminShell>
@@ -115,6 +135,31 @@ export default function AdminOverview() {
           { value: live.data ? fmtNum(wco.published) : "—", label: "Posts published", note: "Across all campaigns", href: "/vault/reports" },
         ]}
       />
+
+      {!dash0 && (
+        <section className="ga-card ov-card ov-att">
+          <div className="ov-card__head ov-card__head--c">
+            <h2 className="ga-h2">⚡ Needs your attention</h2>
+            {TODO.length > 0 && <span className="ga-badge ga-badge--orange">{TODO.length} to do</span>}
+          </div>
+          {TODO.length ? (
+            <div className="ov-att__grid">
+              {TODO.map(([k, ic, l, sub, href]) => (
+                <Link key={k} href={href} className="ov-todo">
+                  <span className="ov-ic">{ic}</span>
+                  <span className="ov-todo__t">
+                    <b>{l}</b>
+                    <small>{sub}</small>
+                  </span>
+                  <strong>{fmtNum(t[k])}</strong>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="ov-clear">✅ All clear — nothing waiting on you right now.</div>
+          )}
+        </section>
+      )}
 
       <div className="ov-grid">
         <div className="ov-col">
@@ -220,6 +265,14 @@ export default function AdminOverview() {
                 </div>
               ))}
             </div>
+            {N(t.creators_incomplete) > 0 && (
+              <p className="ov-note">
+                <b>{fmtNum(t.creators_incomplete)} profiles are unfinished.</b> Offer targeted, optional steps that explain the benefit of each detail.{" "}
+                <Link href="/vault/creators" className="ov-link">
+                  Explore creator activation →
+                </Link>
+              </p>
+            )}
           </section>
 
           {/* Fulfilment pulse */}
@@ -242,11 +295,71 @@ export default function AdminOverview() {
                 </Link>
               ))}
             </div>
+            {live.data && N(B.total) > 0 && (
+              <>
+                <div className="ov-bar">
+                  <i style={{ width: `${pct(B.delivered, B.total)}%` }} />
+                </div>
+                <p className="ov-sub">
+                  {fmtNum(B.delivered)} of {fmtNum(B.total)} marked received
+                </p>
+              </>
+            )}
+          </section>
+
+          {/* Platform health */}
+          <section className="ga-card ov-card">
+            <div className="ov-card__head ov-card__head--c">
+              <h2 className="ga-h2">Platform health</h2>
+              {ig.last_sync && <span className="ga-badge ga-badge--green">Instagram synced {ago(ig.last_sync)}</span>}
+            </div>
+            <div className="ov-pulse">
+              <Link href="/vault/inbox">
+                <strong>{live.data ? fmtNum(msg.unread_24h) : "—"}</strong>
+                <span>Unread messages · 24 h</span>
+              </Link>
+              <Link href="/vault/creators">
+                <strong>{live.data || dash.data ? fmtNum(ig.connected != null ? ig.connected : pe.instagram_connected) : "—"}</strong>
+                <span>Instagram connected</span>
+              </Link>
+            </div>
           </section>
         </div>
       </div>
 
+      <section className="ga-card ov-card ov-motion">
+        <div className="ov-card__head ov-card__head--c">
+          <h2 className="ga-h2">📣 Campaigns in motion</h2>
+          <span className="ov-sub">
+            {fmtNum(c.total)} campaigns · {fmtNum(c.barter)} barter · {fmtNum(c.paid)} paid · {fmtNum(c.barter_paid)} both
+          </span>
+        </div>
+        <div className="ov-people ov-motion__grid">
+          {MOTION.map((p) => (
+            <Link key={p.l} href={p.href} className="ov-p">
+              <strong>{dash0 ? "—" : fmtNum(p.n)}</strong>
+              <span>{p.l}</span>
+              {p.s && <small>{p.s}</small>}
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <style>{`
+        .ov-att { margin-bottom: 20px; padding-bottom: 22px; }
+        .ov-att__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 16px; }
+        .ov-todo { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--ad-line); }
+        .ov-todo:hover { border-color: var(--ad-primary); }
+        .ov-todo__t { flex: 1; min-width: 0; }
+        .ov-todo__t b { display: block; font-size: 13px; color: var(--ad-ink); }
+        .ov-todo__t small { display: block; font-size: 11.5px; color: var(--ad-muted); }
+        .ov-todo strong { font-family: var(--ad-head); font-size: 20px; color: var(--ad-ink); }
+        .ov-note { margin-top: 14px; font-size: 12.5px; color: var(--ad-muted); }
+        .ov-note b { color: var(--ad-ink); }
+        .ov-bar { height: 8px; margin-top: 16px; border-radius: 999px; background: var(--ad-soft); overflow: hidden; }
+        .ov-bar i { display: block; height: 100%; background: #6757f5; }
+        .ov-motion { margin-top: 20px; }
+        .ov-motion__grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
         .ov-grid { display: grid; grid-template-columns: minmax(0, 652fr) minmax(0, 450fr); gap: 20px; align-items: start; }
         .ov-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         .ov-card { padding: 22px 22px 30px; }

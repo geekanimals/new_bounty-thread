@@ -39,6 +39,7 @@ export default function SettingsTeam() {
   const [agency, setAgency] = useState("");
   const [site, setSite] = useState("");
   const [prof, setProf] = useState(null); // org_profiles row
+  const [pf, setPf] = useState({ slug: "", tagline: "", bio: "", whatsapp: "", email: "", city: "", is_public: true });
   const [link, setLink] = useState("");
   const [me, setMe] = useState(null); // members row of the logged-in admin (org_id / org_name)
   const [toast, say] = useToast();
@@ -69,6 +70,7 @@ export default function SettingsTeam() {
         setProf(op);
         setAgency(op.display_name || "");
         setSite(op.website || "");
+        setPf({ slug: op.slug || "", tagline: op.tagline || "", bio: op.bio || "", whatsapp: op.whatsapp || "", email: op.email || "", city: op.city || "", is_public: op.is_public !== false });
         if (op.slug) setLink(`${window.location.host}/o/${op.slug}`);
       }
     })();
@@ -114,15 +116,27 @@ export default function SettingsTeam() {
     setModal(null);
   };
   const save = async () => {
-    const slug = slugify(prof?.slug || agency || me?.org_name || "");
+    const slug = slugify(pf.slug || prof?.slug || agency || me?.org_name || "");
     if (!slug) return say("Add your agency name first — it becomes your public link.", true);
     setBusy(true);
-    const row = { slug, display_name: agency.trim() || null, website: site.trim() || null, is_public: prof ? prof.is_public !== false : true, updated_at: new Date().toISOString() };
+    const row = {
+      slug,
+      display_name: agency.trim() || null,
+      website: site.trim() || null,
+      tagline: pf.tagline.trim() || null,
+      bio: pf.bio.trim() || null,
+      whatsapp: pf.whatsapp.trim() || null,
+      email: pf.email.trim().toLowerCase() || null,
+      city: pf.city.trim() || null,
+      is_public: !!pf.is_public,
+      updated_at: new Date().toISOString(),
+    };
     if (me?.org_id) row.org_id = me.org_id;
     const { error } = await sb.from("org_profiles").upsert(row, { onConflict: "org_id" });
     setBusy(false);
     if (error) return say(error.code === "23505" || /duplicate|unique/i.test(error.message) ? "That link is taken — change the agency name." : errText(error), true);
     setProf((p) => ({ ...(p || {}), ...row }));
+    setPf((v) => ({ ...v, slug }));
     const url = `${window.location.host}/o/${slug}`;
     setLink(url);
     try {
@@ -234,6 +248,15 @@ export default function SettingsTeam() {
         <div className="st-pub">
           <input className="ga-input" placeholder="Geek Creative Agency" value={agency} onChange={(e) => setAgency(e.target.value)} aria-label="Agency name" />
           <input className="ga-input" placeholder="geekcreativeagency.com" value={site} onChange={(e) => setSite(e.target.value)} aria-label="Website" />
+          <input className="ga-input" placeholder="Public link (slug) — e.g. geek-media" value={pf.slug} onChange={(e) => setPf({ ...pf, slug: e.target.value })} aria-label="Public link (slug)" />
+          <input className="ga-input" placeholder="Tagline — India's barter-first creator agency" value={pf.tagline} onChange={(e) => setPf({ ...pf, tagline: e.target.value })} aria-label="Tagline" />
+          <input className="ga-input" placeholder="Contact WhatsApp +91 98xxxxxxxx" value={pf.whatsapp} onChange={(e) => setPf({ ...pf, whatsapp: e.target.value })} aria-label="Contact WhatsApp" />
+          <input className="ga-input" type="email" placeholder="Contact email hello@agency.com" value={pf.email} onChange={(e) => setPf({ ...pf, email: e.target.value })} aria-label="Contact email" />
+          <input className="ga-input" placeholder="City — Gurugram" value={pf.city} onChange={(e) => setPf({ ...pf, city: e.target.value })} aria-label="City" />
+          <textarea className="ga-input st-bio" rows={3} placeholder="Bio — what your agency does, who you work with…" value={pf.bio} onChange={(e) => setPf({ ...pf, bio: e.target.value })} aria-label="Bio" />
+          <label className="st-pubchk">
+            <input type="checkbox" checked={pf.is_public} onChange={(e) => setPf({ ...pf, is_public: e.target.checked })} /> Page is public
+          </label>
         </div>
         {link && (
           <p className="st-link">
@@ -305,6 +328,8 @@ export default function SettingsTeam() {
         .st-pub { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
         .st-pub .ga-input { width: 270px; height: 43px; }
         .st-pub .ga-input::placeholder { color: #757575; }
+        .st-pub .st-bio { width: 100%; max-width: 830px; height: auto; padding: 10px 12px; }
+        .st-pubchk { display: flex; align-items: center; gap: 8px; flex-basis: 100%; font-size: 13px; font-weight: 600; color: var(--ad-text); }
         .st-link { margin-top: 14px; font-size: 13px; font-weight: 700; color: var(--ad-ink); }
         .st-link a { color: var(--ad-primary); word-break: break-all; }
         .st-modal { width: min(460px, 100%); padding: 24px; }

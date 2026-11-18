@@ -58,8 +58,16 @@ export default function FindMatching() {
     if (mode !== "all" || !on) return;
     let alive = true;
     setSearch((s) => ({ ...s, loading: true }));
-    rpc("admin", "api.creator_search", { p_filters: { q: qq, source: "platform" }, p_page: 1, p_size: 24, p_campaign: id }).then((r) => {
-      if (alive) setSearch({ rows: (r.data && r.data.rows) || [], loading: false, error: r.error });
+    rpc("admin", "api.creator_search", { p_filters: { q: qq, source: "platform" }, p_page: 1, p_size: 24, p_campaign: id }).then(async (r) => {
+      const rows = (r.data && r.data.rows) || [];
+      // purane csMarkEligibility jaisa: jo campaign ki shart poori nahi karte unpar "Not eligible" + kyun
+      const ids = [...new Set(rows.map((x) => x.member_id).filter(Boolean))];
+      let elig = {};
+      if (ids.length) {
+        const e = await rpc("admin", "api.campaign_eligibility_bulk", { p_campaign: id, p_members: ids });
+        if (!e.error && e.data) elig = e.data;
+      }
+      if (alive) setSearch({ rows, elig, loading: false, error: r.error });
     });
     return () => {
       alive = false;
@@ -180,6 +188,11 @@ export default function FindMatching() {
                     <td>
                       {isInv(r) ? (
                         <span className="fm-done">{mine[r.member] ? "✓ Invited" : STATE_TXT[r.state] || "✓ Invited"}</span>
+                      ) : mode === "all" && search.elig && search.elig[r.member] && search.elig[r.member].eligible === false ? (
+                        <span className="fm-noel" title={(search.elig[r.member].unmet || []).join(" · ")}>
+                          <span className="ga-badge">Not eligible</span>
+                          <small>{(search.elig[r.member].unmet || []).join(" · ")}</small>
+                        </span>
                       ) : (
                         <button type="button" className="ga-btn ga-btn--primary fm-inv" disabled={busy === r.id || !r.member} onClick={() => invite(r)}>
                           {busy === r.id ? "…" : "🎯 Invite"}
@@ -258,6 +271,8 @@ export default function FindMatching() {
       {toast && <div className="ga-toast fm-toast">{toast}</div>}
 
       <style>{`
+        .fm-noel { display: inline-flex; flex-direction: column; gap: 3px; max-width: 220px; }
+        .fm-noel small { font-size: 11px; color: var(--ad-muted); white-space: normal; }
         /* Figma: select par arrow nahi */
         select.ga-input { appearance: none; -webkit-appearance: none; }
         .fm-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(20,33,59,.28); animation: adFade .15s ease; }

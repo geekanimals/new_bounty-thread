@@ -30,6 +30,15 @@ const SORTS = [
   { k: "sessions", label: "Most sessions", fn: (a, b) => (b.sessions || 0) - (a.sessions || 0) },
   { k: "pages", label: "Most pages", fn: (a, b) => (b.page_views || 0) - (a.page_views || 0) },
 ];
+const FILTERS = [
+  ["now", "Active now", "Last 15 minutes", (r) => ageMin(r) <= 15],
+  ["today", "Today", "Seen in 24 hours", (r) => ageMin(r) <= 1440],
+  ["week", "This week", "Seen in 7 days", (r) => ageMin(r) <= 10080],
+  ["all", "Everyone", "Last 30 days", () => true],
+  ["cookies", "Shared analytics", "Pages & time tracked", (r) => r.consent === "all"],
+  ["ess", "Essential only", "Sign-ins only", (r) => r.consent === "essential"],
+  ["none", "No cookie choice", "Never answered", (r) => !r.consent],
+];
 const COOKIE = (c) => (c === "all" ? ["All", "green"] : c === "essential" ? ["Essential", ""] : ["No choice", "orange"]);
 const ROLE = { creator: "Creator", owner: "Agency", brand: "Brand", manager: "Manager", corporate: "Corporate", admin: "Admin" };
 
@@ -40,10 +49,19 @@ const ROLE = { creator: "Creator", owner: "Agency", brand: "Brand", manager: "Ma
 export default function ActivityPage({ person }) {
   const router = useRouter();
   const [sort, setSort] = useState("recent");
+  const [fk, setFk] = useState("all");
+  const [q, setQ] = useState("");
   const res = useRpc("admin", "admin_activity_summary", { p_days: 30 }, { refreshMs: 30000 });
   const all = useMemo(() => res.data || [], [res.data]);
-  const rows = useMemo(() => [...all].sort(SORTS.find((s) => s.k === sort).fn), [all, sort]);
-  const tot = useMemo(() => all.reduce((a, r) => ({ s: a.s + (r.sessions || 0), m: a.m + (Number(r.minutes) || 0), p: a.p + (r.page_views || 0) }), { s: 0, m: 0, p: 0 }), [all]);
+  const ff = (FILTERS.find((x) => x[0] === fk) || FILTERS[3])[3];
+  const rows = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return all
+      .filter(ff)
+      .filter((r) => !t || [r.name, r.email, r.ig_username, r.role, r.last_city, r.last_region, r.last_ip].filter(Boolean).join(" ").toLowerCase().includes(t))
+      .sort(SORTS.find((s) => s.k === sort).fn);
+  }, [all, sort, ff, q]);
+  const tot = useMemo(() => rows.reduce((a, r) => ({ s: a.s + (r.sessions || 0), m: a.m + (Number(r.minutes) || 0), p: a.p + (r.page_views || 0) }), { s: 0, m: 0, p: 0 }), [rows]);
   const cnt = (fn) => (res.loading ? "…" : fmtNum(all.filter(fn).length));
   const p = person ? all.find((r) => r.member_id === person) || { member_id: person } : null;
 
@@ -62,20 +80,34 @@ export default function ActivityPage({ person }) {
     <AdminShell>
       <PageHead title="Activity" sub="Who is on the platform, for how long and doing what — consent-aware." />
       <Stats
-        items={[
-          { value: cnt((r) => ageMin(r) <= 15), label: "Active now", note: "Last 15 minutes" },
-          { value: cnt((r) => ageMin(r) <= 1440), label: "Today", note: "Seen in 24 hours" },
-          { value: cnt((r) => ageMin(r) <= 10080), label: "This week", note: "Seen in 7 days" },
-          { value: cnt(() => true), label: "Everyone", note: `${fmtNum(tot.s)} sessions` },
-          { value: cnt((r) => !r.consent), label: "No cookie choice", note: "Never answered" },
-        ]}
+        items={FILTERS.filter((x) => x[0] !== "ess" && x[0] !== "cookies").map(([k, label, note, fn]) => ({ value: cnt(fn), label, note: fk === k ? "● showing now" : note, onClick: () => setFk(k), on: fk === k }))}
       />
+      <div className="ac-chips">
+        {FILTERS.filter((x) => x[0] === "cookies" || x[0] === "ess").map(([k, label, note, fn]) => (
+          <button key={k} type="button" className={`ga-tab ${fk === k ? "is-on" : ""}`} onClick={() => setFk(fk === k ? "all" : k)} title={note}>
+            {k === "cookies" ? "📊" : "🍪"} {label} · {cnt(fn)}
+          </button>
+        ))}
+        <input className="ga-input ac-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Name, @handle, city, IP…" aria-label="Search people" />
+        {(fk !== "all" || q) && (
+          <button
+            type="button"
+            className="ga-tab"
+            onClick={() => {
+              setFk("all");
+              setQ("");
+            }}
+          >
+            ✕ Reset
+          </button>
+        )}
+      </div>
       <Notice icon="🔒" className="ac-note">
         Sign-ins, Instagram connect, publish and apply are always logged. Pages and time show only for people who allowed analytics cookies.
       </Notice>
 
       <Panel
-        title={`Everyone · ${res.loading ? "…" : fmtNum(all.length)} people`}
+        title={`${(FILTERS.find((x) => x[0] === fk) || FILTERS[3])[1]} · ${res.loading ? "…" : fmtNum(rows.length)} people`}
         sub={`${fmtNum(tot.s)} sessions · ${actMins(tot.m)} · ${fmtNum(tot.p)} pages`}
         className="ac-panel"
         action={
@@ -90,13 +122,15 @@ export default function ActivityPage({ person }) {
       >
         <Table
           rowH={57}
-          minW={860}
+          minW={1080}
           cols={[
             { label: "Person", w: 233 },
             { label: "Role", w: 115 },
             { label: "Last seen", w: 145 },
             { label: "Sessions", w: 134 },
             { label: "Time", w: 102 },
+            { label: "Pages", w: 90 },
+            { label: "Last action · where", w: 220 },
             { label: "Cookies", w: 163 },
             { label: "", w: 184 },
           ]}
@@ -112,6 +146,12 @@ export default function ActivityPage({ person }) {
               live ? <span key="l" className="ac-live">● Online now</span> : ago(r.last_seen),
               fmtNum(r.sessions || 0),
               r.consent === "all" || Number(r.minutes) > 0 ? actMins(r.minutes) : "—",
+              r.consent === "all" || r.page_views > 0 ? fmtNum(r.page_views || 0) : "—",
+              <small key="loc" className="ac-loc">
+                {r.last_event ? <span className="ac-ev">{actLbl(r.last_event)}</span> : null}
+                {[r.last_city, r.last_region, r.last_country].filter(Boolean).join(", ") || "—"}
+                {r.last_ip ? <code> {r.last_ip}</code> : null}
+              </small>,
               <span key="c" className={`ga-badge ga-badge--${ct}`}>
                 {cl}
               </span>,
@@ -129,6 +169,12 @@ export default function ActivityPage({ person }) {
         .ac-note { margin-bottom: 17px; padding: 12px 15px; }
         .ac-panel .sk-panel__txt { padding-top: 4px; }
         .ac-panel .sk-tw { margin-top: 14px; }
+        .ac-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 16px; }
+        .ac-chips .ga-tab { height: 36px; }
+        .ac-q { width: 260px; height: 38px; margin-left: auto; }
+        .ac-loc { font-size: 11.5px; color: var(--ad-muted); }
+        .ac-ev { display: block; color: var(--ad-text); font-weight: 600; }
+        .ac-loc code { font-size: 10.5px; }
         .ac-sorts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         .ac-sorts .ga-tab { height: 37px; }
         .ac-sorts .ga-tab:not(.is-on) { color: #67718a; }
