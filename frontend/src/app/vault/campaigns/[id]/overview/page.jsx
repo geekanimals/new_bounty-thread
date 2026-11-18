@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
+import { coverOf } from "@/services/creator/helpers";
 import { useCampaign, useToast, campStatusOptions, delivChips, fmtMoney, fmtDate, daysLeft } from "@/components/admin/campaign/live";
 import { buildRows } from "@/components/admin/campaign/journey";
 
@@ -219,7 +220,14 @@ export default function WorkspaceOverview() {
               <details className="wo-more">
                 <summary>Brief, photo, product link &amp; files</summary>
                 <div className="wo-more__b">
-                  {row.cover_url ? <img src={row.cover_url} alt="" className="wo-cover" referrerPolicy="no-referrer" /> : <p className="wo-sub">No campaign photo — creators see a stock photo. Add one with Edit brief.</p>}
+                  {/* creators jo photo dekhte hain wahi (creator app ka coverOf): apni photo → brand → category ki stock photo */}
+                  <img
+                    src={coverOf({ campaign_id: row.id, cover_url: row.cover_url, brand: row.brand, name: row.name, category: (row.ideal_profile && (row.ideal_profile.categories || [])[0]) || "" })}
+                    alt=""
+                    className="wo-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  {!row.cover_url && <p className="wo-sub">This is the stock photo creators see — no campaign photo uploaded yet. Add your own with Edit brief.</p>}
                   {/^https?:\/\//i.test(row.product_link || "") && (
                     <p>
                       🎁 Product:{" "}
