@@ -511,6 +511,7 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue â
   const router = useRouter();
   const [toast, setToast] = useState("");
   const [saving, setSaving] = useState(false);
+  const [fromReview, setFromReview] = useState(false);
   /* Save draft â€” database mein save (naya = Draft status), phir usi campaign par edit chalu */
   const saveDraft = async () => {
     if (!draft) return setToast("âœ“ Draft saved on this device");
@@ -529,6 +530,27 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue â
   };
   const prev = STEPS[step - 1];
   const next = STEPS[step + 1];
+
+  // Review ke "Needs detail" / summary line se aaye (?focus=<field>) â†’ wahi field dikhao, chamkao aur cursor rakho
+  useEffect(() => {
+    let f = "";
+    try {
+      f = new URLSearchParams(window.location.search).get("focus") || "";
+    } catch {
+      /* ignore */
+    }
+    if (!f) return undefined;
+    const t = setTimeout(() => {
+      setFromReview(true);
+      const el = document.getElementById(`nc-${f}`) || document.getElementById(f);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("nc-flash");
+      if (typeof el.focus === "function" && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) el.focus({ preventScroll: true });
+      setTimeout(() => el.classList.remove("nc-flash"), 2200);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [step]);
 
   useEffect(() => {
     if (!toast) return;
@@ -583,6 +605,11 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue â
             </Link>
           )}
           <div className="nc-foot__r">
+            {fromReview && step < STEPS.length - 1 && (
+              <Link href={`/vault/campaigns/new/review${q}`} className="nc-save">
+                âœ“ Back to review
+              </Link>
+            )}
             <button type="button" className="nc-save" disabled={saving} onClick={saveDraft}>
               {saving ? "Savingâ€¦" : "Save draft"}
             </button>
@@ -596,6 +623,7 @@ export default function Wizard({ step, children, onNext, nextLabel = "Continue â
       {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
+        .nc-flash { outline: 3px solid #f59e0b !important; outline-offset: 3px; border-radius: 10px; transition: outline-color .3s; }
         .nc-close { height: 41px !important; padding: 0 14px !important; color: var(--ad-primary-ink); }
         .nc { max-width: 1049px; margin: 0 auto; padding: 22px 22px 22px; }
         .nc-steps { list-style: none; margin: 0 0 22px; padding: 0; display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; }

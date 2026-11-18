@@ -110,10 +110,10 @@ export default function NewCampaignBasics() {
               Remove photo
             </button>
           )}
-          <input className="ga-input nb-link" type="url" value={d.cover} onChange={(e) => set("cover", e.target.value)} placeholder="…or paste an image link (https://…)" aria-label="Campaign photo link" />
+          <input id="nc-cover" className="ga-input nb-link" type="url" value={d.cover} onChange={(e) => set("cover", e.target.value)} placeholder="…or paste an image link (https://…)" aria-label="Campaign photo link" />
         </div>
       </div>
-      <div className="nb-files">
+      <div className="nb-files" id="nc-files">
         <label className="ga-btn ga-btn--ghost nb-b">
           📎 Attach files
           <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.mp4,.mov,.csv,.txt,.zip,.doc,.docx,.ppt,.pptx,.xls,.xlsx" hidden onChange={(e) => addFiles([...e.target.files], "file")} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Wizard, { useDraft, saveCampaign } from "@/components/admin/campaign/Wizard";
 
@@ -14,12 +15,15 @@ export default function NewCampaignReview() {
   const plural = (v, one, many) => `${v} ${v === 1 ? one : many}`;
   const parts = [n("reels") && plural(n("reels"), "Reel", "Reels"), n("stories") && plural(n("stories"), "Story", "Stories"), n("posts") && plural(n("posts"), "Post", "Posts"), n("carousels") && plural(n("carousels"), "Carousel", "Carousels")].filter(Boolean);
 
+  // har check / line → us step ka link, jis field mein kami hai us par cursor (?focus=)
+  const eq = d.editId ? `edit=${d.editId}&` : "";
+  const to = (step, f) => `/vault/campaigns/new/${step}?${eq}focus=${f}`;
   const checks = [
-    { t: "Campaign name and brand", ok: !!(d.name.trim() && d.brand.trim()) },
-    { t: "Deliverables defined", ok: parts.length > 0 },
-    { t: "Product / payment terms", ok: !!(d.reward.trim() && d.value) },
-    { t: "Creative brief", ok: !!d.brief.trim() },
-    { t: "Tracking destination, if enabled", ok: !d.tracking || !!d.url.trim() },
+    { t: "Campaign name and brand", ok: !!(d.name.trim() && d.brand.trim()), href: to("basics", !d.name.trim() ? "name" : "brand"), fix: !d.name.trim() ? "Add the campaign name" : "Add the brand" },
+    { t: "Deliverables defined", ok: parts.length > 0, href: to("deliverables", "reels"), fix: "Add how many reels / stories / posts" },
+    { t: "Product / payment terms", ok: !!(d.reward.trim() && d.value), href: to("deliverables", !d.reward.trim() ? "reward" : "value"), fix: !d.reward.trim() ? "Add the product / reward" : "Add the product value ₹" },
+    { t: "Creative brief", ok: !!d.brief.trim(), href: to("terms", "brief"), fix: "Write what creators should shoot" },
+    { t: "Tracking destination, if enabled", ok: !d.tracking || !!d.url.trim(), href: to("eligibility", d.tracking ? "url" : "tracking"), fix: "Add the shop link" },
   ];
 
   /* Save — public.campaigns insert/update (purana openCampaignModal). Naya campaign → seedha Bulk sheet (creators add karo) */
@@ -41,20 +45,20 @@ export default function NewCampaignReview() {
     <Wizard step={4} draft={{ d, set }} onNext={finish} error={err} nextLabel={d.editId ? "Save changes" : d.status === "Draft" ? "Save as draft" : "Launch campaign"}>
       <div className="nr-box">
         <h2>Review campaign draft</h2>
-        <p>
+        <Link href={to("basics", "name")} className="nr-line">
           <b>{d.name.trim() || "Untitled campaign"}</b>· {d.brand.trim() || "No brand yet"} · {d.type}
-        </p>
-        <p>
+        </Link>
+        <Link href={to("deliverables", "reels")} className="nr-line">
           {parts.join(" · ") || "No deliverables"} · {n("target")} creators · {n("due")} days due after delivery
-        </p>
-        <p>
+        </Link>
+        <Link href={to("deliverables", "reward")} className="nr-line">
           {d.reward.trim() || "Reward not specified"} · ₹{d.value || "—"} · {n("rights")} month(s) usage rights
-        </p>
-        <p>
+        </Link>
+        <Link href={to("basics", "startDate")} className="nr-line">
           Dates: {d.startDate || "—"} → {d.endDate || (d.deadline ? `${d.deadline} days from launch` : "—")}
           {d.type !== "Barter" && ` · Budget ₹${d.budget || "—"} · pay within ${d.payDue || 7} days`}
-        </p>
-        <p>
+        </Link>
+        <Link href={to("eligibility", "locations")} className="nr-line">
           Eligibility:{" "}
           {[
             d.locations.trim() || "Any location",
@@ -69,24 +73,27 @@ export default function NewCampaignReview() {
           ]
             .filter(Boolean)
             .join(" · ")}
-        </p>
-        <p>
+        </Link>
+        <Link href={to("basics", "cover")} className="nr-line">
           Photo: {d.cover ? "added" : "stock photo"} · Files: {(Array.isArray(d.files) ? d.files : []).length}
-        </p>
-        <p>
+        </Link>
+        <Link href={to("eligibility", "tracking")} className="nr-line">
           Tracking: {d.tracking ? "Enabled" : "Off"}
           {d.tracking && ` · ${d.url.trim() ? "Shop URL added" : "Shop URL missing"}`}
-        </p>
+        </Link>
       </div>
 
       <p className="nc-sec">Pre-launch checks</p>
       <div className="nr-checks">
         {checks.map((c) => (
-          <div key={c.t} className="nr-check">
+          <Link key={c.t} href={c.href} className={`nr-check ${c.ok ? "" : "is-bad"}`}>
             <span className="nr-ic">{c.ok ? "✓" : "!"}</span>
-            <b>{c.t}</b>
-            <span className={`ga-badge ga-badge--${c.ok ? "green" : "orange"}`}>{c.ok ? "Ready" : "Needs detail"}</span>
-          </div>
+            <b>
+              {c.t}
+              {!c.ok && <small>{c.fix} → tap to fix</small>}
+            </b>
+            <span className={`ga-badge ga-badge--${c.ok ? "green" : "orange"}`}>{c.ok ? "Ready · edit" : "Needs detail"}</span>
+          </Link>
         ))}
       </div>
       <p className="nr-note">Saving creates the campaign for every admin; creators see it once it is Live.</p>
@@ -95,13 +102,21 @@ export default function NewCampaignReview() {
       <style>{`
         .nr-box { padding: 18px 16px 22px; border-radius: 14px; background: #f5f3ff; border: 1px solid #e3dfff; color: #6257a1; }
         .nr-box h2 { font-family: var(--ad-head); font-size: 17px; font-weight: 800; letter-spacing: -0.4px; }
-        .nr-box p { margin-top: 14px; font-size: 14px; line-height: 1.33; }
-        .nr-box h2 + p { margin-top: 16px; }
+        .nr-box p, .nr-line { display: block; margin-top: 14px; font-size: 14px; line-height: 1.33; color: inherit; }
+        .nr-box h2 + .nr-line { margin-top: 16px; }
+        .nr-line { border-radius: 8px; margin-left: -6px; padding: 2px 6px; }
+        .nr-line:hover { background: #ebe7ff; color: #4b3fb5; }
+        .nr-line::after { content: " ✏️"; opacity: 0; font-size: 12px; }
+        .nr-line:hover::after { opacity: 1; }
         .nr-box b { font-weight: 700; }
         .nr-box + .nc-sec { margin-top: 24px; }
         .nr-checks { display: flex; flex-direction: column; gap: 9px; }
         .nr-check { display: flex; align-items: center; gap: 14px; min-height: 66px; padding: 12px 13px; border-radius: 12px; border: 1px solid var(--ad-line); }
+        .nr-check { cursor: pointer; transition: border-color .15s, background .15s; }
+        .nr-check:hover { border-color: #6657e9; background: #faf9ff; }
+        .nr-check.is-bad { border-color: #f3dfbd; background: #fffaf2; }
         .nr-check b { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: var(--ad-ink); }
+        .nr-check b small { display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: #b26a00; }
         .nr-ic { width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; background: var(--ad-soft); font-size: 19px; color: var(--ad-ink); }
         .nr-note { margin-top: 12px; font-size: 12px; color: var(--ad-muted); }
       `}</style>
