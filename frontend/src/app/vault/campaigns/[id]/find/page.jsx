@@ -137,6 +137,11 @@ export default function FindMatching() {
             <button type="button" className={`ga-tab ${mode === "all" ? "is-on" : ""}`} onClick={() => setMode("all")}>
               🔎 Search all creators
             </button>
+            {extN > 0 && (
+              <button type="button" className={`ga-tab ${mode === "ext" ? "is-on" : ""}`} onClick={() => setMode("ext")}>
+                ✉️ Off-platform invites ({extN})
+              </button>
+            )}
             <select className="ga-input fm-sel" value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
               <option>Not invited yet</option>
               <option>Invited</option>
@@ -148,7 +153,7 @@ export default function FindMatching() {
           </div>
           {mode === "all" && <input className="ga-input fm-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, @handle or city…" aria-label="Search all creators" autoFocus />}
 
-          <div className="fm-table">
+          <div className="fm-table" hidden={mode === "ext"}>
             <table className="ga-table">
               <thead>
                 <tr>
@@ -197,6 +202,57 @@ export default function FindMatching() {
               </p>
             )}
           </div>
+          {mode === "ext" && (
+            <div className="fm-ext">
+              <p className="fm-exth">Creators you invited by Instagram handle — not on Geek OS yet. DM them the message; the campaign waits in their account once they sign up.</p>
+              {(Array.isArray(ext.data) ? ext.data : []).map((i) => {
+                const h = String(i.handle || "").replace(/^@/, "").toLowerCase();
+                const ST = { pending: "⏳ Not sent yet", manual: "✉️ Send the DM yourself", sent: "✅ DM sent", needs_permission: "✉️ Send the DM yourself", failed: "⚠️ Couldn't send" };
+                const msg = `Hi @${h} 👋 We'd love to have you on "${camp?.name || "our campaign"}" with us on Geek OS (Bounty & Threads).\n\nSign up free here and the campaign will be waiting in your account: ${typeof window !== "undefined" ? window.location.origin : ""}/creator\n\nYou'll see the full brief, what you get, and you can accept or pass — no obligation.`;
+                return (
+                  <div key={i.invite_id || h} className="fm-excard">
+                    <span>
+                      <b>@{h}</b> <span className="ga-badge">{i.claimed_at ? "Joined — invite sent ✓" : ST[i.dm_status] || i.dm_status || "Invited"}</span>
+                      {i.note ? <small> “{i.note}”</small> : null}
+                    </span>
+                    {!i.claimed_at && (
+                      <span className="fm-exact">
+                        <a className="ga-btn ga-btn--ghost fm-exb" href={`https://ig.me/m/${encodeURIComponent(h)}`} target="_blank" rel="noopener noreferrer">
+                          Open DM
+                        </a>
+                        <button
+                          type="button"
+                          className="ga-btn ga-btn--ghost fm-exb"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(msg);
+                              setToast("Message copied ✓");
+                            } catch {
+                              window.prompt("Copy this message:", msg);
+                            }
+                          }}
+                        >
+                          Copy message
+                        </button>
+                        <button
+                          type="button"
+                          className="ga-btn ga-btn--ghost fm-exb"
+                          onClick={async () => {
+                            if (!window.confirm(`Remove the invite for @${h}?`)) return;
+                            const { error } = await rpc("admin", "api.delete_external_invite", { p_invite: i.invite_id });
+                            setToast(error ? errText(error) : "Removed ✓");
+                            ext.reload(true);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </aside>
       </div>
       {toast && <div className="ga-toast fm-toast">{toast}</div>}
@@ -221,6 +277,12 @@ export default function FindMatching() {
         .fm-sel { width: 137px; height: 45px; margin-left: 3px; padding: 0 12px; font-size: 14px; color: #293652; }
         .fm-all { height: 41px; padding: 0 16px; }
         .fm-q { margin-top: 14px; }
+        .fm-ext { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+        .fm-exth { font-size: 12.5px; color: var(--ad-muted); }
+        .fm-excard { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ad-line); font-size: 13px; }
+        .fm-excard small { color: var(--ad-muted); }
+        .fm-exact { display: flex; gap: 6px; flex-wrap: wrap; }
+        .fm-exb { height: 34px; padding: 0 12px; font-size: 12.5px; }
         .fm-table { margin: 18px 0 0; overflow-x: auto; border-bottom: 1px solid var(--ad-line); padding-bottom: 14px; }
         .fm-table .ga-table th { background: none; padding: 14px 11px; }
         .fm-table .ga-table td { height: 64px; padding: 10px 11px; }

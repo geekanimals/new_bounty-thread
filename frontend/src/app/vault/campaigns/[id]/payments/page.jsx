@@ -5,8 +5,8 @@ import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Panel, SubTabs, Note, MiniStats, TextBtn, TableState, useToast, downloadFile, readSheetFile, inr, when } from "@/components/admin/campaign2/kit";
-import { useRpc, rpc, errText } from "@/lib/supabase";
-import PayModal, { who, readyOuts, statusOf } from "@/components/admin/campaign2/PayModal";
+import { useRpc, rpc, errText, sbFor } from "@/lib/supabase";
+import PayModal, { who, readyOuts, statusOf, termsLine, PART, STATUS_TXT, DET_TXT } from "@/components/admin/campaign2/PayModal";
 import { useCampaign } from "@/components/admin/campaign/live";
 
 /*
@@ -71,6 +71,8 @@ export default function CampaignPayments() {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(() => new Set()); // payout ids
   const [modal, setModal] = useState(null); // { row, kind }
+  // purane payRowHtml jaisa — row khol kar fee, bank / UPI, har payout aur saare buttons ek saath
+  const [openRow, setOpenRow] = useState(null);
   const [busy, setBusy] = useState(false);
   const impRef = useRef(null);
   const feeRef = useRef(null);
@@ -126,6 +128,116 @@ export default function CampaignPayments() {
     }
     const kind = { "Fee not set": "fee", "Not verified": "verify", "No bank / UPI": "ask", "Due now": "pay", "Not due yet": "pay", "Being paid": "mark", "Fully paid": "details" }[st];
     setModal({ row: r, kind });
+  };
+
+  const quickRpc = async (fn, args, msg, askTxt) => {
+    if (askTxt && !window.confirm(askTxt)) return;
+    const { error: e } = await rpc("admin", fn, args);
+    after(msg, e);
+  };
+  const openProof = async (path) => {
+    const { data: u, error: e } = await sbFor("admin").storage.from("payment-proofs").createSignedUrl(path, 600);
+    if (e || !u) return show("Couldn't open the screenshot: " + errText(e));
+    window.open(u.signedUrl, "_blank", "noopener");
+  };
+  const rowDetail = (r) => {
+    const p = r.payment || {};
+    const po = p.payouts || [];
+    const anyBusy = po.some((o) => ["queued", "processing"].includes(o.status));
+    const where = p.method === "upi" ? `UPI ${p.upi_id || ""}` : p.method === "bank" ? `A/c ••${p.account_last4 || ""} · ${p.ifsc || ""}${p.bank_name ? ` · ${p.bank_name}` : ""}` : "no bank / UPI yet";
+    const left = p.left != null ? +p.left : +p.amount || 0;
+    const B = (label, onClick, opt = {}) => (
+      <button type="button" className={`py-mini ${opt.pri ? "is-pri" : ""}`} disabled={opt.disabled} onClick={onClick}>
+        {label}
+      </button>
+    );
+    return (
+      <div className="py-det">
+        <div className="py-col">
+          <p className="py-ct">💰 Fee</p>
+          {p.amount != null ? (
+            <p>
+              <b>{inr(p.amount)}</b> <span className="py-mute">{termsLine(p, (data || {}).due_days)}</span>
+              {p.fee_source === "bulk" && <span className="ga-badge">from sheet</span>}
+            </p>
+          ) : (
+            <p>
+              <span className="ga-badge ga-badge--orange">Fee not set</span>
+            </p>
+          )}
+          {p.terms_note && <p className="py-mute">📝 {p.terms_note}</p>}
+          {r.first_fee && (
+            <p className="py-mute">
+              First fee with Geek: <b>{inr(r.first_fee.amount)}</b> · {r.first_fee.campaign || ""}
+            </p>
+          )}
+          {p.amount != null && (
+            <p>
+              Paid <b>{inr(p.paid_total || 0)}</b> · left <b>{inr(left)}</b>
+            </p>
+          )}
+          <div className="py-btns">
+            {B(p.amount == null ? "💰 Set fee & terms" : "✏️ Fee & terms", () => setModal({ row: r, kind: "fee" }), { pri: p.amount == null })}
+            {p.amount != null && left > 0 && B("💸 Pay", () => setModal({ row: r, kind: "pay" }), { pri: true })}
+          </div>
+        </div>
+        <div className="py-col">
+          <p className="py-ct">🏦 Bank / UPI</p>
+          <p>
+            {where} <span className="ga-badge">{DET_TXT[p.details_status] || p.details_status || "—"}</span>
+            {p.details_source && p.details_source !== "creator" ? <span className="py-mute"> ({p.details_source === "bulk" ? "from sheet" : "added by team"})</span> : null}
+          </p>
+          {p.verify_name ? (
+            <p className="py-mute">
+              Name at bank: <b>{p.verify_name}</b>
+              {p.account_name && p.verify_name.toLowerCase() !== String(p.account_name).toLowerCase() ? ` · typed: ${p.account_name}` : ""}
+            </p>
+          ) : p.account_name ? (
+            <p className="py-mute">Name: {p.account_name}</p>
+          ) : null}
+          {p.verify_message && p.details_status !== "verified" && <p className="py-mute">{p.verify_message}</p>}
+          {p.details_status === "needs_update" && p.request_reason && <p className="py-mute">Asked: “{p.request_reason}”</p>}
+          <div className="py-btns">
+            {B("✏️ Edit", () => setModal({ row: r, kind: "bank" }), { disabled: anyBusy })}
+            {p.method && B("👁 Full details", () => setModal({ row: r, kind: "reveal" }))}
+            {p.method && p.details_status !== "verified" && B("✓ Verified by me", () => setModal({ row: r, kind: "verify" }), { pri: true })}
+            {p.method && prov.connected && p.details_status !== "verifying" && B("↻ Auto-check", () => quickRpc("api.payment_verify", { p_participation: r.participation_id, p_mode: "auto" }, "Automatic check started — the result shows in a minute ✓"))}
+            {B("✉️ Ask again", () => setModal({ row: r, kind: "ask" }), { disabled: anyBusy })}
+          </div>
+        </div>
+        <div className="py-col">
+          <p className="py-ct">🧾 Payments</p>
+          {po.length ? (
+            po.map((o) => (
+              <div key={o.payout_id} className="py-out">
+                <span>
+                  {PART[o.part] || o.part} <b>{inr(o.amount)}</b>
+                </span>{" "}
+                <span className="ga-badge">
+                  {STATUS_TXT[o.status] || o.status}
+                  {o.status === "due" && o.due_at ? ` · by ${when(o.due_at)}` : ""}
+                </span>
+                {o.utr && <span className="py-mute"> UTR {o.utr}</span>}
+                {o.status === "failed" && o.failure_reason && <span className="py-mute"> · {o.failure_reason}</span>}
+                <div className="py-btns">
+                  {o.proof_path ? B("📎 Screenshot", () => openProof(o.proof_path)) : o.status === "paid" ? B("📎 Add screenshot", () => setModal({ row: r, kind: "proof", payout: o })) : null}
+                  {(["due", "failed"].includes(o.status) || (o.status === "processing" && o.provider === "razorpayx_bulk")) && B("✅ Paid (UTR)", () => setModal({ row: r, kind: "mark", payout: o }), { pri: o.status === "due" })}
+                  {((o.status === "processing" && o.provider === "razorpayx_bulk") || o.status === "failed") &&
+                    B("↺ Back to due", () => quickRpc("api.payout_reset", { p_payout: o.payout_id }, "Back to due ✓", "Put this payment back to “due”?\n\nOnly if it was NOT paid through the bulk file."))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="py-mute">{p.amount == null ? "—" : "no payments yet"}</p>
+          )}
+          <div className="py-btns">
+            {p.on_hold
+              ? B("▶ Release", () => quickRpc("api.payment_hold", { p_participation: r.participation_id, p_hold: false, p_reason: null }, "Released ✓", `Release ${who(r)}'s payment from hold?`))
+              : B("⏸ Hold", () => setModal({ row: r, kind: "hold" }))}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const paySelected = async () => {
@@ -379,7 +491,7 @@ export default function CampaignPayments() {
                   ready = readyOuts(r),
                   nm = r.name || (r.creator || {}).name;
                 return (
-                  <tr key={r.participation_id}>
+                  [<tr key={r.participation_id}>
                     <td className="py-ck">{ready.length > 0 && <input type="checkbox" checked={ready.every((o) => sel.has(o.payout_id))} onChange={() => toggleRow(r)} aria-label={`Select ${who(r)}`} />}</td>
                     <td>
                       <button type="button" className="py-name" onClick={() => setModal({ row: r, kind: "manage" })} title="All payment details and actions">
@@ -406,9 +518,18 @@ export default function CampaignPayments() {
                         <button type="button" className="ga-btn ga-btn--ghost py-act py-more" onClick={() => setModal({ row: r, kind: "manage" })} aria-label={`Manage ${who(r)}`} title="Manage: fee, bank / UPI, payments, screenshots, hold">
                           ⋯
                         </button>
+                        <button type="button" className="ga-btn ga-btn--ghost py-act py-more" onClick={() => setOpenRow(openRow === r.participation_id ? null : r.participation_id)} aria-label={`Open ${who(r)}`} title="Show everything — fee, bank / UPI, every payment">
+                          {openRow === r.participation_id ? "▴" : "▾"}
+                        </button>
                       </span>
                     </td>
-                  </tr>
+                  </tr>,
+                  openRow === r.participation_id ? (
+                    <tr key={r.participation_id + ":open"} className="py-open">
+                      <td colSpan={9}>{rowDetail(r)}</td>
+                    </tr>
+                  ) : null,
+                  ]
                 );
               })}
             </tbody>
@@ -521,6 +642,18 @@ export default function CampaignPayments() {
         .py-ck { width: 40px; }
         .py-ck input, .py-all input { width: 15px; height: 15px; margin: 0; accent-color: #5f6577; }
         .py-act { height: 40px; padding: 0 15px; font-size: 13px; }
+        .py-open td { background: #fafbff; white-space: normal; }
+        .py-det { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 6px 2px; font-size: 13px; line-height: 1.5; }
+        .py-col { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ad-line); background: #fff; }
+        .py-ct { font-weight: 800; color: var(--ad-ink); margin-bottom: 4px; }
+        .py-mute { color: var(--ad-muted); font-size: 12.5px; }
+        .py-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .py-mini { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; font-weight: 800; color: #6657e9; cursor: pointer; white-space: nowrap; }
+        .py-mini.is-pri { background: var(--ad-primary); border-color: var(--ad-primary); color: #fff; }
+        .py-mini:disabled { opacity: .55; cursor: default; }
+        .py-out { padding: 6px 0; border-bottom: 1px dashed var(--ad-line); }
+        .py-out:last-of-type { border-bottom: 0; }
+        @media (max-width: 1100px) { .py-det { grid-template-columns: 1fr; } }
         .py-acts { display: inline-flex; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
         .py-t td:last-child { white-space: nowrap; }
         .py-more { width: 40px; padding: 0; font-size: 18px; line-height: 1; }

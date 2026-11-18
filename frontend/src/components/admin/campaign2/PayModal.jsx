@@ -5,7 +5,7 @@ import { rpc, sbFor, errText } from "@/lib/supabase";
 import { inr, when } from "@/components/admin/campaign2/kit";
 
 /* Payments ke chhote helpers (purane payments.js jaisa) */
-const PART = { advance: "Advance", balance: "Balance", full: "Fee" };
+export const PART = { advance: "Advance", balance: "Balance", full: "Fee" };
 export const who = (r) => {
   const c = r.creator || {};
   return c.username || r.applied_profile ? "@" + (c.username || r.applied_profile) : r.name || c.name || "Creator";
@@ -30,8 +30,8 @@ export const statusOf = (r) => {
   return left > 0 ? "Not due yet" : "Fully paid";
 };
 
-const STATUS_TXT = { waiting: "not due yet", due: "due", queued: "sending…", processing: "sent — waiting for the bank", paid: "paid ✓", failed: "failed", cancelled: "cancelled" };
-const DET_TXT = { pending: "Not added", submitted: "Check by hand", verifying: "Checking…", verified: "Verified ✓", failed: "Failed ✗", needs_update: "Asked again" };
+export const STATUS_TXT = { waiting: "not due yet", due: "due", queued: "sending…", processing: "sent — waiting for the bank", paid: "paid ✓", failed: "failed", cancelled: "cancelled" };
+export const DET_TXT = { pending: "Not added", submitted: "Check by hand", verifying: "Checking…", verified: "Verified ✓", failed: "Failed ✗", needs_update: "Asked again" };
 export const termsLine = (p, days) => {
   if (p.amount == null) return "";
   const d = p.due_days || days || 7,

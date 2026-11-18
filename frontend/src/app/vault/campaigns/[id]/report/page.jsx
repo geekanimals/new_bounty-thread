@@ -7,7 +7,7 @@ import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import ReportTabs from "@/components/admin/campaign2/ReportTabs";
 import { Panel, MiniStats, Note, TableState, useToast, downloadFile, num } from "@/components/admin/campaign2/kit";
 import { useRpc, rpc, errText } from "@/lib/supabase";
-import { useAsk } from "@/components/admin/campaign/journey";
+import { useAsk, readInsightsShot, uploadInsightsProof } from "@/components/admin/campaign/journey";
 
 /*
  * 📈 Campaign report — purane bpAnalyticsHtml / bpDownloadReport jaisa.
@@ -33,7 +33,10 @@ export default function CampaignReport() {
       title: `Numbers for ${(r.creator || {}).name || "this creator"}’s ${String(p.media_type || "post").toLowerCase()}`,
       text: "Copy them from the creator's Instagram insights (they can send you a screenshot). Leave a box empty if you don't have it. 12.4k works.",
       ok: "Save numbers",
-      fields: NUMS.map(([k, l]) => ({ k, label: l, value: st.source === "public" || st[k] == null ? "" : String(st[k]) })),
+      fields: [
+        { k: "shot", label: "📷 Insights screenshot (optional) — we read the numbers off it", file: true, onFile: (f, setV) => readInsightsShot(f, p.media_type, setV) },
+        ...NUMS.map(([k, l]) => ({ k, label: l, value: st.source === "public" || st[k] == null ? "" : String(st[k]) })),
+      ],
     });
     if (!v) return;
     const pl = {};
@@ -43,6 +46,13 @@ export default function CampaignReport() {
     });
     if (!Object.keys(pl).length) return show("Add at least one number.");
     if (p.post_id) pl.post_id = p.post_id;
+    if (v.shot && typeof v.shot === "object") {
+      try {
+        pl.screenshot_url = await uploadInsightsProof(v.shot);
+      } catch (e) {
+        return show(e.message || String(e));
+      }
+    }
     const { error: e } = await rpc("admin", "api.bp_record_metrics", { p_participation: r.participation_id, p_payload: pl });
     if (e) return show(errText(e));
     show("Numbers saved ✓");

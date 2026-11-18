@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import Link from "next/link";
-import { rpc, invoke, errText } from "@/lib/supabase";
+import { rpc, invoke, errText, sbFor } from "@/lib/supabase";
 import { BP_FAIL, effIndex, stepLabel, inviteStepRank, INVITE_STEPS, fmtNum, fmtDate, maskPhone, initials } from "@/components/admin/campaign/live";
 import IgImg from "@/lib/igFresh";
 
@@ -338,7 +338,26 @@ export function useAsk() {
             <label className="ga-label" htmlFor={`jk-${f.k}`}>
               {f.label}
             </label>
-            {f.options ? (
+            {f.file ? (
+              <>
+                <input
+                  id={`jk-${f.k}`}
+                  className="ga-input"
+                  type="file"
+                  accept={f.accept || "image/*"}
+                  onChange={async (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    setV(f.k, file || "");
+                    if (file && f.onFile) {
+                      setV("_note", "⏳ Reading the numbers…");
+                      const note = await f.onFile(file, setV);
+                      setV("_note", note || "");
+                    }
+                  }}
+                />
+                {st.v._note && <p className="jk-t">{st.v._note}</p>}
+              </>
+            ) : f.options ? (
               <select id={`jk-${f.k}`} className="ga-input" value={st.v[f.k]} onChange={(e) => setV(f.k, e.target.value)}>
                 <option value="">Pick…</option>
                 {f.options.map((o) => (
@@ -374,6 +393,37 @@ export function useAsk() {
     </div>
   ) : null;
   return [el, ask];
+}
+
+/** 📷 Insights screenshot → numbers (purana shotReader — edge function post-shot-read) */
+export const SHOT_KEYS = ["views", "reach", "likes", "comments", "shares", "saves"];
+export async function readInsightsShot(file, kind, setV) {
+  if (file.size > 8 * 1024 * 1024) return "That screenshot is over 8 MB — crop it first.";
+  const b64 = await new Promise((r) => {
+    const fr = new FileReader();
+    fr.onload = () => r(String(fr.result || ""));
+    fr.onerror = () => r("");
+    fr.readAsDataURL(file);
+  });
+  const { data, error } = await invoke("admin", "post-shot-read", { image: b64, media_type: kind || "reel" });
+  if (error || !data || data.error) return "Couldn't read it — type the numbers below. " + ((data && data.error) || "");
+  const m = data.metrics || {};
+  Object.entries(m).forEach(([k, v]) => SHOT_KEYS.includes(k) && setV(k, String(v)));
+  const n = Object.keys(m).length;
+  return n ? `✓ Read ${n} number${n > 1 ? "s" : ""} — check them below.${data.note ? " " + data.note : ""}` : data.note || "No numbers found — type them below.";
+}
+/** Screenshot proof upload — purana uploadProof (campaign-files/<org>/proof/…) */
+export async function uploadInsightsProof(file) {
+  const sb = sbFor("admin");
+  const { data: u } = await sb.auth.getUser();
+  const uid = u && u.user && u.user.id;
+  const { data: me } = uid ? await sb.from("members").select("org_id").eq("id", uid).maybeSingle() : { data: null };
+  if (!me || !me.org_id) throw new Error("Your account has no workspace for uploads — type the numbers instead.");
+  const ext = (String(file.type).split("/")[1] || "png").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "png";
+  const path = `${me.org_id}/proof/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const up = await sb.storage.from("campaign-files").upload(path, file, { contentType: file.type || "image/png", upsert: false });
+  if (up.error) throw new Error("Couldn't upload the screenshot: " + up.error.message);
+  return sb.storage.from("campaign-files").getPublicUrl(path).data.publicUrl;
 }
 
 /**
@@ -494,8 +544,10 @@ export async function runAction(key, row, ctx) {
       const NUMS = [["views", "Views / plays"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["shares", "Shares"], ["saves", "Saves"]];
       const fields = [];
       if (posts.length > 1) fields.push({ k: "post", label: "Post", options: posts.map((q) => [q.post_id, `${q.media_type || "post"} · ${fmtDate(q.posted_at)}`]), value: posts[posts.length - 1].post_id, required: true });
+      const kindOf = () => (posts[posts.length - 1] || {}).media_type || "reel";
+      fields.push({ k: "shot", label: "📷 Insights screenshot (optional) — we read the numbers off it", file: true, onFile: (f, setV) => readInsightsShot(f, kindOf(), setV) });
       NUMS.forEach(([k, l]) => fields.push({ k, label: l, placeholder: "e.g. 12,400 or 12.4k" }));
-      const v = await ask({ title: "Add the numbers", text: "Instagram insights load on their own when the creator's account allows it. If not, type them here.", ok: "Save numbers", fields });
+      const v = await ask({ title: "Add the numbers", text: "Instagram insights load on their own when the creator's account allows it. If not, add their insights screenshot — we read the numbers — or type them.", ok: "Save numbers", fields });
       if (!v) return;
       const pl = {};
       NUMS.forEach(([k]) => {
@@ -504,6 +556,13 @@ export async function runAction(key, row, ctx) {
       });
       if (!Object.keys(pl).length) return say("Add at least one number.");
       pl.post_id = v.post || posts[posts.length - 1].post_id;
+      if (v.shot && typeof v.shot === "object") {
+        try {
+          pl.screenshot_url = await uploadInsightsProof(v.shot);
+        } catch (e) {
+          return say(e.message || String(e));
+        }
+      }
       return call("api.bp_record_metrics", { p_participation: P, p_payload: pl }, "Numbers saved ✓");
     }
     case "bpreassign": {
@@ -543,7 +602,7 @@ const rawPhone = (c) => String(c.x?.phone || c.i?.phone || "").replace(/\D/g, ""
 const emailOf = (c) => c.x?.email || c.x?.creator?.email || c.i?.email || "";
 const igOf = (c) => String(c.handle || "").replace(/^@/, "").trim();
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, busy }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, busy, stats }) {
   const pct = Math.max(4, Math.round((c.step / 12) * 100));
   return (
     <div className={`jr ${open ? "is-open" : ""}`}>
@@ -607,6 +666,19 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
           </span>
         </div>
         <p className="jr-turn">{c.turn}</p>
+        {stats && (
+          <p className="jr-stats">
+            🟢 WhatsApp {stats.wa || 0} · ✉️ Email {stats.em || 0} · 🔔 Reminders {stats.rem || 0}
+            {stats.last && stats.last.at ? (
+              <>
+                {" "}
+                · 🕒 Last message {new Date(stats.last.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} · {stats.last.channel === "email" ? "✉️ email" : "🟢 WhatsApp"}
+                {stats.last.status ? ` · ${stats.last.status === "read" ? "read ✓✓" : stats.last.status === "delivered" ? "delivered ✓✓" : stats.last.status === "failed" ? "not delivered ✗" : stats.last.status}` : ""}
+                {stats.last.by ? ` · ${stats.last.by === "team" ? "sent by the team" : stats.last.by === "creator" ? "from the creator" : "automatic"}` : ""}
+              </>
+            ) : null}
+          </p>
+        )}
       </div>
       <div className="jr-act">
         {c.act && (
@@ -641,6 +713,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onChat, open, 
         .jr-step { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ad-ink); }
         .jr-step .ga-bar { width: 160px; height: 6px; flex-shrink: 0; background: #eceef6; }
         .jr-turn { margin-top: 8px; font-size: 12px; line-height: 1.35; color: #8791a7; }
+        .jr-stats { margin-top: 5px; font-size: 11.5px; line-height: 1.35; color: #8791a7; }
         .jr-act { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: center; }
         .jr-btn { height: 41px; padding: 0 15px; }
         .jr-chat { width: 41px; height: 41px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 17px; color: var(--ad-primary-ink); }

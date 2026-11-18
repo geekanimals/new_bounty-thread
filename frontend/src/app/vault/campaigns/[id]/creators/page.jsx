@@ -9,6 +9,7 @@ import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
 import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectionReasons } from "@/components/admin/campaign/journey";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
+import WaPanel from "@/components/admin/campaign/WaPanel";
 
 /* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
@@ -39,6 +40,8 @@ export default function WorkspaceCreators() {
   const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const prog = useRpc("admin", "api.campaign_deliverable_progress", { p_campaign: id }, { skip: !on });
+  // har creator ke WhatsApp / email / reminder ginti + aakhri message (purana ucStatsLoad)
+  const mstats = useRpc("admin", "api.campaign_msg_stats", { p_campaign: id }, { skip: !on });
   const [box, setBox] = useState(0);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Sort: furthest step");
@@ -54,6 +57,7 @@ export default function WorkspaceCreators() {
     bt.reload(true);
     people.reload(true);
     prog.reload(true);
+    mstats.reload(true);
   };
   const all = useMemo(() => buildRows({ tracker: bt.data, people: people.data, progress: prog.data || {}, kind: camp?.campaign_type || "barter" }), [bt.data, people.data, prog.data, camp]);
   const counts = BOXES.map((b) => all.filter(b.f).length);
@@ -150,43 +154,9 @@ export default function WorkspaceCreators() {
 
   /* 💬 WhatsApp to selected — har creator ko uske ABHI ke step ka naya Utility message (Snapto drip, api.snapto_send_current_step).
      Purane geek_* templates yahan se nahi jaate. Apna likha message (24 ghante wali window) waisa hi. */
-  const waSelected = async () => {
-    const v = await ask({
-      title: `💬 WhatsApp to ${sel.length} creator${sel.length > 1 ? "s" : ""}`,
-      text: "Each creator gets the WhatsApp message for the step they are on right now — invite, contract, address, courier, video brief, post link or completed (the new templates). Steps with no message are skipped and listed. Or type your own message — that only reaches creators who wrote to you in the last 24 hours.",
-      ok: "Send on WhatsApp",
-      fields: [{ k: "text", label: "…or your own message (optional)", area: true, placeholder: "Leave empty to send each creator their current step's message" }],
-    });
-    if (!v) return;
-    setBusy("wa");
-    const keys = sel.map(keyOf);
-    if (v.text.trim()) {
-      const r = await sendWhatsApp({ campaignId: id, keys, template: null, text: v.text.trim() });
-      setBusy("");
-      if (r.cancelled) return;
-      setToast(r.msg);
-      if (!r.bad?.length && r.ok) setSel([]);
-      return reload();
-    }
-    const ms = await rpc("admin", "api.campaign_messaging", { p_campaign: id });
-    const sw = ms.data || {};
-    if (!ms.error && !(sw.wa_on && sw.global_wa_on !== false)) {
-      setBusy("");
-      return setToast("WhatsApp is OFF for this campaign — turn it on in Overview first, then send.");
-    }
-    const { data: d, error: e } = await rpc("admin", "api.snapto_send_current_step", {
-      p_campaign: id,
-      p_invites: keys.filter((k) => k[0] === "i").map((k) => k.slice(2)),
-      p_parts: keys.filter((k) => k[0] === "p").map((k) => k.slice(2)),
-    });
-    setBusy("");
-    if (e) return setToast(errText(e));
-    const skipped = (d && d.skipped) || [];
-    setToast(`💬 ${d?.queued ?? 0} creator${d?.queued === 1 ? "" : "s"} will get their step's message in a few minutes${skipped.length ? ` · ${skipped.length} skipped` : ""} ✓`);
-    if (skipped.length) window.alert("Not sent:\n" + skipped.slice(0, 40).map((x) => `${x.who || "Creator"} — ${x.why}`).join("\n"));
-    if (d?.queued) setSel([]);
-    reload();
-  };
+  // 💬 WhatsApp to selected — purane ccWaPanel jaisa panel (step preview + 24h window), WaPanel.jsx
+  const [waOpen, setWaOpen] = useState(false);
+  const waSelected = () => setWaOpen((o) => !o);
 
   const declinable = sel.map((rid) => all.find((x) => x.id === rid)).filter((x) => x && x.kind === "p" && ["applied", "eligible"].includes(x.x.stage));
   const declineSel = async () => {
@@ -286,7 +256,7 @@ export default function WorkspaceCreators() {
             <span className="wcr-allbox" aria-hidden="true" />
             Select all ({rows.length})
           </label>
-          <button type="button" className="ga-btn ga-btn--ghost wcr-wa" disabled={!sel.length || busy === "wa"} onClick={waSelected}>
+          <button type="button" className="ga-btn ga-btn--ghost wcr-wa" disabled={busy === "wa"} onClick={waSelected} title="Tick creators — or open it and pick who replied in the last 24 hours">
             {busy === "wa" ? "Sending…" : `💬 WhatsApp to selected (${sel.length})`}
           </button>
           <button type="button" className="wcr-txt" disabled={!declinable.length || busy === "decl"} onClick={declineSel}>
@@ -318,6 +288,23 @@ export default function WorkspaceCreators() {
             </button>
           )}
         </div>
+        {waOpen && (
+          <WaPanel
+            campaignId={id}
+            keys={sel.map(keyOf)}
+            visible={rows.map((r) => keyOf(r.id))}
+            setSel={setSel}
+            onClose={() => setWaOpen(false)}
+            say={setToast}
+            onDone={(sent) => {
+              if (sent) {
+                setSel([]);
+                setWaOpen(false);
+              }
+              reload();
+            }}
+          />
+        )}
         <button type="button" className="wcr-txt wcr-pick" onClick={() => (setBox(3), setSel(all.filter((x) => x.registered && !x.ig).map((x) => x.id)))}>
           📸 Pick everyone without Instagram
         </button>
@@ -333,6 +320,7 @@ export default function WorkspaceCreators() {
               onAction={() => act(x)}
               busy={busy === x.id}
               onChat={() => router.push(`/vault/campaigns/${c.id}/creators/${x.id}`)}
+              stats={(mstats.data || {})[keyOf(x.id)]}
             />
           ))}
           {!rows.length && (

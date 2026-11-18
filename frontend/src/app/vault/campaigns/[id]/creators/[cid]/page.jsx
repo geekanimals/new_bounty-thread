@@ -68,6 +68,32 @@ export default function WorkspaceCreator() {
     if (box) box.scrollTop = box.scrollHeight;
   }, [msgs.length]);
 
+  // ✉️ Email (purane creator hub ka team_send_email) — sirf campaign mein jude creators
+  const sendEmail = async () => {
+    const v = await askFn({
+      title: `Email ${x.name}`,
+      text: "Goes to the creator's email from the Geek team, about this campaign. It's also saved in their history.",
+      ok: "Send email",
+      fields: [
+        { k: "subject", label: "Subject", value: `About ${camp?.name || "your campaign"}`, required: true },
+        { k: "body", label: "Message", area: true, required: true },
+      ],
+    });
+    if (!v) return;
+    const { error } = await rpc("admin", "api.team_send_email", { p_participation: x.pid, p_subject: v.subject.trim(), p_body: v.body.trim() });
+    setToast(error ? errText(error) : "✉️ Email sent ✓");
+    if (!error) hub.reload(true);
+  };
+  // 📊 sheet waale creator ka public Instagram (purana openPublicAnalytics — api.creator_public_stats)
+  const [pub, setPub] = useState(null);
+  const openPublic = async () => {
+    const h = String(x?.i?.handle || x?.handle || "").replace(/^@/, "").toLowerCase();
+    if (!h) return setToast("No Instagram username for this creator.");
+    setPub({ handle: h, loading: true });
+    const { data, error } = await rpc("admin", "api.creator_public_stats", { p_handle: h });
+    setPub({ handle: h, data: data || null, error: error ? errText(error) : null });
+  };
+
   /* chat send — wa-send (purane hub / invite chat jaisa) */
   const send = async (e) => {
     e.preventDefault();
@@ -306,13 +332,18 @@ export default function WorkspaceCreator() {
                     📊 Instagram analytics
                   </Link>
                 ) : (
-                  <button type="button" className="wcc-btn" onClick={() => setToast("Not on Geek OS yet — Instagram analytics show once they register and connect.")}>
+                  <button type="button" className="wcc-btn" onClick={openPublic}>
                     📊 Instagram analytics
                   </button>
                 )}
                 <button type="button" className="wcc-btn" onClick={links}>
                   🔗 Links / courier
                 </button>
+                {x.kind === "p" && (
+                  <button type="button" className="wcc-btn" onClick={sendEmail}>
+                    ✉️ Email them
+                  </button>
+                )}
                 {memberId && (
                   <>
                     <Link href={`/vault/creators/${memberId}/profile`} className="wcc-btn">
@@ -351,6 +382,86 @@ export default function WorkspaceCreator() {
         )}
       </section>
 
+      {pub && (
+        <div className="ga-overlay" onClick={() => setPub(null)}>
+          <div className="ga-modal wcc-modal wcc-pub" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Instagram analytics">
+            <h2 className="ga-h2">📊 Instagram analytics · @{pub.handle}</h2>
+            {pub.loading ? (
+              <p>Loading…</p>
+            ) : pub.error ? (
+              <p>{pub.error}</p>
+            ) : !(pub.data && pub.data.profile) ? (
+              <p>No public numbers for @{pub.handle} yet — they fill in once Instagram shares them, or when the creator connects Instagram.</p>
+            ) : (
+              (() => {
+                const P = pub.data.profile;
+                const f = +P.followers || 0;
+                const er = P.engagement != null ? Number(P.engagement) : f && P.avg_likes != null ? Math.round((10000 * ((+P.avg_likes || 0) + (+P.avg_comments || 0))) / f) / 100 : null;
+                const posts = pub.data.posts || [];
+                return (
+                  <>
+                    <div className="wcc-pubstats">
+                      <div>
+                        <b>{f ? f.toLocaleString("en-IN") : "—"}</b>followers
+                      </div>
+                      <div>
+                        <b>{P.media_count != null ? P.media_count : "—"}</b>posts
+                      </div>
+                      <div>
+                        <b>{P.avg_likes != null ? Math.round(P.avg_likes).toLocaleString("en-IN") : "—"}</b>avg likes
+                      </div>
+                      <div>
+                        <b>{P.avg_comments != null ? Math.round(P.avg_comments).toLocaleString("en-IN") : "—"}</b>avg comments
+                      </div>
+                      <div>
+                        <b>{er != null ? `${er}%` : "—"}</b>engagement
+                      </div>
+                    </div>
+                    {P.bio && <p className="wcc-pubbio">{P.bio}</p>}
+                    {posts.length > 0 && (
+                      <table className="c2-t">
+                        <thead>
+                          <tr>
+                            <th>Post</th>
+                            <th>Views</th>
+                            <th>Likes</th>
+                            <th>Comments</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {posts.slice(0, 20).map((q, i) => (
+                            <tr key={i}>
+                              <td>
+                                {/^https?:\/\//.test(q.permalink || q.url || "") ? (
+                                  <a href={q.permalink || q.url} target="_blank" rel="noopener noreferrer">
+                                    {q.media_type || "post"} ↗
+                                  </a>
+                                ) : (
+                                  q.media_type || "post"
+                                )}
+                              </td>
+                              <td>{q.views != null ? Number(q.views).toLocaleString("en-IN") : "—"}</td>
+                              <td>{q.likes != null ? Number(q.likes).toLocaleString("en-IN") : "—"}</td>
+                              <td>{q.comments != null ? Number(q.comments).toLocaleString("en-IN") : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {P.fetched_at && <p className="wcc-pubbio">From their public profile · {new Date(P.fetched_at).toLocaleDateString("en-IN")}</p>}
+                  </>
+                );
+              })()
+            )}
+            <div className="wcc-modal__act">
+              <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setPub(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {ask && (
         <div className="ga-overlay" onClick={() => setAsk(false)}>
           <div className="ga-modal wcc-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Remove creator">
@@ -385,6 +496,11 @@ export default function WorkspaceCreator() {
         .wcc-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; padding: 13px 14px 14px; background: #f3f0e8; }
         .wcc-day { align-self: center; margin: 10px auto 2px; padding: 3px 10px; border-radius: 999px; background: rgba(127,127,127,.14); font-size: 11px; color: var(--ga-muted, #8a8f9c); }
         .wcc-pp { margin-top: 18px; }
+        .wcc-pub { max-width: 720px; }
+        .wcc-pubstats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+        .wcc-pubstats div { display: flex; flex-direction: column; padding: 10px; border-radius: 10px; border: 1px solid var(--ad-line); font-size: 11.5px; color: var(--ad-muted); }
+        .wcc-pubstats b { font-size: 17px; color: var(--ad-ink); }
+        .wcc-pubbio { font-size: 12.5px; color: var(--ad-muted); margin: 6px 0; white-space: pre-wrap; }
         .wcc-msg { align-self: flex-start; width: min(447px, 88%); padding: 10px 12px 8px; border-radius: 9px; background: #fff; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
         .wcc-msg p { white-space: pre-line; font-size: 13px; line-height: 1.33; color: var(--ad-ink); }
         .wcc-msg small { display: block; margin-top: 4px; text-align: right; font-size: 12px; color: var(--ad-muted); }
