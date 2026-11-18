@@ -19,7 +19,8 @@ const BOXES = [
   { l: "Registered", s: "on Geek OS", f: (c) => c.registered },
   { l: "No Instagram", s: "signed up, not linked", f: (c) => c.registered && !c.ig },
   { l: "Instagram", s: "media kit connected", f: (c) => c.ig },
-  { l: "Applied", s: "waiting", f: (c) => c.applied && c.registered && !c.failed },
+  { l: "Applied", s: "screening", f: (c) => c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand" },
+  { l: "Sent to brand", s: "waiting for the brand", f: (c) => c.x?.stage === "sent_to_brand" },
   { l: "Rejected", s: "not a fit / brand passed", f: (c) => c.failed },
   { l: "Approved", s: "brand said yes", f: (c) => c.approved },
   { l: "Contract signed", f: (c) => (c.sheet ?? c.step) >= 5 },
@@ -45,6 +46,8 @@ export default function WorkspaceCreators() {
   // har creator ke WhatsApp / email / reminder ginti + aakhri message (purana ucStatsLoad)
   const mstats = useRpc("admin", "api.campaign_msg_stats", { p_campaign: id }, { skip: !on });
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  // sheet upload / profile / contact — email, city, followers jo tracker mein nahi aate
+  const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const [box, setBox] = useState(0);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Sort: furthest step");
@@ -62,8 +65,24 @@ export default function WorkspaceCreators() {
     people.reload(true);
     prog.reload(true);
     mstats.reload(true);
+    extras.reload(true);
   };
-  const all = useMemo(() => buildRows({ tracker: bt.data, people: people.data, progress: prog.data || {}, kind: camp?.campaign_type || "barter" }), [bt.data, people.data, prog.data, camp]);
+  const all = useMemo(() => {
+    const ex = extras.data || {};
+    return buildRows({ tracker: bt.data, people: people.data, progress: prog.data || {}, kind: camp?.campaign_type || "barter" }).map((r) => {
+      const e = r.pid && ex[r.pid];
+      if (!e) return r;
+      const fol = r.followersN || Number(e.followers) || 0;
+      return {
+        ...r,
+        x: { ...r.x, email: r.x?.email || e.email, phone: r.x?.phone || e.phone },
+        city: r.city && r.city !== "—" ? r.city : e.city || "—",
+        followersN: fol,
+        followers: r.followersN ? r.followers : e.followers != null ? Number(e.followers).toLocaleString("en-IN") + (e.followers_from === "sheet" ? " (sheet)" : "") : r.followers,
+        handle: r.handle || (e.handle ? "@" + String(e.handle).replace(/^@/, "") : ""),
+      };
+    });
+  }, [bt.data, people.data, prog.data, camp, extras.data]);
   const counts = BOXES.map((b) => all.filter(b.f).length);
 
   const rows = useMemo(() => {
@@ -101,7 +120,7 @@ export default function WorkspaceCreators() {
   const fitN = useMemo(() => {
     const m = { ok: 0, no: 0, missing: 0 };
     all.forEach((x) => {
-      const ms = x.pid && x.applied && !x.failed ? matchState((bmatch.data || {})[x.pid]) : null;
+      const ms = x.pid && x.applied && !x.failed && x.x?.stage !== "sent_to_brand" ? matchState((bmatch.data || {})[x.pid]) : null;
       if (ms) m[ms.k]++;
     });
     return m;
