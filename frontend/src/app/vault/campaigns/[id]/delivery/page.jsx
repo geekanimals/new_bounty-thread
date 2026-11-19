@@ -50,6 +50,17 @@ function explain(r) {
     };
   if (r.opted_out) return { what, code: "opted_out", status: "Not delivered", tone: "red", reason: "The creator replied STOP on WhatsApp — no more messages go to this number.", fix: "Only if they ask again: Messaging & bot → Opted out → Turn back on." };
   if (r.status === "held") return { what, code: "held", status: "Held", tone: "orange", reason: err.replace(/^paused:\s*/i, "") ? `Held — ${err.replace(/^paused:\s*/i, "")}.` : "Held — messages are OFF for this campaign.", fix: "Turn the channel ON in the campaign Overview. Held messages are not sent later." };
+  if (r.status === "skipped" && /covered by the Snapto drip/i.test(err))
+    return { what, code: "skipped", status: "No duplicate", tone: "", reason: "Not sent here on purpose — the Snapto drip for this step sends the WhatsApp, so the creator gets it only once.", fix: "" };
+  if (r.status === "skipped" && /old WhatsApp template off/i.test(err))
+    return {
+      what,
+      code: "skipped",
+      status: "Skipped (old rule)",
+      tone: "orange",
+      reason: /drip|bulk_invite|completed|video|shipped|address|parcel|contract|approved/.test(String(r.template || "")) ? "Not sent here — the Snapto drip for this step sends the WhatsApp." : "This step's WhatsApp was switched off by mistake (no Snapto drip covers it), so only the email went. Fixed on 19 Nov — from now on it goes on WhatsApp too.",
+      fix: "",
+    };
   if (r.status === "skipped")
     return {
       what,
@@ -212,6 +223,14 @@ export default function DeliveryLog() {
 
         <div className="c2-tw">
           <table className="c2-t dl-t">
+            <colgroup>
+              <col style={{ width: 108 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 250 }} />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 120 }} />
+              <col />
+            </colgroup>
             <thead>
               <tr>
                 <th>When</th>
@@ -349,7 +368,10 @@ export default function DeliveryLog() {
         .dl-chs { display: flex; gap: 6px; }
         .dl-chs .ga-tab { height: 34px; }
         .dl-mute { font-size: 12px; color: var(--ad-muted); }
-        .dl-t { margin-top: 12px; }
+        .dl-t { margin-top: 12px; table-layout: fixed; min-width: 1000px; }
+        .c2-t.dl-t td { white-space: normal; word-break: break-word; overflow-wrap: anywhere; vertical-align: top; }
+        .c2-t.dl-t td.dl-reason { min-width: 0; max-width: none; line-height: 1.45; color: var(--ad-text); }
+        .c2-t.dl-t .dl-badnum { word-break: break-all; }
         .dl-row { cursor: pointer; }
         .dl-row:hover td, .dl-row.is-open td { background: var(--ad-soft-2); }
         .dl-row td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; font-size: 12.5px; }
