@@ -393,7 +393,8 @@ export default function CampaignPayments() {
       <SubTabs
         active="payments"
         items={[
-          { k: "shipping", label: "📦 Shipping", href: `/vault/campaigns/${id}/fulfilment` },
+          // Physical visit mein koi product nahi jaata — Shipping tab nahi
+          ...(kind === "visit" ? [] : [{ k: "shipping", label: "📦 Shipping", href: `/vault/campaigns/${id}/fulfilment` }]),
           { k: "payments", label: "💰 Payments", href: `/vault/campaigns/${id}/payments` },
         ]}
       />

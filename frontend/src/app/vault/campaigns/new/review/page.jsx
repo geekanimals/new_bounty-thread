@@ -21,7 +21,9 @@ export default function NewCampaignReview() {
   const checks = [
     { t: "Campaign name and brand", ok: !!(d.name.trim() && d.brand.trim()), href: to("basics", !d.name.trim() ? "name" : "brand"), fix: !d.name.trim() ? "Add the campaign name" : "Add the brand" },
     { t: "Deliverables defined", ok: parts.length > 0, href: to("deliverables", "reels"), fix: "Add how many reels / stories / posts" },
-    { t: "Product / payment terms", ok: !!(d.reward.trim() && d.value), href: to("deliverables", !d.reward.trim() ? "reward" : "value"), fix: !d.reward.trim() ? "Add the product / reward" : "Add the product value ₹" },
+    d.type === "Physical visit"
+      ? { t: "Place to visit", ok: (d.vVenues || []).some((v) => String(v.name || "").trim() && String(v.address || "").trim()), href: to("basics", "vMode"), fix: "Add the place name and address" }
+      : { t: "Product / payment terms", ok: !!(d.reward.trim() && d.value), href: to("deliverables", !d.reward.trim() ? "reward" : "value"), fix: !d.reward.trim() ? "Add the product / reward" : "Add the product value ₹" },
     { t: "Creative brief", ok: !!d.brief.trim(), href: to("terms", "brief"), fix: "Write what creators should shoot" },
     { t: "Tracking destination, if enabled", ok: !d.tracking || !!d.url.trim(), href: to("eligibility", d.tracking ? "url" : "tracking"), fix: "Add the shop link" },
   ];
@@ -49,7 +51,7 @@ export default function NewCampaignReview() {
           <b>{d.name.trim() || "Untitled campaign"}</b>· {d.brand.trim() || "No brand yet"} · {d.type}
         </Link>
         <Link href={to("deliverables", "reels")} className="nr-line">
-          {parts.join(" · ") || "No deliverables"} · {n("target")} creators · {n("due")} days due after delivery
+          {parts.join(" · ") || "No deliverables"} · {n("target")} creators · {n("due")} days due after {d.type === "Physical visit" ? "the visit" : "delivery"}
         </Link>
         {d.type === "Physical visit" ? (
           <Link href={to("basics", "vMode")} className="nr-line">
