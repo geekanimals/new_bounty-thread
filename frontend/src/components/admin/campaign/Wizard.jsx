@@ -186,6 +186,15 @@ export function startDraftFromRequest(q, brand) {
 }
 
 /** Draft state — steps ke beech sessionStorage mein bachta hai. ?edit=<id> ho to us campaign se bharta hai */
+
+/* row ka chhota fingerprint — draft purana hai ya nahi ye pehchaanne ke liye */
+function rowSig(o) {
+  const t = JSON.stringify(o);
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (Math.imul(31, h) + t.charCodeAt(i)) | 0;
+  return `${t.length}.${h}`;
+}
+
 export function useDraft() {
   const [d, setD] = useState(DEFAULT_DRAFT);
   const [ready, setReady] = useState(false);
@@ -199,7 +208,9 @@ export function useDraft() {
     } catch {
       /* ignore */
     }
-    if (edit && (!saved || saved.editId !== edit)) {
+    if (edit) {
+      // Edit: hamesha database ka taaza row lao. Purana draft (isi tab ka) sirf tab rakho jab row tab se badla na ho —
+      // warna purana draft save karne par nayi photo / cover / settings mit jaati thi (stale draft bug).
       sbFor("admin")
         .from("campaigns")
         .select("*")
@@ -207,7 +218,12 @@ export function useDraft() {
         .maybeSingle()
         .then(({ data }) => {
           if (!alive) return;
-          const n = data ? draftFromRow(data) : saved || DEFAULT_DRAFT;
+          let n;
+          if (data) {
+            const fresh = draftFromRow(data);
+            const sig = rowSig(fresh);
+            n = saved && saved.editId === edit && saved.rowSig === sig ? saved : { ...fresh, rowSig: sig };
+          } else n = saved && saved.editId === edit ? saved : DEFAULT_DRAFT;
           setD(n);
           try {
             window.sessionStorage.setItem(KEY, JSON.stringify(n));
@@ -217,7 +233,7 @@ export function useDraft() {
           setReady(true);
         });
     } else {
-      if (!edit && saved && saved.editId) saved = null; // naya campaign — purane edit ka draft nahi
+      if (saved && saved.editId) saved = null; // naya campaign — purane edit ka draft nahi
       if (saved) setD(saved);
       setReady(true);
     }
