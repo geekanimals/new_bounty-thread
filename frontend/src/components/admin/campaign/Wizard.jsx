@@ -19,9 +19,12 @@ export const STEPS = [
 ];
 
 const KEY = "geek_admin_new_campaign";
-export const TYPE_KEYS = { Barter: "barter", Paid: "paid", "Barter + Paid": "barter_paid" };
-const TYPE_LABELS = { barter: "Barter", paid: "Paid", barter_paid: "Barter + Paid" };
+export const TYPE_KEYS = { Barter: "barter", Paid: "paid", "Barter + Paid": "barter_paid", "Physical visit": "visit" };
+const TYPE_LABELS = { barter: "Barter", paid: "Paid", barter_paid: "Barter + Paid", visit: "Physical visit" };
+/* Physical visit — creator jagah par jaata hai (restaurant / hotel / club / store / event), product nahi jaata */
+export const VISIT_DEFAULT = { vMode: "paid", vReach: "local", vVenues: [{ name: "", address: "", map: "", city: "" }], vCovers: ["food"], vPlusOne: false, vFrom: "", vTo: "", vSlots: "", vNotes: "", vPayMode: "advance", vAdvPct: "50" };
 export const DEFAULT_DRAFT = {
+  ...VISIT_DEFAULT,
   editId: "",
   brandId: "",
   subtype: "normal_barter",
@@ -99,6 +102,21 @@ function draftFromRow(c) {
     brandId: c.brand_id || "",
     subtype: c.barter_subtype || "normal_barter",
     type: TYPE_LABELS[c.campaign_type] || "Barter",
+    ...(ct.visit && typeof ct.visit === "object"
+      ? {
+          vMode: ct.visit.mode || "paid",
+          vReach: ct.visit.reach || "local",
+          vVenues: Array.isArray(ct.visit.venues) && ct.visit.venues.length ? ct.visit.venues.map((v) => ({ name: v.name || "", address: v.address || "", map: v.map_url || "", city: v.city || "" })) : VISIT_DEFAULT.vVenues,
+          vCovers: Array.isArray(ct.visit.covers) ? ct.visit.covers : [],
+          vPlusOne: !!ct.visit.plus_one,
+          vFrom: ct.visit.window_start || "",
+          vTo: ct.visit.window_end || "",
+          vSlots: ct.visit.slots || "",
+          vNotes: ct.visit.notes || "",
+          vPayMode: ct.visit.pay_mode || "advance",
+          vAdvPct: ct.visit.advance_pct != null ? String(ct.visit.advance_pct) : "50",
+        }
+      : {}),
     name: c.name || "",
     brand: c.brand || "",
     objective: c.objective || "Awareness",
@@ -269,7 +287,31 @@ export function useDraft() {
 export async function saveCampaign(d, { draft = false } = {}) {
   const sb = sbFor("admin");
   const t = TYPE_KEYS[d.type] || "barter";
-  const st = t === "paid" ? null : d.subtype || "normal_barter";
+  const st = t === "paid" || t === "visit" ? null : d.subtype || "normal_barter";
+  // Physical visit: venue + map zaroori; experience mode = koi payment nahi
+  let visit = null;
+  if (t === "visit") {
+    const venues = (d.vVenues || []).map((v) => ({ name: String(v.name || "").trim(), address: String(v.address || "").trim(), map_url: String(v.map || "").trim() || null, city: String(v.city || "").trim() || null })).filter((v) => v.name || v.address);
+    if (!venues.length) throw new Error("Add at least one place to visit (name + address).");
+    if (venues.some((v) => !v.name || !v.address)) throw new Error("Every place needs a name and an address.");
+    if (venues.some((v) => v.map_url && !/^https:\/\//i.test(v.map_url))) throw new Error("The Google Maps link must start with https://");
+    if (d.vFrom && d.vTo && d.vTo < d.vFrom) throw new Error("Visit window: the last day must be after the first day.");
+    const adv = Math.min(100, Math.max(0, parseInt(d.vAdvPct) || 0));
+    visit = {
+      mode: d.vMode === "experience" ? "experience" : "paid",
+      reach: ["local", "travel_covered", "travel_own"].includes(d.vReach) ? d.vReach : "local",
+      venues,
+      covers: Array.isArray(d.vCovers) ? d.vCovers : [],
+      plus_one: !!d.vPlusOne,
+      window_start: d.vFrom || null,
+      window_end: d.vTo || null,
+      slots: String(d.vSlots || "").trim().slice(0, 300) || null,
+      notes: String(d.vNotes || "").trim().slice(0, 500) || null,
+      pay_mode: d.vMode === "experience" ? null : d.vPayMode === "full_after" ? "full_after" : "advance",
+      advance_pct: d.vMode === "experience" || d.vPayMode === "full_after" ? null : adv,
+    };
+  }
+  const visitPaid = t === "visit" && visit.mode === "paid";
   const num = (v) => (String(v ?? "").trim() === "" || isNaN(Number(v)) ? null : Number(v));
   if (!String(d.name).trim()) throw new Error("Add a campaign name.");
   if (!String(d.brand).trim()) throw new Error("Pick the brand (or type a new brand's name).");
@@ -345,17 +387,17 @@ export async function saveCampaign(d, { draft = false } = {}) {
     brand_id: d.brandId || null,
     campaign_type: t,
     barter_subtype: st,
-    type: legacyTypeFor(t, st),
+    type: t === "visit" ? (visitPaid ? "Paid Campaign" : "Mass Barter") : legacyTypeFor(t, st),
     objective: d.objective,
     status,
-    budget: t === "barter" ? null : num(d.budget),
-    product_link: t === "paid" ? null : plink || dest || (d._row && d._row.product_link) || null,
+    budget: t === "barter" || (t === "visit" && !visitPaid) ? null : num(d.budget),
+    product_link: t === "paid" || t === "visit" ? null : plink || dest || (d._row && d._row.product_link) || null,
     start_date: start,
     cover_url: cover || null,
     wa_invite_image: waImage || null,
     wa_invite_photo_on: !!(d.waPhotoOn && waImage),
     attachments: Array.isArray(d.files) ? d.files : [],
-    product_value: t === "paid" ? null : num(d.value),
+    product_value: t === "paid" || t === "visit" ? null : num(d.value),
     platforms: "Instagram",
     hashtags: [...tags.tags, ...tags.ments].join(" ") || null,
     deliverables: delivText,
@@ -365,12 +407,13 @@ export async function saveCampaign(d, { draft = false } = {}) {
     ideal_profile: { ...prev, ...ideal, ...(locs.length ? {} : { locations: prev.locations }) },
     contract_terms: {
       ...((d._row && d._row.contract_terms) || (d._prefill && d._prefill.contract_terms) || {}),
-      product: t === "paid" ? null : String(d.reward || "").trim() || null,
-      product_value: t === "paid" ? null : num(d.value),
+      product: t === "paid" || t === "visit" ? null : String(d.reward || "").trim() || null,
+      product_value: t === "paid" || t === "visit" ? null : num(d.value),
+      visit,
       deliverables: delivText,
       ad_rights_months: Math.min(24, Math.max(0, parseInt(d.rights) || 0)),
       content_days: Math.min(60, Math.max(1, parseInt(d.due) || 7)),
-      pay_due_days: t === "barter" ? null : Math.min(90, Math.max(1, parseInt(d.payDue) || 7)),
+      pay_due_days: t === "barter" || (t === "visit" && !visitPaid) ? null : Math.min(90, Math.max(1, parseInt(d.payDue) || 7)),
     },
     video_brief: {
       ...((d._row && d._row.video_brief) || (d._prefill && d._prefill.video_brief) || {}),

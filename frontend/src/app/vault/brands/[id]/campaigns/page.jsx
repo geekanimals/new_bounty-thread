@@ -6,7 +6,7 @@ import BrandPanel, { useBrand } from "@/components/admin/brand/BrandPanel";
 import PTable from "@/components/admin/brand/PTable";
 import { num } from "@/components/admin/brand/util";
 
-const TYPE = { barter: "Barter", paid: "Paid", barter_paid: "Barter + Paid" };
+const TYPE = { barter: "Barter", paid: "Paid", barter_paid: "Barter + Paid", visit: "Physical visit" };
 const tone = (s = "") => (/live/i.test(s) ? "green" : /draft|approval|sourcing/i.test(s) ? "orange" : /shortlist|production/i.test(s) ? "violet" : "");
 
 /** /vault/brands/[id]/campaigns — is brand ki campaigns (brand_detail.campaigns) */

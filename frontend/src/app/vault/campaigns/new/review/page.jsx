@@ -51,12 +51,20 @@ export default function NewCampaignReview() {
         <Link href={to("deliverables", "reels")} className="nr-line">
           {parts.join(" · ") || "No deliverables"} · {n("target")} creators · {n("due")} days due after delivery
         </Link>
-        <Link href={to("deliverables", "reward")} className="nr-line">
-          {d.reward.trim() || "Reward not specified"} · ₹{d.value || "—"} · {n("rights")} month(s) usage rights
-        </Link>
+        {d.type === "Physical visit" ? (
+          <Link href={to("basics", "vMode")} className="nr-line">
+            📍 {d.vMode === "experience" ? "Experience only (no payment)" : `Visit + payment · ${d.vPayMode === "full_after" ? "full payment after the campaign" : `${d.vAdvPct || 0}% advance + balance`}`} ·{" "}
+            {(d.vVenues || []).filter((v) => v.name).map((v) => v.name + (v.city ? ` (${v.city})` : "")).join(", ") || "No place added"} ·{" "}
+            {{ local: "local creators only", travel_covered: "travel + stay paid", travel_own: "anyone, own cost" }[d.vReach] || ""} · {n("rights")} month(s) usage rights
+          </Link>
+        ) : (
+          <Link href={to("deliverables", "reward")} className="nr-line">
+            {d.reward.trim() || "Reward not specified"} · ₹{d.value || "—"} · {n("rights")} month(s) usage rights
+          </Link>
+        )}
         <Link href={to("basics", "startDate")} className="nr-line">
           Dates: {d.startDate || "—"} → {d.endDate || (d.deadline ? `${d.deadline} days from launch` : "—")}
-          {d.type !== "Barter" && ` · Budget ₹${d.budget || "—"} · pay within ${d.payDue || 7} days`}
+          {d.type !== "Barter" && !(d.type === "Physical visit" && d.vMode === "experience") && ` · Budget ₹${d.budget || "—"} · pay within ${d.payDue || 7} days`}
         </Link>
         <Link href={to("eligibility", "locations")} className="nr-line">
           Eligibility:{" "}

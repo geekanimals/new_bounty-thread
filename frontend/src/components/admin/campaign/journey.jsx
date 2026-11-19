@@ -39,7 +39,7 @@ export function nextAction(x, kind = "barter", progress = {}) {
   const ship = x.shipment || {};
   const g = progress[x.participation_id] || {};
   const overdue = x.due_on && x.due_on < todayISO();
-  const noShip = kind === "paid";
+  const noShip = kind === "paid" || kind === "visit";
   const chat = ["bpchat", "💬 Message on WhatsApp"];
   if (BP_FAIL.includes(x.stage)) return { turn: "off", title: `Out of the campaign — ${String(x.stage).replace(/_/g, " ")}`, text: x.reason || "", acts: [] };
   if (x.blocked_at) return { turn: "you", tone: "bad", title: "Blocked — no video after delivery", text: `Call ${x.phone || "them"}, note what they said and unblock with a new date.`, acts: [["bpunblock", "✅ Called — unblock", 1], ["bpcall", "📝 Note a call"], chat] };
@@ -55,7 +55,7 @@ export function nextAction(x, kind = "barter", progress = {}) {
       return { turn: "brand", title: "Waiting for the brand", text: "The brand approves in their Approvals page.", acts: [["bpbrand", "✅ Approve for brand", 1], ["bpbrandno", "Brand said no"]] };
     case "brand_confirmed":
     case "accepted":
-      return ["paid", "barter_paid"].includes(kind)
+      return ["paid", "barter_paid", "visit"].includes(kind)
         ? { turn: "you", title: "Set their fee — the contract goes out with it", text: "Open 💰 Payments, set this creator's fee & terms; the contract is sent automatically.", acts: [["bppay", "💰 Set fee", 1]] }
         : { turn: "you", title: "Send the contract", text: "Usually goes out on its own — send it now if it hasn't.", acts: [["bpcontract", "📜 Contract sent", 1]] };
     case "contract_sent":
@@ -102,7 +102,7 @@ export function stepMsg(x, nx, kind) {
     case "contract_sent":
       return ["contract_sent", "🔁 Resend contract"];
     case "contract_signed":
-      return kind === "paid" ? null : ["confirm_address", "🔔 Remind: confirm address"];
+      return kind === "paid" || kind === "visit" ? null : ["confirm_address", "🔔 Remind: confirm address"];
     case "product_sent":
       return ship.status === "delivered" ? (overdue ? ["video_warning", "▶ Remind: video overdue"] : ["video_due", "▶ Remind"]) : ["product_shipped", "🔁 Resend: product shipped"];
     case "content_created":

@@ -18,13 +18,13 @@ export default function NewCampaignDeliverables() {
         <Field label="🎟️ District reviews (creator uploads a screenshot)" k="districtReviews" d={d} set={set} type="number" placeholder="0" />
         <Field full label="Anything else each creator does (optional)" k="other" d={d} set={set} placeholder="e.g. tag the store location" />
       </div>
-      <p className="nc-sec">Commercial value</p>
+      <p className="nc-sec">{d.type === "Physical visit" ? "Content timing & rights" : "Commercial value"}</p>
       <div className="nc-grid">
-        <Field label="Product / reward" k="reward" d={d} set={set} placeholder="e.g. curated PR kit" />
-        <Field label="Product value ₹" k="value" d={d} set={set} type="number" placeholder="e.g. 2000" />
-        <Field label="Content due after delivery (days)" k="due" d={d} set={set} type="number" />
+        {d.type !== "Physical visit" && <Field label="Product / reward" k="reward" d={d} set={set} placeholder="e.g. curated PR kit" />}
+        {d.type !== "Physical visit" && <Field label="Product value ₹" k="value" d={d} set={set} type="number" placeholder="e.g. 2000" />}
+        <Field label={d.type === "Physical visit" ? "Content due after the visit (days)" : "Content due after delivery (days)"} k="due" d={d} set={set} type="number" />
         <Field label="Usage / ad rights (months)" k="rights" d={d} set={set} type="number" />
-        {d.type !== "Paid" && <Field full label="Product link (optional)" k="productLink" d={d} set={set} type="url" placeholder="https://brand.example/product" />}
+        {d.type !== "Paid" && d.type !== "Physical visit" && <Field full label="Product link (optional)" k="productLink" d={d} set={set} type="url" placeholder="https://brand.example/product" />}
       </div>
       <div className="nd-sum">
         <p className="nd-sum__t">Creator-facing summary</p>

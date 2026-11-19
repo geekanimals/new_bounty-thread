@@ -55,7 +55,7 @@ function toRows(pipe = [], legacy = []) {
   return [...a, ...L];
 }
 // Har type apne tab mein — "Barter + Paid" alag tab (Paid / Barter mein dobara nahi aata)
-const TYPE_KEY = { Paid: "paid", Barter: "barter", "Barter + Paid": "barter_paid" };
+const TYPE_KEY = { Paid: "paid", Barter: "barter", "Barter + Paid": "barter_paid", "Physical visit": "visit" };
 const typePass = (r, t) => t === "All" || r.ctype === TYPE_KEY[t];
 
 /**

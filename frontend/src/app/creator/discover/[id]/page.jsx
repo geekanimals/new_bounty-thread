@@ -71,7 +71,9 @@ export default function CampaignBrief() {
     );
 
   const k = kindOf(x);
-  const noProd = k === "paid";
+  const noProd = k === "paid" || k === "visit";
+  const vz = k === "visit" && x.visit && typeof x.visit === "object" ? x.visit : null;
+  const COVER_TXT = { food: "Food / meal", stay: "Stay", entry: "Entry / experience", travel: "Travel", service: "Service / treatment" };
   const t = x.terms || {};
   const b = x.video_brief || {};
   const who = whoList(x);
@@ -362,6 +364,37 @@ export default function CampaignBrief() {
                     <p className="cb-v">{tags.join(" ")}</p>
                   </>
                 )}
+                {vz && (
+                  <div className="cb-visit">
+                    <p className="cb-k">📍 Where you go</p>
+                    {(vz.venues || []).map((v, i) => (
+                      <div key={i} className="cb-vplace">
+                        <b>{v.name}</b>
+                        {v.city ? ` · ${v.city}` : ""}
+                        <small>{v.address}</small>
+                        {v.map_url && (
+                          <a href={safeLink(v.map_url)} target="_blank" rel="noopener noreferrer">
+                            Open in Google Maps ↗
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                    <p className="cb-v">
+                      {vz.mode === "experience" ? "🎁 Free experience — no payment" : `💰 Visit + payment${vz.pay_mode === "full_after" ? " · paid in full after the campaign" : vz.advance_pct ? ` · ${vz.advance_pct}% advance, the rest after posting` : ""}`}
+                    </p>
+                    {(vz.covers || []).length > 0 && <p className="cb-v">Covered for you: {(vz.covers || []).map((c) => COVER_TXT[c] || c).join(", ")}{vz.plus_one ? " · plus one allowed" : ""}</p>}
+                    <p className="cb-v">
+                      {{ local: "For creators who live near this place.", travel_covered: "Creators from other cities can apply — travel and stay are covered.", travel_own: "Creators from other cities can apply if they can come on their own." }[vz.reach] || ""}
+                    </p>
+                    {(vz.window_start || vz.window_end) && (
+                      <p className="cb-v">
+                        Visit between {vz.window_start ? fdate(vz.window_start) : "—"} and {vz.window_end ? fdate(vz.window_end) : "—"}
+                      </p>
+                    )}
+                    {vz.slots && <p className="cb-v">Slots: {vz.slots}</p>}
+                    {vz.notes && <p className="cb-v cb-pre">{vz.notes}</p>}
+                  </div>
+                )}
                 <p className="cb-k">Deliverables</p>
                 <p className="cb-v cb-pre">{x.deliverables_text || delivLine(x)}</p>
                 {x.product_link && (
@@ -492,6 +525,10 @@ export default function CampaignBrief() {
         .cb-brief__head[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
         .cb-brief__body { padding-bottom: 4px; }
         .cb-v { margin: 0; font-size: 13.5px; color: #14231a; }
+        .cb-visit { margin: 10px 0 12px; padding: 12px; border-radius: 10px; background: #f6f9f4; border: 1px solid #e1ead9; }
+        .cb-vplace { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 10px; font-size: 13.5px; }
+        .cb-vplace small { color: #5b6b60; font-size: 12.5px; }
+        .cb-vplace a { font-size: 12.5px; font-weight: 700; }
         .cb-terms { margin: 12px 0 6px; font-size: 13px; font-weight: 500; color: #14231a; }
         .cb-brief li { margin-bottom: 4px; }
         .cb-brief li b { font-weight: 700; }

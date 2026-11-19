@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Wizard, { Field, useDraft, useBrands, uploadCampaignFile } from "@/components/admin/campaign/Wizard";
 
-const TYPES = ["Barter", "Paid", "Barter + Paid"];
+const TYPES = ["Barter", "Paid", "Barter + Paid", "Physical visit"];
+const COVERS = [["food", "Food / meal"], ["stay", "Stay (hotel / room)"], ["entry", "Entry / experience"], ["travel", "Travel"], ["service", "Service / treatment"]];
 
 /* Figma: New campaign — 1 Basics */
 export default function NewCampaignBasics() {
@@ -11,8 +12,13 @@ export default function NewCampaignBasics() {
   const BRANDS = useBrands(); // Brand CRM (api.brand_list)
   const [err, setErr] = useState("");
   const [up, setUp] = useState("");
-  const paid = d.type === "Paid";
+  const visit = d.type === "Physical visit";
+  const paid = d.type === "Paid" || visit;
   const barter = d.type === "Barter";
+  const vPaid = visit && d.vMode !== "experience";
+  const venues = Array.isArray(d.vVenues) && d.vVenues.length ? d.vVenues : [{ name: "", address: "", map: "", city: "" }];
+  const setVenue = (i, k, v) => set("vVenues", venues.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const covers = Array.isArray(d.vCovers) ? d.vCovers : [];
   const files = Array.isArray(d.files) ? d.files : [];
   const addFiles = async (list, kind) => {
     setErr("");
@@ -93,9 +99,94 @@ export default function NewCampaignBasics() {
         )}
         <Field label="Start date" k="startDate" d={d} set={set} type="date" />
         <Field label="End date" k="endDate" d={d} set={set} type="date" />
-        {!barter && <Field label="Budget (₹)" k="budget" d={d} set={set} type="number" placeholder="e.g. 100000" />}
-        {!barter && <Field label="Pay creators within (days after the post)" k="payDue" d={d} set={set} type="number" placeholder="7" />}
+        {!barter && (!visit || vPaid) && <Field label="Budget (₹)" k="budget" d={d} set={set} type="number" placeholder="e.g. 100000" />}
+        {!barter && (!visit || vPaid) && <Field label="Pay creators within (days after the post)" k="payDue" d={d} set={set} type="number" placeholder="7" />}
       </div>
+
+      {visit && (
+        <div className="nv">
+          <p className="nc-sec">Physical visit — the creator goes to the place (no product is sent)</p>
+          <div className="nc-grid">
+            <Field
+              label="What the creator gets"
+              k="vMode"
+              d={d}
+              set={set}
+              options={[
+                ["paid", "Visit + payment — visit, shoot, post and get paid"],
+                ["experience", "Experience only — free stay / food / entry, no payment"],
+              ]}
+            />
+            <Field
+              label="Who can apply"
+              k="vReach"
+              d={d}
+              set={set}
+              options={[
+                ["local", "Only creators near the place (same city)"],
+                ["travel_covered", "Anyone — travel + stay paid by us (e.g. bigger creators from far)"],
+                ["travel_own", "Anyone who can come at their own cost"],
+              ]}
+            />
+          </div>
+
+          <p className="nc-label nv-l">Places to visit</p>
+          {venues.map((v, i) => (
+            <div key={i} className="nv-venue">
+              <input className="ga-input" value={v.name} placeholder="Place name (e.g. Olio Pizza, Mysore)" aria-label="Place name" onChange={(e) => setVenue(i, "name", e.target.value)} />
+              <input className="ga-input" value={v.city} placeholder="City" aria-label="City" onChange={(e) => setVenue(i, "city", e.target.value)} />
+              <input className="ga-input nv-wide" value={v.address} placeholder="Full address" aria-label="Address" onChange={(e) => setVenue(i, "address", e.target.value)} />
+              <input className="ga-input nv-wide" type="url" value={v.map} placeholder="Google Maps link (https://maps.app.goo.gl/…)" aria-label="Google Maps link" onChange={(e) => setVenue(i, "map", e.target.value)} />
+              {venues.length > 1 && (
+                <button type="button" className="ga-btn ga-btn--ghost nb-b" onClick={() => set("vVenues", venues.filter((_, j) => j !== i))}>
+                  Remove place
+                </button>
+              )}
+            </div>
+          ))}
+          <button type="button" className="ga-btn ga-btn--ghost nb-b" onClick={() => set("vVenues", [...venues, { name: "", address: "", map: "", city: "" }])}>
+            + Add another place / branch
+          </button>
+
+          <p className="nc-label nv-l">What is covered for the creator</p>
+          <div className="nv-chips">
+            {COVERS.map(([k, l]) => (
+              <label key={k} className={`nv-chip ${covers.includes(k) ? "is-on" : ""}`}>
+                <input type="checkbox" checked={covers.includes(k)} onChange={() => set("vCovers", covers.includes(k) ? covers.filter((x) => x !== k) : [...covers, k])} />
+                {l}
+              </label>
+            ))}
+            <label className={`nv-chip ${d.vPlusOne ? "is-on" : ""}`}>
+              <input type="checkbox" checked={!!d.vPlusOne} onChange={(e) => set("vPlusOne", e.target.checked)} />
+              Plus one allowed
+            </label>
+          </div>
+
+          <div className="nc-grid">
+            <Field label="Visit window — first day" k="vFrom" d={d} set={set} type="date" />
+            <Field label="Visit window — last day" k="vTo" d={d} set={set} type="date" />
+            <Field label="Slots / timings" k="vSlots" d={d} set={set} placeholder="e.g. Lunch 12:30 PM, Dinner 7:30 PM · 4 creators per slot" full />
+            <Field label="Notes for the creator (who to meet, parking, dress code…)" k="vNotes" d={d} set={set} area full />
+          </div>
+
+          {vPaid && (
+            <div className="nc-grid">
+              <Field
+                label="How creators are paid"
+                k="vPayMode"
+                d={d}
+                set={set}
+                options={[
+                  ["advance", "Advance + balance — part before the visit, the rest after posting"],
+                  ["full_after", "Full payment after the campaign (our standard)"],
+                ]}
+              />
+              {d.vPayMode !== "full_after" && <Field label="Advance (% of each creator's fee)" k="vAdvPct" d={d} set={set} type="number" placeholder="50" />}
+            </div>
+          )}
+          <p className="nb-hint">Each creator&apos;s own amount is set when they are approved — it can differ per creator.</p>
+        </div>
+      )}
       <p className="nc-sec">Campaign photo &amp; files</p>
       <div className="nb-media">
         <div className="nb-cover">
@@ -161,7 +252,18 @@ export default function NewCampaignBasics() {
         <span>💡</span> Save as draft first. Going live should require a complete brief, rights/terms, budget and creator eligibility validation.
       </p>
       <style>{`
-        .nb-types { margin-bottom: 9px; }
+        .nb-types { margin-bottom: 9px; flex-wrap: wrap; }
+        .nv { margin: 6px 0 16px; padding: 16px; border-radius: 14px; border: 1px solid #dcd7fb; background: #faf9ff; }
+        .nv .nc-sec { margin-top: 0; }
+        .nv-l { display: block; margin: 14px 0 6px; }
+        .nv-venue { display: grid; grid-template-columns: 1fr 200px; gap: 8px; margin-bottom: 10px; padding: 10px; border-radius: 12px; background: #fff; border: 1px solid var(--ad-line); }
+        .nv-venue .ga-input { height: 40px; }
+        .nv-wide { grid-column: 1 / -1; }
+        .nv-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .nv-chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .nv-chip.is-on { border-color: var(--ad-primary); background: #f1efff; color: var(--ad-primary); }
+        .nv-chip input { margin: 0; }
+        @media (max-width: 640px) { .nv-venue { grid-template-columns: 1fr; } }
         .nb-types .ga-tab { height: 38px; font-weight: 800; color: #65718a; }
         .nb-types .ga-tab.is-on { color: #fff; }
         .nb-hint { margin: 0 0 14px; font-size: 12px; color: var(--ad-muted); }

@@ -78,7 +78,7 @@ export function statusesFor(kind) {
 export const stRank = (k) => Math.max(0, BASE_ST.findIndex((x) => x[0] === k)) + 1;
 export const stLabel = (k) => (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[1];
 export const stMsg = (k) => (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[3];
-export const KIND_LABEL = { barter: "🎁 Barter campaign", barter_paid: "🎁💰 Barter + Paid campaign", paid: "💰 Paid campaign" };
+export const KIND_LABEL = { barter: "🎁 Barter campaign", barter_paid: "🎁💰 Barter + Paid campaign", paid: "💰 Paid campaign", visit: "📍 Physical visit campaign" };
 export const bkKindOf = (c) => {
   const k = c ? campKind(c) : "barter";
   return ["paid", "barter_paid"].includes(k) ? k : "barter";

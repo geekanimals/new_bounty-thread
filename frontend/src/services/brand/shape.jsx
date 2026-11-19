@@ -6,8 +6,8 @@
  */
 
 /* ---------- labels (purane brand-portal.js TYPE / STATUS / STEPS / RS) ---------- */
-export const B_TYPE = { paid: "💰 Paid", barter: "🎁 Barter", barter_paid: "🎁 Barter + 💰 Paid" };
-export const B_TYPE_SHORT = { paid: "Paid", barter: "Barter", barter_paid: "Barter + Paid" };
+export const B_TYPE = { paid: "💰 Paid", barter: "🎁 Barter", barter_paid: "🎁 Barter + 💰 Paid", visit: "📍 Physical visit" };
+export const B_TYPE_SHORT = { paid: "Paid", barter: "Barter", barter_paid: "Barter + Paid", visit: "Physical visit" };
 export const B_STATUS = { creator_discovery: "Live · taking creators", in_execution: "Live · in progress", completed: "Completed", draft: "Draft", paused: "Paused", closed: "Closed" };
 export const B_STEPS = [
   ["to_approve", "To approve"],

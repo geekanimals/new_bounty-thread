@@ -213,7 +213,7 @@ const COMP_TO_KIND = { cash: "paid", hybrid: "barter_paid", barter: "barter" };
 export const kindOf = (c) => (c && (c.campaign_type || COMP_TO_KIND[c.comp_type])) || "";
 const kindOrBarter = (c) => kindOf(c) || "barter";
 // naye design ke type keys: paid | barter | hybrid
-export const typeKey = (c) => ({ paid: "paid", barter: "barter", barter_paid: "hybrid" }[kindOf(c)] || "barter");
+export const typeKey = (c) => ({ paid: "paid", barter: "barter", barter_paid: "hybrid", visit: "visit" }[kindOf(c)] || "barter");
 export const isCeleb = (c) => c && c.barter_subtype === "celebrity_story";
 
 /** reward line — purane compLine jaisa */
@@ -221,9 +221,10 @@ export function compLine(c) {
   const k = kindOrBarter(c);
   if (k === "paid") return c.product_value ? money(c.product_value) : "Paid";
   if (k === "barter_paid") return (c.product_value ? money(c.product_value) + " + " : "") + (c.product || "product");
+  if (k === "visit") return c.visit && c.visit.mode === "experience" ? "Free experience" : "Visit + payment";
   return c.product_value ? "Products worth " + money(c.product_value) : c.product || "Product";
 }
-export const compSub = (c) => ({ paid: "Payment", barter_paid: "Payment + product" }[kindOf(c)] || "Product");
+export const compSub = (c) => (kindOf(c) === "visit" ? (c.visit && c.visit.mode === "experience" ? "📍 Visit · experience" : "📍 Visit + payment") : { paid: "Payment", barter_paid: "Payment + product" }[kindOf(c)] || "Product");
 export const delivLine = (c) => (c.deliverables_text ? String(c.deliverables_text).split(/\n|;/)[0].slice(0, 40) : c.platforms ? String(c.platforms).split(",")[0] : "1 Reel");
 
 /** "Who can apply" lines: guest = who_can_apply (text), login = eligibility.criteria[].need */

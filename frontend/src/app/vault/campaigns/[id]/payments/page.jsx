@@ -80,7 +80,7 @@ export default function CampaignPayments() {
   const [fees, setFees] = useState(null); // { rows, cols, result, err }
   const camp = useCampaign(id && id !== "sample" ? id : null);
   const kind = camp.c ? camp.c.campaign_type || "" : "";
-  const noPay = !!camp.c && !["paid", "barter_paid"].includes(kind);
+  const noPay = !!camp.c && !["paid", "barter_paid", "visit"].includes(kind);
 
   const rows = useMemo(() => (data && data.rows) || [], [data]);
   const prov = (data && data.provider) || {};

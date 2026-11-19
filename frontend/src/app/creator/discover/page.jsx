@@ -15,6 +15,7 @@ const FILTERS = [
   { key: "paid", label: "Paid" },
   { key: "barter", label: "Barter" },
   { key: "both", label: "Paid + Barter" },
+  { key: "visit", label: "📍 Visit" },
 ];
 const FIRST = 6;
 
@@ -24,6 +25,7 @@ const match = (f, x) => {
   if (f === "paid") return t === "paid";
   if (f === "barter") return t === "barter" && !isCeleb(x);
   if (f === "both") return t === "barter_paid";
+  if (f === "visit") return t === "visit";
   return true;
 };
 

@@ -77,7 +77,7 @@ export const igUrl = (handle) => "https://instagram.com/" + encodeURIComponent(S
 export const uniq = (a) => a.filter((x, i) => x && a.indexOf(x) === i);
 
 /* ---------- Campaign labels (purane TYPE / STATUS / STEPS) ---------- */
-export const TYPE = { paid: "Paid", barter: "Barter", barter_paid: "Barter + Paid" };
+export const TYPE = { paid: "Paid", barter: "Barter", barter_paid: "Barter + Paid", visit: "Physical visit" };
 export const STATUS_LABEL = {
   creator_discovery: "Live · taking creators",
   in_execution: "Live · in progress",

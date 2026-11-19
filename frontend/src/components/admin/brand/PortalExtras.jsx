@@ -11,7 +11,7 @@ import { startDraftFromRequest } from "@/components/admin/campaign/Wizard";
  *  ⭐ creators they saved · 🔎 shortlisted from Discovery (🎯 Invite · Decline · Reopen)
  */
 const RS = { new: "New", in_review: "In review", converted: "Converted", declined: "Declined" };
-const TYPE = { barter: "Barter", paid: "Paid", barter_paid: "Barter + Paid" };
+const TYPE = { barter: "Barter", paid: "Paid", barter_paid: "Barter + Paid", visit: "Physical visit" };
 const nf = (n) => (n == null ? "" : Number(n).toLocaleString("en-IN"));
 const fd = (v) => (v ? new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "");
 

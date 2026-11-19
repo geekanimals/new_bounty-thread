@@ -40,7 +40,7 @@ export const dayAgo = (t) => {
 };
 export const fmtDate = (t) => (t ? new Date(t).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—");
 
-export const TYPE_LABEL = { paid: "Paid", barter: "Barter", barter_paid: "Barter + Paid" };
+export const TYPE_LABEL = { paid: "Paid", barter: "Barter", barter_paid: "Barter + Paid", visit: "Physical visit" };
 export const typeLabel = (t) => TYPE_LABEL[t] || (t ? String(t).replace(/_/g, " ") : "—");
 /** campaign workspace ka id — purana app legacy id se kholta tha */
 export const campId = (x) => x?.legacy_campaign_id || x?.campaign_id || x?.id || "";

@@ -15,6 +15,7 @@ const TABS = [
   { k: "barter", label: "Barter", href: "/vault/campaigns/barter", test: (c) => campInBucket(c.raw, "barter") },
   { k: "paid", label: "Paid", href: "/vault/campaigns/paid", test: (c) => campInBucket(c.raw, "paid") },
   { k: "barter_paid", label: "Barter + Paid", href: "/vault/campaigns/barter-paid", test: (c) => campInBucket(c.raw, "barter_paid") },
+  { k: "visit", label: "📍 Physical visit", href: "/vault/campaigns/visit", test: (c) => campInBucket(c.raw, "visit") },
   { k: "completed", label: "Completed", href: "/vault/campaigns/completed", test: (c) => c.status === "Completed" },
   // purane app ke filter: ⭐ Stories (celebrity story barter) · ⏳ Awaiting approval
   { k: "stories", label: "⭐ Stories", href: "/vault/campaigns/stories", test: (c) => c.raw?.barter_subtype === "celebrity_story" || (!c.raw?.barter_subtype && /celebrity/i.test(c.raw?.type || "")) },

@@ -12,6 +12,7 @@ export const CAMP_TYPES = [
   ["barter", "Barter"],
   ["paid", "Paid"],
   ["barter_paid", "Barter + Paid"],
+  ["visit", "Physical visit"],
 ];
 export const BARTER_SUBTYPES = [
   ["normal_barter", "Normal"],
@@ -40,6 +41,7 @@ export function campInBucket(c, b) {
   if (b === "paid") return campKind(c) === "paid";
   if (b === "barter") return campKind(c) === "barter" && !isCelebrityCamp(c);
   if (b === "barter_paid") return campKind(c) === "barter_paid";
+  if (b === "visit") return campKind(c) === "visit";
   return true;
 }
 const todayISO = () => new Date().toISOString().slice(0, 10);
