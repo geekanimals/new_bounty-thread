@@ -26,7 +26,7 @@ export default function CampaignTop({ c }) {
   const funnel = [
     { n: c.funnel.invited, label: "Invited" },
     { n: c.funnel.applied, label: "Applied" },
-    { n: c.funnel.approved, label: "Approved by you" },
+    { n: c.funnel.approved, label: "Approved" },
     { n: c.funnel.videoOk, label: "Video OK" },
     { n: c.funnel.live, label: "Live", green: true },
   ];

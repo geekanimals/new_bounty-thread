@@ -54,6 +54,7 @@ export default function CampaignActivity() {
         .cv-team strong { display: block; font-size: 13px; font-weight: 700; }
         .cv-team small { display: block; font-size: 11.5px; color: var(--br-muted); }
         .cv-am small { color: var(--br-green); }
+        .cv-by { font-style: normal; color: var(--br-muted); }
         .cv-team__label { margin: 16px 0 10px; padding-top: 14px; border-top: 1px solid var(--br-border); font-size: 11.5px; font-weight: 600; color: var(--br-muted); }
         .cv-wa { margin-top: 14px; }
 
@@ -68,6 +69,9 @@ export default function CampaignActivity() {
     </>
   );
 }
+
+// faisle wale steps — inke saath dikhao kisne kiya (brand khud / Geek brand ki taraf se)
+const DECIDED = ["brand_confirmed", "accepted", "brand_declined", "content_approved", "changes_requested"];
 
 function ActivityTab({ timeline }) {
   const team = useTeam();
@@ -114,7 +118,10 @@ function ActivityTab({ timeline }) {
                 <ToneIcon icon={icon} tone={tone} size={30} />
                 <div className="cv-txt">
                   <strong>{a.creator || "A creator"}</strong>
-                  <small>{a.status || a.to}</small>
+                  <small>
+                    {a.status || a.to}
+                    {DECIDED.includes(a.to) && <em className="cv-by">{a.by === "you" ? " · by you" : " · by Geek on your behalf"}</em>}
+                  </small>
                 </div>
                 <span className="cv-time">{bAgo(a.at, now)}</span>
               </li>

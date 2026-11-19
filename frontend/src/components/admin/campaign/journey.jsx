@@ -576,10 +576,20 @@ export async function runAction(key, row, ctx) {
     }
     case "bpsend":
       return call("api.advance_participation", { p_participation: P, p_to: "sent_to_brand", p_reason: "added to the brand's list" }, `📋 ${who} added to the brand's list`);
-    case "bpbrand":
-      return call("api.brand_decide_participation", { p_participation: P, p_confirm: true, p_reason: null }, `✅ Brand confirmed ${who}`);
+    case "bpbrand": {
+      // brand khud Approvals mein approve karta hai — admin yahan se sirf "brand ki taraf se" (brand ko record dikhta hai)
+      const v = await ask({
+        title: `Approve ${who} on the brand's behalf?`,
+        text: "Normally the brand approves this in their Approvals page. Use this only when the brand told you yes (WhatsApp, call, email). The brand will see “Approved by Geek on your behalf”.",
+        ok: "Approve for the brand",
+        fields: [{ k: "note", label: "How did the brand say yes? (optional)" }],
+      });
+      if (!v) return;
+      const note = String(v.note || "").trim();
+      return call("api.brand_decide_participation", { p_participation: P, p_confirm: true, p_reason: `Approved by Geek on the brand's behalf${note ? " · " + note : ""}` }, `✅ ${who} approved on the brand's behalf`);
+    }
     case "bpbrandno": {
-      const v = await rejectAsk(ask, { title: `The brand passed on ${who} — tell them why`, match: ctx.match, campaign: ctx.campaignName });
+      const v = await rejectAsk(ask, { title: `The brand passed on ${who} — record it on the brand's behalf and tell the creator why`, match: ctx.match, campaign: ctx.campaignName });
       if (!v) return;
       return call("api.brand_decide_participation", { p_participation: P, p_confirm: false, p_reason: v.note }, "Brand passed — creator told");
     }
@@ -587,8 +597,17 @@ export async function runAction(key, row, ctx) {
       return call("api.bp_send_contract", { p_participation: P }, `📜 Contract sent to ${who}`);
     case "bpdeliv":
       return call("api.bp_mark_delivered", { p_participation: P }, `📦 Marked delivered — video brief sent to ${who}`);
-    case "bpapprove":
-      return call("api.bp_review_video", { p_participation: P, p_approve: true, p_reason: null }, `✅ ${who}’s video approved`);
+    case "bpapprove": {
+      const v = await ask({
+        title: `Approve ${who}’s video on the brand's behalf?`,
+        text: "The brand normally watches and approves videos in their Approvals page. Use this only when the brand told you it's OK. The brand will see “Approved by Geek on your behalf”.",
+        ok: "Approve for the brand",
+        fields: [{ k: "note", label: "How did the brand say OK? (optional)" }],
+      });
+      if (!v) return;
+      const note = String(v.note || "").trim();
+      return call("api.bp_review_video", { p_participation: P, p_approve: true, p_reason: `Approved by Geek on the brand's behalf${note ? " · " + note : ""}` }, `✅ ${who}’s video approved on the brand's behalf`);
+    }
     case "bpchanges": {
       const v = await ask({ title: "Ask for changes", ok: "Send", fields: [{ k: "reason", label: "What should they change?", area: true, required: true }] });
       if (!v) return;

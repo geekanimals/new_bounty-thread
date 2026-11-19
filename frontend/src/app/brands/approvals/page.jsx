@@ -78,8 +78,9 @@ export default function ApprovalsPage() {
         <BrEmpty
           title="No creators waiting"
           text={(() => {
-            const t = Object.values(a.appliedCounts || {}).reduce((m, x) => m + (Number(x.applied) || 0), 0);
-            return t ? `${t} creator${t === 1 ? " has" : "s have"} applied — the Geek team is screening them and will send you the best matches to approve.` : "When the Geek team shortlists creators for your campaigns, they show up here for your OK. Nothing to approve right now.";
+            // sirf chalu campaigns ke wo applicants jinki Geek abhi screening kar raha hai
+            const t = Object.values(a.appliedCounts || {}).reduce((m, x) => m + (Number(x.screening) || 0), 0);
+            return t ? `${t} creator${t === 1 ? " is" : "s are"} being screened by the Geek team — the best matches will come here for you to approve.` : "When the Geek team shortlists creators for your campaigns, they show up here for your OK. Nothing to approve right now.";
           })()}
         />
       ) : (

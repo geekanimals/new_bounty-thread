@@ -157,6 +157,8 @@ function CreatorsTab({ d, c, reload }) {
               const post = posts.find((p) => p.permalink);
               const tot = { views: bSum(posts, "views"), likes: bSum(posts, "likes"), comments: bSum(posts, "comments"), shares: bSum(posts, "shares"), saves: bSum(posts, "saves") };
               const v = r.video || {};
+              // views tabhi jab kisi post ke stats aaye hon — warna "0" galat lagta hai (Instagram juda nahi)
+              const hasStats = posts.some((p) => p.stats && (p.stats.views != null || p.stats.likes != null));
               const href = creatorHref(r.participation_id, r.invite_id);
               return (
                 <tr key={r.participation_id || r.invite_id} className={hot ? "is-hot" : ""}>
@@ -187,6 +189,8 @@ function CreatorsTab({ d, c, reload }) {
                       <a href={v.url} target="_blank" rel="noopener noreferrer" className="cc-rev">
                         <Play size={12} /> Watch
                       </a>
+                    ) : k === "posting" || k === "posted" ? (
+                      <span className="cc-ok" title="Approved — posted without a video upload here">✓ OK</span>
                     ) : (
                       <span className="cc-dash">—</span>
                     )}
@@ -201,9 +205,15 @@ function CreatorsTab({ d, c, reload }) {
                     )}
                   </td>
                   <td>
-                    <strong>{posts.length ? bShort(tot.views) : "—"}</strong>
+                    {hasStats ? (
+                      <strong>{bShort(tot.views)}</strong>
+                    ) : (
+                      <span className="cc-dash" title={posts.length ? "Views not available yet — this creator's Instagram isn't connected to Geek OS" : ""}>
+                        —
+                      </span>
+                    )}
                   </td>
-                  <td className="cc-muted">{posts.length ? bEr(tot) : "—"}</td>
+                  <td className="cc-muted">{hasStats ? bEr(tot) : "—"}</td>
                   <td className="cc-muted">{cr.city || "—"}</td>
                   <td>
                     {k === "video_review" && r.participation_id ? (

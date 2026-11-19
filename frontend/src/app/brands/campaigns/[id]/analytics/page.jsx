@@ -13,6 +13,7 @@ const MODES = [
   { key: "clicks", label: "Clicks", unit: (v) => `${bShort(v)} link clicks` },
 ];
 
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** posts ko din ke hisaab se jodo (post ki date / numbers ki date) → [{ d: "12", v }] */
 function daily(creators, mode) {
   const by = {};
@@ -28,7 +29,8 @@ function daily(creators, mode) {
   return Object.keys(by)
     .sort()
     .slice(-14)
-    .map((k) => ({ key: k, d: String(Number(k.slice(8, 10))), v: by[k] }));
+    // label mein mahina bhi — warna "21, 22 … 17, 18" ulta lagta hai jab din do mahino mein hon
+    .map((k) => ({ key: k, d: `${Number(k.slice(8, 10))} ${MON[Number(k.slice(5, 7)) - 1] || ""}`.trim(), v: by[k] }));
 }
 
 /** /brands/campaigns/[id]/analytics — views, top posts, har creator (purana paintAnalytics: campaign_analytics + brand_top_posts) */
@@ -209,7 +211,8 @@ function AnalyticsTab({ id }) {
                   </span>
                   <strong>{c.handle || c.name}</strong>
                   <small>
-                    {p.er != null ? `${p.er}% eng.` : "—"} · {bShort(p.likes)} likes
+                    {/* engagement: server ka er, warna wahi hisaab jo "By creator" mein hai */}
+                    {p.er != null ? `${p.er}%` : bEr(p)} eng.{p.likes != null ? ` · ${bShort(p.likes)} likes` : p.comments != null ? ` · ${bShort(p.comments)} comments` : ""}
                   </small>
                 </a>
               );
