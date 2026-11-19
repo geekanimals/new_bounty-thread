@@ -12,23 +12,37 @@ import { rpc, useRpc, errText } from "@/lib/supabase";
 const when = (t) => (t ? new Date(t).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
 const camHref = (a) => `/vault/campaigns/${a.public_id || a.campaign_id}/delivery`;
 
+// ek creator (number + campaign) = ek card; kitni baar fail hua + aakhri baar kab
+export const groupAlerts = (items) => {
+  const m = new Map();
+  (items || []).forEach((a) => {
+    const k = `${a.phone || a.who}|${a.campaign_id || ""}`;
+    const g = m.get(k);
+    if (g) {
+      g.n++;
+      if (new Date(a.happened_at) > new Date(g.happened_at)) Object.assign(g, { happened_at: a.happened_at });
+    } else m.set(k, { ...a, n: 1 });
+  });
+  return [...m.values()].sort((x, y) => new Date(y.happened_at) - new Date(x.happened_at));
+};
+const short = (r) => (/131026/.test(r || "") ? "This number is not on WhatsApp (or can't receive). Get another number from the creator." : r);
+
 function AlertList({ items }) {
-  if (!items.length) return <p className="dla-empty">All campaign messages were delivered ✓</p>;
+  const list = groupAlerts(items);
+  if (!list.length) return <p className="dla-empty">All campaign messages were delivered ✓</p>;
   return (
     <ul className="dla-list">
-      {items.map((a) => (
+      {list.map((a) => (
         <li key={a.id}>
           <div className="dla-top">
             <b>{a.who || a.phone || "Creator"}</b>
-            <span>{when(a.happened_at)}</span>
+            <span>{a.n > 1 ? `${a.n} messages · last ${when(a.happened_at)}` : when(a.happened_at)}</span>
           </div>
           <div className="dla-mid">
             {a.campaign ? <span className="dla-camp">{a.campaign}</span> : null}
             {a.phone ? <span className="dla-ph">{a.phone}</span> : null}
           </div>
-          <p className="dla-why">
-            {a.what}: {a.reason}
-          </p>
+          <p className="dla-why">{short(a.reason)}</p>
         </li>
       ))}
     </ul>
@@ -125,6 +139,7 @@ export function CampaignAlertBanner({ id }) {
   const d = al.data || {};
   const n = Number(d.open) || 0;
   const items = d.items || [];
+  const people = groupAlerts(items).length;
   // naya alert aaya → ek baar khud pop-up (har naye alert par, ek session mein ek hi baar)
   useEffect(() => {
     if (!n || !items[0]) return;
@@ -147,13 +162,13 @@ export function CampaignAlertBanner({ id }) {
   return (
     <>
       <button type="button" className="dla-banner" onClick={() => setShow(true)}>
-        ⚠️ <b>{n} WhatsApp message{n > 1 ? "s" : ""} not delivered</b> in this campaign — see who and why →
+        ⚠️ <b>{people || n} creator{(people || n) > 1 ? "s" : ""} didn&apos;t get WhatsApp</b> in this campaign ({n} message{n > 1 ? "s" : ""}) — see who and why →
       </button>
       {show && (
         <div className="ga-overlay" onClick={() => setShow(false)}>
           <div className="ga-modal dla-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Messages not delivered">
             <div className="dla-mhead">
-              <h2>⚠️ Not delivered · {n}</h2>
+              <h2>⚠️ WhatsApp not delivered · {people || n} creator{(people || n) > 1 ? "s" : ""}</h2>
               <button type="button" className="dla-x" onClick={() => setShow(false)} aria-label="Close">
                 ✕
               </button>
