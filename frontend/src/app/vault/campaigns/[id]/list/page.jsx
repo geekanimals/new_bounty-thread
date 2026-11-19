@@ -16,7 +16,7 @@ import { stageIndex, fmtNum } from "@/components/admin/campaign/live";
  */
 const FAILED = ["dropped", "rejected", "ineligible", "brand_declined"];
 const okFor = (x) => x.stage === "eligible" || x.stage === "sent_to_brand" || (stageIndex(x.stage) >= stageIndex("brand_confirmed") && !FAILED.includes(x.stage));
-const label = (x) => (stageIndex(x.stage) >= stageIndex("brand_confirmed") ? "Brand confirmed" : x.stage === "sent_to_brand" ? "Sent to brand" : "Screened");
+const label = (x) => (stageIndex(x.stage) >= stageIndex("brand_confirmed") ? "Approved" : x.stage === "sent_to_brand" ? "Sent to brand" : "Screened");
 
 export default function CampaignBrandList() {
   const { id } = useParams();
@@ -105,7 +105,7 @@ export default function CampaignBrandList() {
                           {busy === x.participation_id ? "…" : "Screened"}
                         </button>
                       ) : (
-                        <span className={`ga-badge ga-badge--${st === "Brand confirmed" ? "green" : "violet"}`}>{st}</span>
+                        <span className={`ga-badge ga-badge--${st === "Approved" ? "green" : "violet"}`}>{st}</span>
                       )}
                     </td>
                   </tr>

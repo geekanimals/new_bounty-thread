@@ -11,10 +11,10 @@ export const CTR_TRAITS = [
 
 const cap1 = (v) => String(v || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const STEPS = {
-  applied: "1. Registered", eligible: "2. Screened", sent_to_brand: "3. Sent to brand", brand_confirmed: "4. Brand confirmed", contract_sent: "5. Contract sent",
+  applied: "1. Applied", eligible: "2. Screened", sent_to_brand: "3. Sent to brand", brand_confirmed: "4. Approved", contract_sent: "5. Contract sent",
   contract_signed: "6. Contract signed", address_confirmed: "7. Address confirmed", product_sent: "8. Courier sent", product_delivered: "9. Courier delivered",
-  content_created: "10. Video brief sent", content_submitted: "11. Video submitted", changes_requested: "12. Changes asked", content_approved: "13. Client approved",
-  published: "14. Posted", completed: "15. Done",
+  content_created: "10. Video brief sent", content_submitted: "11. Video submitted", changes_requested: "11. Video submitted · changes asked", content_approved: "12. Client approved",
+  published: "13. Posted", completed: "13. Done",
   ineligible: "Declined", brand_declined: "Declined by brand", dropped: "Dropped", rejected: "Rejected",
 };
 const ALIAS = { invited: "applied", shortlisted: "applied", accepted: "brand_confirmed" };

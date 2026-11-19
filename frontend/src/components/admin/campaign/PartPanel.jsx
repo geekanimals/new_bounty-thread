@@ -15,17 +15,17 @@ const safe = (u) => (/^https?:\/\//i.test(String(u || "")) ? u : null);
 
 const STEPS = [
   ["applied", "Applied", "applied"],
-  ["eligible", "Meets the brief", "eligible"],
-  ["sent_to_brand", "On the brand's list", "sent_to_brand"],
-  ["brand_confirmed", "Brand confirmed", "accepted"],
+  ["eligible", "Screened", "eligible"],
+  ["sent_to_brand", "Sent to brand", "sent_to_brand"],
+  ["brand_confirmed", "Approved", "accepted"],
   ["contract_sent", "Contract sent", "contract_sent"],
   ["contract_signed", "Contract signed", "contract_signed"],
   ["address_confirmed", "Address confirmed", "address_confirmed"],
   ["product_sent", "Courier sent", "product_sent"],
-  ["content_created", "Delivered — making the video", "content_created"],
+  ["content_created", "Video brief sent", "content_created"],
   ["content_submitted", "Video submitted", "content_submitted"],
-  ["changes_requested", "Changes asked", "changes_requested"],
-  ["content_approved", "Video approved", "content_approved"],
+  ["changes_requested", "Video submitted · changes asked", "changes_requested"],
+  ["content_approved", "Client approved", "content_approved"],
   ["published", "Posted", "published"],
   ["completed", "Done", "completed"],
 ];
@@ -36,16 +36,16 @@ export function partActions(x, { ship: hasShip = true } = {}) {
   const ship = x.shipment || {};
   const posts = x.posts || [];
   const A = [];
-  if (st === "applied") A.push(["bpscreen", "✓ Meets the brief", 1], ["bpreject", "Not a fit"]);
-  if (st === "eligible") A.push(["bpsend", "📋 Add to the brand's list", 1]);
-  if (st === "sent_to_brand") A.push(["bpbrand", "✅ Brand confirmed", 1], ["bpbrandno", "Brand passed"]);
-  if (["brand_confirmed", "accepted"].includes(st)) A.push(["bpcontract", "📜 Send contract now", 1]);
+  if (st === "applied") A.push(["bpscreen", "✓ Screened", 1], ["bpreject", "Not a fit"]);
+  if (st === "eligible") A.push(["bpsend", "📋 Send to brand", 1]);
+  if (st === "sent_to_brand") A.push(["bpbrand", "✅ Approved", 1], ["bpbrandno", "Brand said no"]);
+  if (["brand_confirmed", "accepted"].includes(st)) A.push(["bpcontract", "📜 Contract sent", 1]);
   if (st === "contract_sent") A.push(["bpcontract", "🔁 Resend contract (latest terms)"]);
-  if (hasShip && ["address_confirmed", "accepted"].includes(st)) A.push(["bpship", "🚚 Add courier & tracking", 1]);
+  if (hasShip && ["address_confirmed", "accepted"].includes(st)) A.push(["bpship", "🚚 Courier sent", 1]);
   if (hasShip && ["product_sent", "content_created"].includes(st) && ship.status !== "delivered") A.push(["bpship", "✎ Edit courier"]);
-  if (hasShip && st === "product_sent" && ship.status === "shipped") A.push(["bpdeliv", "📦 Mark delivered → send video brief", 1]);
+  if (hasShip && st === "product_sent" && ship.status === "shipped") A.push(["bpdeliv", "📦 Courier delivered", 1]);
   if (x.blocked_at) A.push(["bpunblock", "✅ Called — unblock", 1], ["bpcall", "📝 Note a call"]);
-  if (st === "content_submitted") A.push(["bpapprove", "✅ Approve video", 1], ["bpchanges", "✏️ Ask for changes"], ["bprelink", "🔗 Request a new link"]);
+  if (st === "content_submitted") A.push(["bpapprove", "✅ Client approved", 1], ["bpchanges", "✏️ Ask for changes"], ["bprelink", "🔗 Request a new link"]);
   if (["content_created", "content_submitted", "changes_requested", "content_approved", "published", "completed"].includes(st)) A.push(["bppost", "🔗 Add post / story", st === "content_approved" ? 1 : 0]);
   if (["published", "completed"].includes(st) && posts.length) A.push(["bpmetrics", "📈 Add numbers"]);
   if (st === "published") A.push(["bpdone", "🏁 Mark complete", 1]);

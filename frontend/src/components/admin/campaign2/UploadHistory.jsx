@@ -241,7 +241,7 @@ export default function UploadHistory({ id, kind, ups, onDownload, show }) {
                             <span className="uh-main">
                               <b>{r.name}</b> {r.handle && r.handle !== r.name ? <em>{r.handle}</em> : null}
                               <small>
-                                Step {r.step}/12 · {r.stepNote}
+                                {r.no ? `Step ${r.no}/13 · ` : ""}{r.stepNote}
                               </small>
                               <small className={c.action === "new" ? "uh-new" : "uh-upd"}>
                                 {c.action === "new" ? "🆕 New in this upload" : "✏️ Updated by this upload"}

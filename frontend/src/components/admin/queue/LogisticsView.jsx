@@ -312,7 +312,7 @@ export default function LogisticsView({ openId }) {
           )}
           {open.status === "shipped" && (
             <button type="button" className="ga-btn ga-btn--primary lg-update" disabled={busy} onClick={() => markDelivered(open)}>
-              {busy ? "…" : "📦 Mark delivered"}
+              {busy ? "…" : "📦 Courier delivered"}
             </button>
           )}
           {open.campaign_id && (

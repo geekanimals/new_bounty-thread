@@ -8,7 +8,7 @@ import { useState } from "react";
 import { uploadMedia } from "@/lib/media";
 import Link from "next/link";
 import { rpc, invoke, errText, sbFor } from "@/lib/supabase";
-import { BP_FAIL, effIndex, stepLabel, inviteStepRank, INVITE_STEPS, fmtNum, fmtDate, maskPhone, initials } from "@/components/admin/campaign/live";
+import { BP_FAIL, effIndex, stepLabel, inviteStepRank, INVITE_STEPS, fmtNum, fmtDate, maskPhone, initials, FLOW_TOTAL, flowNoOfStage, FLOW_NO_OF_INVITE, flowName } from "@/components/admin/campaign/live";
 import IgImg from "@/lib/igFresh";
 
 /* Figma ke 12 steps (row ki progress bar: "Step 9/12 · Courier delivered") */
@@ -48,16 +48,16 @@ export function nextAction(x, kind = "barter", progress = {}) {
     case "shortlisted":
       return { turn: "creator", title: "Invited — waiting for them to accept", text: "They got the invite on WhatsApp + email.", acts: [chat] };
     case "applied":
-      return { turn: "you", title: "Screen this creator", text: "Do they fit the brief?", acts: [["bpscreen", "✓ Meets the brief", 1], ["bpreject", "Not a fit"]] };
+      return { turn: "you", title: "Screen this creator", text: "Do they fit the brief?", acts: [["bpscreen", "✓ Screened", 1], ["bpreject", "Not a fit"]] };
     case "eligible":
-      return { turn: "you", title: "Add them to the brand's list", text: "They cleared screening.", acts: [["bpsend", "📋 Add to the brand's list", 1]] };
+      return { turn: "you", title: "Send them to the brand", text: "They cleared screening.", acts: [["bpsend", "📋 Send to brand", 1]] };
     case "sent_to_brand":
-      return { turn: "brand", title: "Waiting for the brand", text: "Record what the brand said.", acts: [["bpbrand", "✅ Brand confirmed", 1], ["bpbrandno", "Brand passed"]] };
+      return { turn: "brand", title: "Waiting for the brand", text: "The brand approves in their Approvals page.", acts: [["bpbrand", "✅ Approved", 1], ["bpbrandno", "Brand said no"]] };
     case "brand_confirmed":
     case "accepted":
       return ["paid", "barter_paid"].includes(kind)
         ? { turn: "you", title: "Set their fee — the contract goes out with it", text: "Open 💰 Payments, set this creator's fee & terms; the contract is sent automatically.", acts: [["bppay", "💰 Set fee", 1]] }
-        : { turn: "you", title: "Send the contract", text: "Usually goes out on its own — send it now if it hasn't.", acts: [["bpcontract", "📜 Send contract now", 1]] };
+        : { turn: "you", title: "Send the contract", text: "Usually goes out on its own — send it now if it hasn't.", acts: [["bpcontract", "📜 Contract sent", 1]] };
     case "contract_sent":
       return { turn: "creator", title: "Stuck: contract not signed", text: "They need to open the app and sign.", acts: [chat, ["bpcontract", "🔁 Resend contract"]] };
     case "contract_signed":
@@ -65,22 +65,22 @@ export function nextAction(x, kind = "barter", progress = {}) {
         ? { turn: "creator", title: "Video brief going out", text: "Nothing to ship on a paid campaign — the brief goes out on its own.", acts: [chat] }
         : { turn: "creator", title: "Stuck: delivery address", text: "They need to confirm where to ship.", acts: [chat] };
     case "address_confirmed":
-      return { turn: "you", title: "Ship the product", text: "Book the courier and add the tracking.", acts: [["bpship", "🚚 Add courier & tracking", 1]] };
+      return { turn: "you", title: "Ship the product", text: "Book the courier and add the tracking.", acts: [["bpship", "🚚 Courier sent", 1]] };
     case "product_sent":
       if (ship.status === "delivered") return { turn: "creator", title: "Making the video", text: x.due_on ? `Due ${fmtDate(x.due_on)}.` : "", acts: [chat, ["bppost", "🔗 Add post / story"]] };
-      if (ship.status === "shipped") return { turn: "you", title: "In transit — mark delivered when it arrives", text: ship.shipped_at ? `Sent ${fmtDate(ship.shipped_at)}.` : "", acts: [["bpdeliv", "📦 Mark delivered", 1], ["bpship", "✎ Edit courier"]] };
-      return { turn: "you", title: "Add the courier & tracking", text: "", acts: [["bpship", "🚚 Add courier & tracking", 1]] };
+      if (ship.status === "shipped") return { turn: "you", title: "In transit — mark delivered when it arrives", text: ship.shipped_at ? `Sent ${fmtDate(ship.shipped_at)}.` : "", acts: [["bpdeliv", "📦 Courier delivered", 1], ["bpship", "✎ Edit courier"]] };
+      return { turn: "you", title: "Add the courier & tracking", text: "", acts: [["bpship", "🚚 Courier sent", 1]] };
     case "content_created":
       return { turn: "creator", tone: overdue ? "bad" : "", title: overdue ? "Stuck: video overdue" : "Making the video", text: x.due_on ? `${overdue ? "Was due" : "Due"} ${fmtDate(x.due_on)} · ${x.reminders_sent || 0} reminder${x.reminders_sent == 1 ? "" : "s"} sent` : "", acts: [chat, ["bppost", "🔗 Add post / story"]] };
     case "changes_requested":
       return { turn: "creator", title: "Fixing the video", text: "Waiting for the new cut.", acts: [chat] };
     case "content_submitted":
-      return { turn: "you", title: "Review the video", text: "Approve it or ask for changes.", acts: [["bpapprove", "✅ Approve video", 1], ["bpchanges", "✏️ Ask for changes"]], video: x.submission && x.submission.url };
+      return { turn: "you", title: "Review the video", text: "Approve it or ask for changes.", acts: [["bpapprove", "✅ Client approved", 1], ["bpchanges", "✏️ Ask for changes"]], video: x.submission && x.submission.url };
     case "content_approved":
       return { turn: "creator", title: "Stuck: not posted yet", text: "Approved — waiting for them to post.", acts: [chat, ["bppost", "🔗 Add post / story", 1]] };
     case "published":
       return g.all_done
-        ? { turn: "you", title: "Every post is up", text: "Mark the campaign complete for them.", acts: [["bpdone", "🏁 Mark complete", 1]] }
+        ? { turn: "you", title: "Every post is up", text: "Mark the campaign complete for them.", acts: [["bpdone", "🏁 Done", 1]] }
         : { turn: "creator", title: "Posting", text: g.left ? `Still to post: ${g.left}.` : "", acts: [["bppost", "🔗 Add post / story", 1], chat] };
     case "completed":
       return { turn: "done", title: "Done ✓", text: "", acts: [] };
@@ -147,13 +147,15 @@ export function buildRows({ tracker, people, progress, kind }) {
       name: cr.name || (cr.username ? "@" + cr.username : "Creator"),
       handle: cr.username ? "@" + cr.username : x.applied_profile ? "@" + x.applied_profile : "",
       pic: cr.profile_picture_url || null,
-      tags: [[x.from_bulk ? "via upload" : "applied", "violet"], [x.ig_connected === false ? "On Geek · connect Instagram" : "On Geek", "orange"]],
+      tags: [[x.from_bulk ? "via upload" : "applied on Geek", "violet"], [x.ig_connected === false ? "On Geek · connect Instagram" : "On Geek", "orange"]],
       phone: maskPhone(x.phone),
       followersN: Number(cr.followers) || 0,
       followers: cr.followers != null ? fmtNum(cr.followers) : "—",
       city: cr.city || "—",
       step,
-      stepNote: BP_FAIL.includes(x.stage) ? stepLabel(x.stage) : JOURNEY_STEPS[step],
+      // display: 13 steps, wahi naam jo har jagah hain (FLOW_STEPS)
+      no: BP_FAIL.includes(x.stage) ? 0 : flowNoOfStage(x.stage, x.shipment?.status),
+      stepNote: BP_FAIL.includes(x.stage) ? stepLabel(x.stage) : x.stage === "changes_requested" ? "Video submitted · changes asked" : flowName(flowNoOfStage(x.stage, x.shipment?.status)),
       turnWho: nx.turn,
       turn: `${TURN_TXT[nx.turn] || TURN_TXT.you} · ${nx.title}${nx.text ? " · " + nx.text : ""}${days != null && nx.turn !== "done" ? ` · ${days} day${days === 1 ? "" : "s"}` : ""}${waTxt(x.last_wa)}`,
       action: act ? act.label : "",
@@ -203,7 +205,8 @@ export function buildRows({ tracker, people, progress, kind }) {
       city: i.city || "—",
       step,
       sheet: INV_STEP[st] ?? 3, // sheet ka status — upar ke boxes isi se ginte hain (purane app jaisa)
-      stepNote: !reg ? `Sheet: ${invLabel(st)} · joins once registered` : step <= 2 ? `${JOURNEY_STEPS[step]} · sheet: ${invLabel(st)}` : invLabel(st),
+      no: !reg || miss.length ? 0 : FLOW_NO_OF_INVITE[st] || 1,
+      stepNote: !reg ? `Invited — not registered yet · sheet: ${invLabel(st)}` : miss.length ? `${waitIg ? "Registered — Instagram not connected" : "Registered — profile not complete"} · sheet: ${invLabel(st)}` : invLabel(st),
       turnWho: nx.turn,
       turn: `${TURN_TXT[nx.turn]} · ${nx.title}${days != null && !posted ? ` · ${days} day${days === 1 ? "" : "s"}` : ""}${waTxt(i.last_wa)}${i.last_wa ? " · automatic" : ""}`,
       action: act ? act.label : "",
@@ -771,24 +774,46 @@ export function MatchDetails({ m }) {
   );
 }
 
+/* Creators list ki column headings — CreatorRow ke grid jaise hi */
+export function CreatorHead({ withCheck = true }) {
+  return (
+    <div className={`jr jr--head ${withCheck ? "" : "jr--nocheck"}`} aria-hidden="true">
+      {withCheck && <span />}
+      <span />
+      <span>Creator</span>
+      <span>Contact</span>
+      <span>Step</span>
+      <span>Messages</span>
+      <span className="jr-head-act">Action</span>
+      <style>{JR_CSS}</style>
+    </div>
+  );
+}
+
 export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
-  const pct = Math.max(4, Math.round((c.step / 12) * 100));
+  const no = c.no ?? 0;
+  const ig = igOf(c);
+  const last = stats && stats.last && stats.last.at ? stats.last : null;
   return (
-    <div className={`jr ${open ? "is-open" : ""}`}>
+    <div className={`jr ${open ? "is-open" : ""} ${onCheck ? "" : "jr--nocheck"}`}>
       {onCheck && <input type="checkbox" className="jr-check" checked={!!checked} onChange={onCheck} aria-label={`Select ${c.name}`} />}
       <IgImg className="jr-av jr-av--img" handle={/^@/.test(c.name) ? c.name : c.handle} src={c.pic} fallback={<span className="jr-av">{initials(c.name.replace(/^@/, ""))[0]}</span>} />
-      <div className="jr-main">
-        <p className="jr-top">
-          {href ? (
-            <Link href={href} className="jr-name">
-              {c.name}
-            </Link>
-          ) : (
-            <b className="jr-name">{c.name}</b>
-          )}
-          {c.handle && c.handle !== c.name && <span className="jr-handle">{c.handle}</span>}
+
+      {/* 1 · Creator */}
+      <div className="jr-col jr-who">
+        {href ? (
+          <Link href={href} className="jr-name">
+            {c.name}
+          </Link>
+        ) : (
+          <b className="jr-name">{c.name}</b>
+        )}
+        <span className="jr-sub">
+          {c.handle && c.handle !== c.name ? `${c.handle} · ` : ""}👥 {c.followers} · 📍 {c.city}
+        </span>
+        <span className="jr-tags">
           {c.tags.map(([t, tn]) => (
             <span key={t} className={`ga-badge ga-badge--${tn}`}>
               {t}
@@ -799,131 +824,169 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
               {ms.label}
             </button>
           )}
-        </p>
-        <p className="jr-meta">
-          {c.phone ? (
-            <>
-              {rawPhone(c) ? (
-                <a className="jr-lnk" href={`https://wa.me/${rawPhone(c)}`} target="_blank" rel="noopener noreferrer" title="Open their WhatsApp">
-                  🟢 WhatsApp {c.phone}
-                </a>
-              ) : (
-                <>🟢 WhatsApp {c.phone}</>
-              )}{" "}
-              <span className="ga-badge ga-badge--green">ON</span> ·{" "}
-            </>
+        </span>
+      </div>
+
+      {/* 2 · Contact */}
+      <div className="jr-col jr-contact">
+        {c.phone ? (
+          rawPhone(c) ? (
+            <a className="jr-lnk" href={`https://wa.me/${rawPhone(c)}`} target="_blank" rel="noopener noreferrer" title="Open their WhatsApp">
+              🟢 {c.phone}
+            </a>
           ) : (
-            "No WhatsApp · "
-          )}
-          {emailOf(c) && (
-            <>
-              <a className="jr-lnk" href={`mailto:${emailOf(c)}`} title="Email them">
-                ✉️ {emailOf(c)}
-              </a>{" "}
-              ·{" "}
-            </>
-          )}
-          {igOf(c) && (
-            <>
-              <a className="jr-lnk" href={`https://instagram.com/${igOf(c)}`} target="_blank" rel="noopener noreferrer" title={`Open @${igOf(c)} on Instagram`}>
-                @{igOf(c)} ↗
-              </a>{" "}
-              ·{" "}
-            </>
-          )}
-          👥 {c.followers} followers · 📍 {c.city}
-        </p>
-        <div className="jr-step">
-          <span className="ga-bar">
-            <i style={{ width: c.step ? `${pct}%` : 0 }} />
-          </span>
-          <span>
-            Step {c.step}/12 · {c.stepNote}
-          </span>
-        </div>
-        <p className="jr-turn">{c.turn}</p>
-        {ms && showMatch && <MatchDetails m={match} />}
-        {stats && (
-          <p className="jr-stats">
-            🟢 WhatsApp {stats.wa || 0} · ✉️ Email {stats.em || 0} · 🔔 Reminders {stats.rem || 0}
-            {stats.last && stats.last.at ? (
-              <>
-                {" "}
-                · 🕒 Last message {new Date(stats.last.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} · {stats.last.channel === "email" ? "✉️ email" : "🟢 WhatsApp"}
-                {stats.last.status ? ` · ${stats.last.status === "read" ? "read ✓✓" : stats.last.status === "delivered" ? "delivered ✓✓" : stats.last.status === "failed" ? "not delivered ✗" : stats.last.status}` : ""}
-                {stats.last.by ? ` · ${stats.last.by === "team" ? "sent by the team" : stats.last.by === "creator" ? "from the creator" : "automatic"}` : ""}
-              </>
-            ) : null}
-          </p>
+            <span>🟢 {c.phone}</span>
+          )
+        ) : (
+          <span className="jr-dim">No WhatsApp</span>
+        )}
+        {emailOf(c) ? (
+          <a className="jr-lnk jr-ell" href={`mailto:${emailOf(c)}`} title={emailOf(c)}>
+            ✉️ {emailOf(c)}
+          </a>
+        ) : (
+          <span className="jr-dim">No email</span>
+        )}
+        {ig ? (
+          <a className="jr-lnk" href={`https://instagram.com/${ig}`} target="_blank" rel="noopener noreferrer" title={`Open @${ig} on Instagram`}>
+            📸 @{ig} ↗
+          </a>
+        ) : (
+          <span className="jr-dim">No Instagram</span>
         )}
       </div>
+
+      {/* 3 · Step (13 steps, same names everywhere) */}
+      <div className="jr-col jr-stepcol">
+        <span className="jr-stepname">
+          {no ? <b>Step {no}/{FLOW_TOTAL}</b> : <b>—</b>} · {c.stepNote}
+        </span>
+        <span className="jr-dots" aria-hidden="true">
+          {Array.from({ length: FLOW_TOTAL }, (_, i) => (
+            <i key={i} className={i < no ? "on" : ""} />
+          ))}
+        </span>
+        <span className="jr-turn" title={c.turn}>
+          {c.turn}
+        </span>
+      </div>
+
+      {/* 4 · Messages */}
+      <div className="jr-col jr-msgs">
+        {stats ? (
+          <>
+            <span>
+              🟢 {stats.wa || 0} · ✉️ {stats.em || 0} · 🔔 {stats.rem || 0}
+            </span>
+            {last ? (
+              <span className="jr-dim" title="Last message">
+                🕒 {new Date(last.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} · {last.channel === "email" ? "email" : "WhatsApp"}
+                {last.status ? ` · ${last.status === "read" ? "read ✓✓" : last.status === "delivered" ? "delivered ✓✓" : last.status === "failed" ? "not delivered ✗" : last.status}` : ""}
+                {last.by ? ` · ${last.by === "team" ? "by the team" : last.by === "creator" ? "from the creator" : "automatic"}` : ""}
+              </span>
+            ) : (
+              <span className="jr-dim">No message yet</span>
+            )}
+          </>
+        ) : (
+          <span className="jr-dim">—</span>
+        )}
+      </div>
+
+      {/* 5 · Action (fixed width, always on the right) */}
       <div className="jr-act">
-        {ms && (
-          <button type="button" className={`ga-btn ga-btn--ghost jr-mbtn ${showMatch ? "is-on" : ""}`} onClick={() => setShowMatch((v) => !v)} title="Check every criterion before you approve">
-            🔍 Match details
-          </button>
-        )}
-        {onReject && (
-          <button type="button" className="ga-btn ga-btn--ghost jr-rej" onClick={onReject} disabled={busy} title="Reject — they stay in the campaign under Rejected">
-            ✗ Reject
-          </button>
-        )}
         {c.act && (
           <button type="button" className="ga-btn ga-btn--primary jr-btn" onClick={onAction} disabled={busy}>
             {busy ? "…" : c.action}
           </button>
         )}
-        <button type="button" className="jr-chat" onClick={onChat} aria-label={`Chat with ${c.name}`}>
-          💬
-        </button>
-        {href ? (
-          <Link href={href} className="jr-more" aria-label={`Open ${c.name}`}>
-            Open ›
-          </Link>
-        ) : null}
+        <span className="jr-act2">
+          {ms && (
+            <button type="button" className={`ga-btn ga-btn--ghost jr-mini ${showMatch ? "is-on" : ""}`} onClick={() => setShowMatch((v) => !v)} title="Check every criterion before you approve">
+              🔍 Match
+            </button>
+          )}
+          {onReject && (
+            <button type="button" className="ga-btn ga-btn--ghost jr-mini jr-rej" onClick={onReject} disabled={busy} title="Reject — they stay in the campaign under Rejected">
+              ✗ Reject
+            </button>
+          )}
+          <button type="button" className="jr-chat" onClick={onChat} aria-label={`Chat with ${c.name}`} title="Chat">
+            💬
+          </button>
+          {href ? (
+            <Link href={href} className="jr-more" aria-label={`Open ${c.name}`}>
+              Open ›
+            </Link>
+          ) : null}
+        </span>
       </div>
-      <style>{`
-        .jr { display: flex; align-items: flex-start; gap: 14px; padding: 13px 14px 14px 13px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; transition: border-color .15s; }
-        .jr:hover { border-color: #cfd2ee; }
-        .jr-check { margin-top: 12px; accent-color: var(--ad-primary); }
-        .jr-av { width: 38px; height: 38px; flex-shrink: 0; border-radius: 11px; display: grid; place-items: center; background: var(--ad-soft); font-size: 19px; color: var(--ad-ink); }
-        .jr-av--img { object-fit: cover; }
-        .jr-main { flex: 1; min-width: 0; padding-top: 2px; }
-        .jr-top { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-        .jr-name { font-size: 14px; font-weight: 700; color: var(--ad-ink); }
-        a.jr-name:hover { color: var(--ad-primary); }
-        .jr-handle { margin-right: 2px; font-size: 12px; font-weight: 700; color: var(--ad-muted); }
-        .jr-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: #8791a7; }
-        .jr-meta .ga-badge { height: 22px; padding: 0 9px; }
-        .jr-lnk { color: inherit; text-decoration: none; }
-        .jr-lnk:hover { color: var(--ad-primary); text-decoration: underline; }
-        .jr-step { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ad-ink); }
-        .jr-step .ga-bar { width: 160px; height: 6px; flex-shrink: 0; background: #eceef6; }
-        .jr-turn { margin-top: 8px; font-size: 12px; line-height: 1.35; color: #8791a7; }
-        .jr-stats { margin-top: 5px; font-size: 11.5px; line-height: 1.35; color: #8791a7; }
-        .jr-act { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: center; }
-        .jr-btn { height: 41px; padding: 0 15px; }
-        .jr-mbtn { height: 41px; padding: 0 12px; font-size: 12.5px; }
-        .jr-rej { height: 41px; padding: 0 12px; font-size: 12.5px; color: #d6453d; }
-        .jr-rej:hover { border-color: #d6453d; }
-        .jr-mbtn.is-on { border-color: var(--ad-primary); color: var(--ad-primary); }
-        .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }
-        .jr-chat { width: 41px; height: 41px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 17px; color: var(--ad-primary-ink); }
-        .jr-chat:hover { border-color: var(--ad-primary); }
-        .jr-more { display: inline-flex; align-items: center; height: 41px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 13px; font-weight: 800; color: #6657e9; white-space: nowrap; }
-        .jr-more:hover { border-color: var(--ad-primary); background: var(--ad-soft-2); }
-        @media (max-width: 1023px) {
-          .jr { flex-wrap: wrap; }
-          .jr-act { width: 100%; padding-left: 52px; }
-          .jr-btn { flex: 1; }
-        }
-        @media (max-width: 640px) {
-          .jr { gap: 10px; padding: 12px; }
-          .jr-av { width: 32px; height: 32px; font-size: 15px; }
-          .jr-act { padding-left: 0; }
-          .jr-step { flex-direction: column; align-items: flex-start; gap: 6px; }
-        }
-      `}</style>
+
+      {ms && showMatch && (
+        <div className="jr-matchrow">
+          <MatchDetails m={match} />
+        </div>
+      )}
+      <style>{JR_CSS}</style>
     </div>
   );
 }
+
+const JR_CSS = `
+  .jr { display: grid; grid-template-columns: 18px 40px minmax(170px, 1.25fr) minmax(170px, 1.05fr) minmax(210px, 1.35fr) minmax(150px, .95fr) 236px; column-gap: 14px; row-gap: 8px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; transition: border-color .15s; }
+  .jr.jr--nocheck { grid-template-columns: 40px minmax(170px, 1.25fr) minmax(170px, 1.05fr) minmax(210px, 1.35fr) minmax(150px, .95fr) 236px; }
+  .jr:hover { border-color: #cfd2ee; }
+  .jr--head { padding: 4px 14px; border: 0; background: transparent; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ad-muted); }
+  .jr--head:hover { border-color: transparent; }
+  .jr-head-act { text-align: right; }
+  .jr-check { accent-color: var(--ad-primary); }
+  .jr-av { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--ad-soft); font-size: 19px; color: var(--ad-ink); }
+  .jr-av--img { object-fit: cover; }
+  .jr-col { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ad-ink); }
+  .jr-name { font-size: 14px; font-weight: 700; color: var(--ad-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  a.jr-name:hover { color: var(--ad-primary); }
+  .jr-sub { color: #8791a7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jr-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .jr-tags .ga-badge { height: 20px; padding: 0 8px; font-size: 10.5px; }
+  .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 700; }
+  .jr-lnk { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jr-lnk:hover { color: var(--ad-primary); text-decoration: underline; }
+  .jr-dim { color: #9aa3b8; }
+  .jr-stepname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jr-dots { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; max-width: 220px; }
+  .jr-dots i { height: 5px; border-radius: 3px; background: #eceef6; }
+  .jr-dots i.on { background: var(--ad-primary); }
+  .jr-turn { color: #8791a7; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .jr-msgs span { overflow: hidden; text-overflow: ellipsis; }
+  .jr-act { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  .jr-btn { height: 38px; padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jr-act2 { display: flex; justify-content: flex-end; gap: 6px; }
+  .jr-mini { height: 32px; padding: 0 10px; font-size: 12px; }
+  .jr-mini.is-on { border-color: var(--ad-primary); color: var(--ad-primary); }
+  .jr-rej { color: #d6453d; }
+  .jr-rej:hover { border-color: #d6453d; }
+  .jr-chat { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 15px; color: var(--ad-primary-ink); }
+  .jr-chat:hover { border-color: var(--ad-primary); }
+  .jr-more { display: inline-flex; align-items: center; height: 32px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; font-weight: 800; color: #6657e9; white-space: nowrap; }
+  .jr-more:hover { border-color: var(--ad-primary); background: var(--ad-soft-2); }
+  .jr-matchrow { grid-column: 1 / -1; }
+  @media (max-width: 1279px) {
+    .jr, .jr.jr--nocheck { grid-template-columns: 18px 40px minmax(0, 1fr) minmax(0, 1fr); }
+    .jr.jr--nocheck { grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr); }
+    .jr-stepcol, .jr-msgs { grid-column: span 1; }
+    .jr > .jr-stepcol { grid-column: 3 / span 1; }
+    .jr > .jr-msgs { grid-column: 4 / span 1; }
+    .jr.jr--nocheck > .jr-stepcol { grid-column: 2 / span 1; }
+    .jr.jr--nocheck > .jr-msgs { grid-column: 3 / span 1; }
+    .jr-act { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; }
+    .jr--head { display: none; }
+  }
+  @media (max-width: 640px) {
+    .jr, .jr.jr--nocheck { grid-template-columns: 18px 36px minmax(0, 1fr); padding: 12px; }
+    .jr.jr--nocheck { grid-template-columns: 36px minmax(0, 1fr); }
+    .jr > .jr-col, .jr > .jr-stepcol, .jr > .jr-msgs { grid-column: 1 / -1; }
+    .jr > .jr-who { grid-column: auto; }
+    .jr-act { flex-direction: column; }
+    .jr-av { width: 32px; height: 32px; font-size: 15px; }
+  }
+`;

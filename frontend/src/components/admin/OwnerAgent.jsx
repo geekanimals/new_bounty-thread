@@ -23,7 +23,8 @@ function isHinglish(q) {
 /* purane builtInAnswer ke rules — wahi text; href = naye panel mein wo page */
 function answer(text) {
   const hi = isHinglish(text);
-  const T = (h, e) => (hi ? h : e);
+  // jawab hamesha English mein (Hinglish sawaal bhi samajh leta hai)
+  const T = (h, e) => (hi ? e : e);
   const q = text.toLowerCase();
   if (/delete|hata|remove/.test(q))
     return {

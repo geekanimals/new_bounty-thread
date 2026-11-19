@@ -7,7 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
-import { CreatorRow, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, matchState, autoReject } from "@/components/admin/campaign/journey";
+import { CreatorRow, CreatorHead, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, matchState, autoReject } from "@/components/admin/campaign/journey";
 import { downloadFile, loadScript, XLSX_SRC, sheetPhone } from "@/components/admin/campaign2/kit";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 import WaPanel from "@/components/admin/campaign/WaPanel";
@@ -134,7 +134,7 @@ export default function WorkspaceCreators() {
       ...rows.map((x) => {
         const m = x.pid ? (bmatch.data || {})[x.pid] : null;
         const ms = matchState(m);
-        return [x.name, x.handle, sheetPhone(x.x?.phone || x.i?.phone || ""), x.x?.email || x.x?.creator?.email || x.i?.email || "", x.city === "—" ? "" : x.city, x.followersN || "", `${x.step}/12 · ${x.stepNote || ""}`, ms ? ms.label.replace(/^\S+\s/, "") : "Not checked", ms && ms.k !== "ok" ? autoReject(m).text.replace(/^This campaign needs /, "") : "", x.next || ""];
+        return [x.name, x.handle, sheetPhone(x.x?.phone || x.i?.phone || ""), x.x?.email || x.x?.creator?.email || x.i?.email || "", x.city === "—" ? "" : x.city, x.followersN || "", `${x.no ? `${x.no}/13 · ` : ""}${x.stepNote || ""}`, ms ? ms.label.replace(/^\S+\s/, "") : "Not checked", ms && ms.k !== "ok" ? autoReject(m).text.replace(/^This campaign needs /, "") : "", x.next || ""];
       }),
     ];
   };
@@ -466,6 +466,7 @@ export default function WorkspaceCreators() {
         </button>
 
         <div className="wcr-rows">
+          {rows.length > 0 && <CreatorHead />}
           {rows.map((x) => (
             <CreatorRow
               key={x.id}

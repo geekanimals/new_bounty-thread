@@ -8,10 +8,10 @@ import PTable from "@/components/admin/brand/PTable";
 
 /* purane app ke barter steps (hubStepLabel) — number hata ke */
 const STEP = {
-  applied: "Registered", invited: "Registered", shortlisted: "Registered", eligible: "Screened", sent_to_brand: "Sent to brand",
-  brand_confirmed: "Brand confirmed", accepted: "Brand confirmed", contract_sent: "Contract sent", contract_signed: "Contract signed",
-  address_confirmed: "Address confirmed", product_sent: "Courier sent", product_delivered: "Delivered", content_created: "Video brief sent",
-  content_submitted: "Video submitted", changes_requested: "Changes asked", content_approved: "Client approved", published: "Posted", completed: "Done",
+  applied: "Applied", invited: "Invited", shortlisted: "Invited", eligible: "Screened", sent_to_brand: "Sent to brand",
+  brand_confirmed: "Approved", accepted: "Approved", contract_sent: "Contract sent", contract_signed: "Contract signed",
+  address_confirmed: "Address confirmed", product_sent: "Courier sent", product_delivered: "Courier delivered", content_created: "Video brief sent",
+  content_submitted: "Video submitted", changes_requested: "Video submitted · changes asked", content_approved: "Client approved", published: "Posted", completed: "Done",
   ineligible: "Declined", brand_declined: "Declined by brand", dropped: "Dropped", rejected: "Rejected",
 };
 const label = (s) => STEP[s] || String(s || "—").replace(/_/g, " ");

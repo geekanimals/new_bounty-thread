@@ -109,10 +109,10 @@ export function splitTags(t) {
 
 /* ---------- Creator journey (BARTER_STEPS, BP_ALIAS, BP_JOURNEY) ---------- */
 export const BARTER_STEPS = [
-  ["applied", "1. Registered"],
+  ["applied", "1. Applied"],
   ["eligible", "2. Screened"],
   ["sent_to_brand", "3. Sent to brand"],
-  ["brand_confirmed", "4. Brand confirmed"],
+  ["brand_confirmed", "4. Approved"],
   ["contract_sent", "5. Contract sent"],
   ["contract_signed", "6. Contract signed"],
   ["address_confirmed", "7. Address confirmed"],
@@ -120,11 +120,48 @@ export const BARTER_STEPS = [
   ["product_delivered", "9. Courier delivered"],
   ["content_created", "10. Video brief sent"],
   ["content_submitted", "11. Video submitted"],
-  ["changes_requested", "12. Changes asked"],
-  ["content_approved", "13. Client approved"],
-  ["published", "14. Posted"],
-  ["completed", "15. Done"],
+  ["changes_requested", "11. Video submitted · changes asked"],
+  ["content_approved", "12. Client approved"],
+  ["published", "13. Posted"],
+  ["completed", "13. Done"],
 ];
+
+/*
+ * Campaign ke 13 steps — HAR jagah yahi naam (creators list, detail, boxes, sheet, buttons).
+ * Purani lists ("Registered", "Brand confirmed", "In transit") ab display mein nahi.
+ */
+export const FLOW_STEPS = [
+  "Applied",
+  "Screened",
+  "Sent to brand",
+  "Approved",
+  "Contract sent",
+  "Contract signed",
+  "Address confirmed",
+  "Courier sent",
+  "Courier delivered",
+  "Video brief sent",
+  "Video submitted",
+  "Client approved",
+  "Posted / Done",
+];
+export const FLOW_TOTAL = FLOW_STEPS.length;
+/** participation (stage + shipment) → step number 1–13 (0 = abhi sirf invited) */
+export function flowNoOfStage(stage, shipStatus) {
+  if (stage === "product_sent") return shipStatus === "delivered" ? 9 : 8;
+  return (
+    {
+      invited: 0, shortlisted: 0, applied: 1, eligible: 2, sent_to_brand: 3, brand_confirmed: 4, accepted: 4, contract_sent: 5, contract_signed: 6,
+      address_confirmed: 7, product_delivered: 9, content_created: 10, content_submitted: 11, changes_requested: 11, content_approved: 12, published: 13, completed: 13,
+    }[stage] ?? 1
+  );
+}
+/** bulk-sheet invite status → step number 1–13 */
+export const FLOW_NO_OF_INVITE = {
+  registered: 1, screened: 2, sent_to_brand: 3, approved: 4, contract_sent: 5, contract_signed: 6, address_confirmed: 7,
+  courier_sent: 8, courier_delivered: 9, video_brief_sent: 10, video_submitted: 11, client_approved: 12, posted: 13,
+};
+export const flowName = (no) => (no >= 1 ? FLOW_STEPS[no - 1] : "Invited");
 export const BP_ALIAS = { invited: "applied", shortlisted: "applied", accepted: "brand_confirmed" };
 export const BP_SHIP = ["address_confirmed", "product_sent", "product_delivered"];
 export const BP_FAIL = ["dropped", "rejected", "ineligible", "brand_declined"];

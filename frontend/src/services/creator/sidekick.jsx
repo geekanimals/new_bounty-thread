@@ -22,7 +22,8 @@ const SUPPORT = "mayank@geekcreativeagency.com";
 /* ---------- Language ---------- */
 /** Sidekick hamesha English mein jawab deta hai (Hinglish / Hindi sawal bhi samajhta hai, jawab English). */
 export const isHi = () => false;
-const T = (hi, en, h) => (h ? hi : en);
+// Saare jawab hamesha English mein (Hinglish sawaal bhi samajhta hai, jawab English)
+const T = (hi, en) => en;
 
 /* ---------- Data (ek chat ke liye 60 sec cache) ---------- */
 let cache = { t: 0, mine: null, open: null };
