@@ -14,24 +14,23 @@ import WaPanel from "@/components/admin/campaign/WaPanel";
 
 /* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
-  { l: "Total", s: "everyone · rejected not counted", f: (c) => !c.failed },
-  { l: "Invited", s: "not registered", f: (c) => !c.failed && (!c.registered) },
-  { l: "Registered", s: "on Geek OS", f: (c) => !c.failed && (c.registered) },
-  { l: "No Instagram", s: "signed up, not linked", f: (c) => !c.failed && (c.registered && !c.ig) },
-  { l: "Instagram", s: "media kit connected", f: (c) => !c.failed && (c.ig) },
-  { l: "Applied", s: "screening", f: (c) => !c.failed && (c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand") },
-  { l: "Sent to brand", s: "waiting for the brand", f: (c) => !c.failed && (c.x?.stage === "sent_to_brand") },
-  { l: "Rejected", s: "not a fit / brand passed", f: (c) => c.failed },
-  { l: "Approved", s: "brand said yes", f: (c) => !c.failed && (c.approved) },
-  { l: "Contract signed", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 5) },
-  { l: "Address confirmed", s: "brief sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 6) },
-  { l: "Courier sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 7) },
-  { l: "Delivered", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9) },
-  { l: "Video submitted", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11) },
-  { l: "No video yet", s: "got product", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9 && (c.sheet ?? c.step) < 11) },
-  { l: "Client approved", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage))) },
-  { l: "Done", s: "every post up", f: (c) => !c.failed && (c.posted) },
-  { l: "Unread replies", s: "creator wrote back", f: (c, u) => !c.failed && (u[(c.id[0] === "p" ? "p:" : "i:") + c.id.slice(2)]?.n || 0) > 0 },
+  { t: "all", l: "Total", s: "everyone · rejected not counted", f: (c) => !c.failed },
+  { t: "reach", l: "Invited", s: "not registered", f: (c) => !c.failed && (!c.registered) },
+  { t: "reach", l: "Registered", s: "on Geek OS", f: (c) => !c.failed && (c.registered) },
+  { t: "reach", l: "No Instagram", s: "signed up, not linked", f: (c) => !c.failed && (c.registered && !c.ig) },
+  { t: "reach", l: "Instagram", s: "media kit connected", f: (c) => !c.failed && (c.ig) },
+  { t: "screen", l: "Applied", s: "screening", f: (c) => !c.failed && (c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand") },
+  { t: "screen", l: "Sent to brand", s: "waiting for the brand", f: (c) => !c.failed && (c.x?.stage === "sent_to_brand") },
+  { t: "bad", l: "Rejected", s: "not a fit / brand passed", f: (c) => c.failed },
+  { t: "screen", l: "Approved", s: "brand said yes", f: (c) => !c.failed && (c.approved) },
+  { t: "ship", l: "Contract signed", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 5) },
+  { t: "ship", l: "Address confirmed", s: "brief sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 6) },
+  { t: "ship", l: "Courier sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 7) },
+  { t: "ship", l: "Delivered", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9) },
+  { t: "content", l: "Video submitted", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11) },
+  { t: "content", l: "No video yet", s: "got product", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9 && (c.sheet ?? c.step) < 11) },
+  { t: "content", l: "Client approved", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage))) },
+  { t: "good", l: "Done", s: "every post up", f: (c) => !c.failed && (c.posted) },
 ];
 
 /* Figma: Campaign workspace — Creators (journey + rows) — barter_tracker + campaign_people */
@@ -353,10 +352,12 @@ export default function WorkspaceCreators() {
         </div>
         <div className="wcr-boxes">
           {BOXES.map((b, i) => (
-            <button key={b.l} type="button" className={`wcr-box ${box === i ? "is-on" : ""}`} onClick={() => setBox(i)} aria-pressed={box === i}>
+            <button key={b.l} type="button" className={`wcr-box wcr-box--${b.t || "all"} ${box === i ? "is-on" : ""} ${counts[i] ? "" : "is-zero"}`} onClick={() => setBox(i)} aria-pressed={box === i} title={b.s ? `${b.l} — ${b.s}` : b.l}>
+              <span className="wcr-box__l">
+                <i aria-hidden="true" />
+                {b.l}
+              </span>
               <strong>{n(i)}</strong>
-              <span>{b.l}</span>
-              {b.s && <small>{b.s}</small>}
             </button>
           ))}
         </div>
@@ -539,15 +540,23 @@ export default function WorkspaceCreators() {
         .wcr-head__act { display: flex; align-items: center; gap: 16px; padding-top: 2px; }
         .wcr-link { font-size: 14px; font-weight: 800; color: #6657e9; }
         .wcr-find { height: 41px; padding: 0 16px; }
-        .wcr-boxes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
-        .wcr-box { display: flex; flex-direction: column; align-items: flex-start; min-height: 117px; padding: 22px 19px 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; text-align: left; transition: border-color .15s, box-shadow .15s; }
-        .wcr-box:hover { border-color: #cfd2ee; }
-        .wcr-box strong { font-family: var(--ad-head); font-size: 28px; font-weight: 800; letter-spacing: -1px; line-height: 1.1; color: var(--ad-ink); }
-        .wcr-box span { margin-top: 9px; font-size: 12px; color: var(--ad-muted); }
-        .wcr-box small { margin-top: 5px; font-size: 11px; color: var(--ad-faint); }
-        .wcr-box.is-on { background: var(--ad-grad); border-color: transparent; box-shadow: 0 16px 30px -18px rgba(103,87,245,.9); }
-        .wcr-box.is-on strong { color: #fff; }
-        .wcr-box.is-on span, .wcr-box.is-on small { color: #e4ddff; }
+        .wcr-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; margin-top: 18px; }
+        .wcr-box { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 11px 13px 10px; border-radius: 12px; border: 1px solid var(--ad-line); background: linear-gradient(180deg, #fff 0%, #fbfbff 100%); text-align: left; box-shadow: 0 1px 2px rgba(20, 22, 60, 0.04); transition: border-color .15s, box-shadow .15s, transform .15s; }
+        .wcr-box:hover { border-color: #c9c4f7; box-shadow: 0 6px 16px -10px rgba(103, 87, 245, 0.45); transform: translateY(-1px); }
+        .wcr-box__l { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 11.5px; font-weight: 700; color: var(--ad-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wcr-box__l i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #a3a8c3; }
+        .wcr-box--reach .wcr-box__l i { background: #5b8def; }
+        .wcr-box--screen .wcr-box__l i { background: #7c6cf2; }
+        .wcr-box--ship .wcr-box__l i { background: #f59e0b; }
+        .wcr-box--content .wcr-box__l i { background: #14b8a6; }
+        .wcr-box--good .wcr-box__l i { background: #22a06b; }
+        .wcr-box--bad .wcr-box__l i { background: #e5484d; }
+        .wcr-box strong { font-family: var(--ad-head); font-size: 21px; font-weight: 800; letter-spacing: -0.6px; line-height: 1; color: var(--ad-ink); }
+        .wcr-box.is-zero strong { color: #c3c6d6; }
+        .wcr-box.is-zero .wcr-box__l { color: #a6aabd; }
+        .wcr-box.is-on { background: var(--ad-grad); border-color: transparent; box-shadow: 0 12px 24px -14px rgba(103, 87, 245, 0.9); }
+        .wcr-box.is-on strong, .wcr-box.is-on .wcr-box__l { color: #fff; }
+        .wcr-box.is-on .wcr-box__l i { background: #fff; }
 
         .wcr-filters { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 25px; }
         .wcr-search { width: 270px; height: 43px; }
@@ -570,15 +579,13 @@ export default function WorkspaceCreators() {
         .wcr-warn { margin: 8px 0 0; padding: 7px 10px; border-radius: 9px; background: #fff7e6; color: #b45309; font-size: 12.5px; }
         .wcr-empty { padding: 24px; text-align: center; font-size: 13px; color: var(--ad-muted); }
 
-        @media (max-width: 1023px) { .wcr-boxes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 1023px) { .wcr-boxes { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); } }
         @media (max-width: 640px) {
           .wcr-card { padding: 18px 16px; }
           .wcr-head__act { width: 100%; justify-content: space-between; }
           .wcr-boxes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-          .wcr-box { min-height: 0; padding: 14px 12px; }
-          .wcr-box:first-child { grid-column: 1 / -1; }
-          .wcr-box strong { font-size: 24px; }
-          .wcr-box span { margin-top: 6px; }
+          .wcr-box { padding: 10px 11px 9px; }
+          .wcr-box strong { font-size: 19px; }
           .wcr-search { width: 100%; }
           .wcr-sel { flex: 1 1 45%; }
           .wcr-wa { margin-left: 0; width: 100%; }
