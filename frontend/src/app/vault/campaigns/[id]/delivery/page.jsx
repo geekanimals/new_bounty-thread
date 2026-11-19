@@ -26,6 +26,16 @@ function explain(r) {
       : `WhatsApp drip ${r.drip} · ${(DRIPS[r.drip] && DRIPS[r.drip].name) || "drip"}`
     : `${r.channel === "email" ? "Email" : "WhatsApp"} · ${r.title || r.template || "step update"}`;
   const err = String(r.error || "");
+  // purana message galat number par gaya tha, par number baad mein sahi ho gaya — ise "Not delivered" mein mat gino
+  if (r.channel === "whatsapp" && r.phone_ok === false && r.kind !== "done" && r.now_to && r.now_to !== r.to)
+    return {
+      what,
+      code: "fixed",
+      status: "Old number — fixed",
+      tone: "",
+      reason: `This one went to ${r.to || "a wrong number"} (the sheet's Timestamp was taken as WhatsApp). The number is corrected now (…${String(r.now_to).slice(-4)}) — newer messages go to the right number.`,
+      fix: "",
+    };
   if (r.channel === "whatsapp" && r.phone_ok === false && r.kind !== "done")
     return {
       what,
@@ -52,7 +62,7 @@ function explain(r) {
   return { what, code: "sent", status: drip ? "Sent to Snapto" : "Sent", tone: "green", reason: drip ? "Handed to Snapto — the drip's messages go on its timeline. Delivered / read: Snapto → Reports." : "Sent.", fix: "" };
 }
 
-const REASON_TITLE = { bad_number: "Wrong WhatsApp number", opted_out: "Replied STOP", held: "Held — channel OFF", failed: "Failed", skipped: "Skipped", past_step: "Not needed (already past the step)" };
+const REASON_TITLE = { fixed: "Old wrong number — corrected since", bad_number: "Wrong WhatsApp number", opted_out: "Replied STOP", held: "Held — channel OFF", failed: "Failed", skipped: "Skipped", past_step: "Not needed (already past the step)" };
 
 export default function DeliveryLog() {
   const { id } = useParams();
