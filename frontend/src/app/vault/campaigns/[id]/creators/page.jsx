@@ -14,23 +14,23 @@ import WaPanel from "@/components/admin/campaign/WaPanel";
 
 /* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
-  { l: "Total", s: "everyone · incl. rejected", f: () => true },
-  { l: "Invited", s: "not registered", f: (c) => !c.registered },
-  { l: "Registered", s: "on Geek OS", f: (c) => c.registered },
-  { l: "No Instagram", s: "signed up, not linked", f: (c) => c.registered && !c.ig },
-  { l: "Instagram", s: "media kit connected", f: (c) => c.ig },
-  { l: "Applied", s: "screening", f: (c) => c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand" },
-  { l: "Sent to brand", s: "waiting for the brand", f: (c) => c.x?.stage === "sent_to_brand" },
+  { l: "Total", s: "everyone · rejected not counted", f: (c) => !c.failed },
+  { l: "Invited", s: "not registered", f: (c) => !c.failed && (!c.registered) },
+  { l: "Registered", s: "on Geek OS", f: (c) => !c.failed && (c.registered) },
+  { l: "No Instagram", s: "signed up, not linked", f: (c) => !c.failed && (c.registered && !c.ig) },
+  { l: "Instagram", s: "media kit connected", f: (c) => !c.failed && (c.ig) },
+  { l: "Applied", s: "screening", f: (c) => !c.failed && (c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand") },
+  { l: "Sent to brand", s: "waiting for the brand", f: (c) => !c.failed && (c.x?.stage === "sent_to_brand") },
   { l: "Rejected", s: "not a fit / brand passed", f: (c) => c.failed },
-  { l: "Approved", s: "brand said yes", f: (c) => c.approved },
-  { l: "Contract signed", f: (c) => (c.sheet ?? c.step) >= 5 },
-  { l: "Address confirmed", s: "brief sent", f: (c) => (c.sheet ?? c.step) >= 6 },
-  { l: "Courier sent", f: (c) => (c.sheet ?? c.step) >= 7 },
-  { l: "Delivered", f: (c) => (c.sheet ?? c.step) >= 9 },
-  { l: "Video submitted", f: (c) => (c.sheet ?? c.step) >= 11 },
-  { l: "No video yet", s: "got product", f: (c) => (c.sheet ?? c.step) >= 9 && (c.sheet ?? c.step) < 11 },
-  { l: "Client approved", f: (c) => (c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage)) },
-  { l: "Done", s: "every post up", f: (c) => c.posted },
+  { l: "Approved", s: "brand said yes", f: (c) => !c.failed && (c.approved) },
+  { l: "Contract signed", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 5) },
+  { l: "Address confirmed", s: "brief sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 6) },
+  { l: "Courier sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 7) },
+  { l: "Delivered", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9) },
+  { l: "Video submitted", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11) },
+  { l: "No video yet", s: "got product", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9 && (c.sheet ?? c.step) < 11) },
+  { l: "Client approved", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage))) },
+  { l: "Done", s: "every post up", f: (c) => !c.failed && (c.posted) },
 ];
 
 /* Figma: Campaign workspace — Creators (journey + rows) — barter_tracker + campaign_people */
@@ -461,7 +461,7 @@ export default function WorkspaceCreators() {
             }}
           />
         )}
-        <button type="button" className="wcr-txt wcr-pick" onClick={() => (setBox(3), setSel(all.filter((x) => x.registered && !x.ig).map((x) => x.id)))}>
+        <button type="button" className="wcr-txt wcr-pick" onClick={() => (setBox(3), setSel(all.filter((x) => !x.failed && x.registered && !x.ig).map((x) => x.id)))}>
           📸 Pick everyone without Instagram
         </button>
 

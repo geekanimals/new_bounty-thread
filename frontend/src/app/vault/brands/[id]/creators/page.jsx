@@ -35,7 +35,8 @@ export default function BrandCreatorsPage() {
 
 function BrandCreators() {
   const { d } = useBrand();
-  const rows = (d.creators || []).map((p) => {
+  // rejected / brand-declined creators sirf campaign ke "Rejected" box mein dikhte hain
+  const rows = (d.creators || []).filter((p) => !["ineligible", "brand_declined", "dropped", "rejected"].includes(p.stage)).map((p) => {
     const c = p.creator || {};
     return { key: p.participation_id, mid: c.member_id, name: c.username ? `@${c.username}` : c.name || "Creator", campaign: p.campaign || "—", stage: p.stage };
   });

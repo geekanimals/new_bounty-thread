@@ -25,14 +25,15 @@ const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
 // "__reg" jaise keys ginti nahi, alag info hain
 const sum = (o, pred) => Object.entries(o || {}).reduce((n, [k, v]) => n + (!k.startsWith("__") && pred(k) ? Number(v) || 0 : 0), 0);
 
+const REJECTED_STAGES = ["ineligible", "brand_declined", "dropped", "rejected"];
 /* admin_campaigns ki ek row → list ki row */
 // Bilkul campaign ke Creators tab wale boxes jaisa hisaab (same rows: campaign ke log + jo invite abhi join nahi hue):
-//  Creators = Total (rejected bhi) · Approved = brand ne haan kaha · Done = post up
+//  Creators = Total (rejected nahi — woh sirf Rejected box mein) · Approved = brand ne haan kaha · Done = post up
 //  awaiting screening = Applied box (applied / eligible + invite wale jo Geek OS par aa gaye, abhi join nahi hue)
 function toRow(c, inv = {}) {
   const pc = c.pipeline_stage_counts || {};
   const iv = inv || {};
-  const applied = (Number(c.applied) || 0) + sum(pc, () => true) + sum(iv, () => true);
+  const applied = Math.max(0, (Number(c.applied) || 0) - (Number(c.declined) || 0)) + sum(pc, (k) => !REJECTED_STAGES.includes(k)) + sum(iv, () => true);
   const approved = (Number(c.approved) || 0) + sum(pc, REPORT_APPROVED) + sum(iv, (k) => inviteStepRank(k) >= 3);
   const done = sum(pc, (k) => k === "published" || k === "completed") + sum(iv, (k) => k === "posted");
   const pending = sum(pc, (k) => k === "applied" || k === "eligible") + (Number(iv.__reg) || 0) + Math.max(0, (Number(c.applied) || 0) - (Number(c.approved) || 0) - (Number(c.declined) || 0));

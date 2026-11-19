@@ -9,6 +9,11 @@ import { rpc, invoke, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast, INVITE_STEPS, inviteStepRank } from "@/components/admin/campaign/live";
 import { CreatorRow, buildRows, runAction, useAsk } from "@/components/admin/campaign/journey";
 import PartPanel from "@/components/admin/campaign/PartPanel";
+import { DRIPS, fillParts } from "@/components/admin/msg/snaptoDrips";
+
+// drip ruk gaya to kyon — creator ne kaam kar diya (delivery page jaisa)
+const DRIP_DONE = { join: "joined the campaign", profile: "completed the profile", instagram: "connected Instagram", contract: "signed the contract", address: "confirmed the address", video: "uploaded the video", post: "added the post link" };
+const firstName = (v) => String(v || "").trim().replace(/^@/, "").split(/\s+/)[0] || "there";
 
 const tm = (t) => {
   try {
@@ -39,10 +44,18 @@ export default function WorkspaceCreator() {
   const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !on || !isP });
   const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !on });
   const hub = useRpc("admin", isP ? "api.campaign_creator_hub" : "api.invite_messages", isP ? { p_participation: rid } : { p_invite: rid }, { skip: !on });
+  // Snapto WhatsApp drips (jo asal mein jaate hain) — hub mein nahi aate
+  const drips = useRpc("admin", "api.creator_drip_log", isP ? { p_participation: rid, p_invite: null } : { p_participation: null, p_invite: rid }, { skip: !on });
   const pauses = useRpc("admin", "api.admin_msg_pauses", {}, { skip: !on });
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on || !isP });
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  // 24 h window ke liye "abhi ka time" — har minute taaza
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useToast(3200);
   const [askEl, askFn] = useAsk();
@@ -53,13 +66,82 @@ export default function WorkspaceCreator() {
     bt.reload(true);
     people.reload(true);
     hub.reload(true);
+    drips.reload(true);
   };
   const rows = useMemo(() => buildRows({ tracker: bt.data, people: people.data, progress: {}, kind: camp?.campaign_type || "barter" }), [bt.data, people.data, camp]);
   const total = rows.filter((r) => !r.failed).length;
   const x = rows.find((r) => r.id === cid);
   const h = hub.data || {};
   const phone = h.phone || (x && (x.x?.phone || x.i?.phone)) || "";
-  const msgs = (Array.isArray(h.messages) ? h.messages : []).filter((m) => m.channel === "whatsapp" || !m.channel).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  // Ek timeline: Snapto WhatsApp drips + team / creator WhatsApp + email. Jo kabhi gaya hi nahi (skipped / held —
+  // purana WhatsApp template band hai, ya channel OFF) woh nahi dikhta.
+  const msgs = useMemo(() => {
+    const own = (Array.isArray(h.messages) ? h.messages : [])
+      .filter((m) => !["skipped", "held"].includes(m.status))
+      .map((m) => ({ ...m, channel: m.channel || "whatsapp" }));
+    const vals = (a = {}) => ({
+      name: firstName(a.creator_name || (x && x.name)),
+      campaign: a.campaign_name || camp?.name || "your campaign",
+      courier: a.courier || a.courier_name,
+      tracking: a.tracking_id || a.tracking,
+      address: a.delivery_address || a.address,
+      due: a.due_date || a.due || a.video_due,
+      ig: a.ig || a.instagram,
+    });
+    const dr = (Array.isArray(drips.data) ? drips.data : [])
+      .filter((d) => d.status !== "skipped" && (d.kind === "start" || d.kind === "done"))
+      .map((d) => {
+        if (d.kind === "done") return { at: d.at, sys: true, text: `WhatsApp reminders stopped — they ${DRIP_DONE[d.drip] || "finished this step"}` };
+        const D = DRIPS[d.drip] || {};
+        const first = (D.msgs || [])[0];
+        const more = (D.msgs || []).slice(1);
+        return {
+          at: d.at,
+          dir: "out",
+          channel: "whatsapp",
+          drip: true,
+          title: D.name || `WhatsApp drip ${d.drip}`,
+          parts: first ? fillParts(first.text, vals(d.attrs || {})) : null,
+          follow: more.length ? `+ ${more.length} reminder${more.length > 1 ? "s" : ""} (after ${more.map((m) => m.after).join(", ")}) until they ${D.stops || "finish the step"}` : "",
+          status: d.status,
+          error: d.error,
+          auto: true,
+        };
+      });
+    return [...own, ...dr].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  }, [h.messages, drips.data, x, camp]);
+  // WhatsApp ka 24 ghante wala window — sirf tab type karke bhej sakte hain jab creator ne pichhle 24 h mein msg kiya ho
+  const lastIn = msgs.filter((m) => m.dir === "in" && m.at).reduce((a, m) => (String(m.at) > String(a || "") ? m.at : a), null);
+  const winMs = lastIn ? new Date(lastIn).getTime() + 24 * 3600 * 1000 - now : -1;
+  const canSend = !!phone && (h.session_open === true || winMs > 0);
+  const winLeft = winMs > 0 ? (winMs >= 3600000 ? `${Math.floor(winMs / 3600000)} h` : `${Math.max(1, Math.floor(winMs / 60000))} min`) : "";
+  const lastOut = msgs.filter((m) => !m.sys && m.at).slice(-1)[0];
+  const rowStats = useMemo(
+    () => ({
+      wa: msgs.filter((m) => !m.sys && m.channel === "whatsapp" && m.dir === "out").length,
+      em: msgs.filter((m) => m.channel === "email").length,
+      rem: msgs.filter((m) => m.drip).length,
+      last: lastOut ? { at: lastOut.at, channel: lastOut.channel, status: lastOut.drip ? "sent" : lastOut.status, by: lastOut.dir === "in" ? "creator" : lastOut.auto ? "auto" : "team" } : null,
+    }),
+    [msgs, lastOut],
+  );
+  const msgCount = { wa: msgs.filter((m) => !m.sys && m.channel === "whatsapp" && m.dir === "out").length, em: msgs.filter((m) => m.channel === "email").length, in: msgs.filter((m) => m.dir === "in").length };
+
+  // ✕ / Esc — wapas creators list par (filters wahi rehte hain jab history se lautte hain)
+  const close = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push(`/vault/campaigns/${id}/creators`);
+  };
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".ga-overlay")) return; // pehle khula popup band ho
+      close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
   const video = x ? (x.kind === "p" ? x.x?.submission?.url : x.i?.video_url) : null;
   const memberId = x ? (x.kind === "p" ? x.x?.member_id : x.i?.member_id) : null;
   const curSt = x ? (x.kind === "p" ? STAGE_TO_ST[x.x.stage] || "registered" : x.i.status === "invited" ? "registered" : x.i.status || "registered") : "registered";
@@ -101,6 +183,7 @@ export default function WorkspaceCreator() {
     const t = text.trim();
     if (!t) return setToast("Type a message first.");
     if (!phone) return setToast("No WhatsApp number for this creator.");
+    if (!canSend) return setToast("They haven’t messaged in the last 24 hours — WhatsApp doesn’t allow a typed message now.");
     setSending(true);
     const { data: r, error } = await invoke("admin", "wa-send", { to_phone: phone, text: t, subject: h.campaign || camp?.name || null });
     setSending(false);
@@ -209,13 +292,13 @@ export default function WorkspaceCreator() {
         <WorkspaceHead id={id} campaign={camp} />
         <section className="ga-card wcc">
           <div className="wcc-top">
-            <Link href={`/vault/campaigns/${id}/creators`} className="wcc-back wcc-back--on" aria-label="Back to all creators">
-              ←
-            </Link>
             <h2 className="ga-h2">{loading ? "Loading creator…" : people.error ? errText(people.error) : "This creator isn’t on this campaign any more — the list is up to date."}</h2>
+            <button type="button" className="wcc-close" onClick={close} aria-label="Close" title="Close (Esc)">
+              ✕
+            </button>
           </div>
         </section>
-        <style>{`.wcc { padding: 22px; } .wcc-top { display: flex; gap: 10px; align-items: center; } .wcc-back--on { font-size: 18px; font-weight: 800; color: var(--ad-primary); }`}</style>
+        <style>{`.wcc { padding: 22px; } .wcc-top { display: flex; gap: 10px; align-items: center; justify-content: space-between; } .wcc-close { flex-shrink: 0; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 16px; font-weight: 800; color: var(--ad-ink, #1d1f27); cursor: pointer; } .wcc-close:hover { border-color: var(--ad-primary); color: var(--ad-primary); }`}</style>
       </AdminShell>
     );
 
@@ -225,14 +308,15 @@ export default function WorkspaceCreator() {
 
       <section className="ga-card wcc">
         <div className="wcc-top">
-          <Link href={`/vault/campaigns/${c.id}/creators`} className="wcc-back" aria-label="Back to all creators">
-            ←
-          </Link>
           <h2 className="ga-h2">Creators · {total}</h2>
+          <button type="button" className="wcc-close" onClick={close} aria-label="Close and go back to the creators list" title="Close (Esc)">
+            ✕
+          </button>
         </div>
         <CreatorRow
           c={x}
           open
+          stats={rowStats}
           busy={busy === "act"}
           onAction={async () => {
             setBusy("act");
@@ -263,32 +347,74 @@ export default function WorkspaceCreator() {
                 Open in WhatsApp ↗
               </a>
             </div>
+            <div className="wcc-sum">
+              🟢 {msgCount.wa} WhatsApp · ✉️ {msgCount.em} email · 💬 {msgCount.in} repl{msgCount.in === 1 ? "y" : "ies"}
+              <span>Snapto WhatsApp shows “sent to Snapto” — delivered / read is in Snapto → Reports.</span>
+            </div>
             <div className="wcc-msgs">
-              {hub.loading && <p className="wcc-note">Loading messages…</p>}
+              {(hub.loading || drips.loading) && !msgs.length && <p className="wcc-note">Loading messages…</p>}
               {hub.error && <p className="wcc-note">Messages: {errText(hub.error)}</p>}
-              {!hub.loading && !hub.error && !msgs.length && <p className="wcc-note">No WhatsApp messages yet.</p>}
+              {drips.error && <p className="wcc-note">WhatsApp drips: {errText(drips.error)}</p>}
+              {!hub.loading && !drips.loading && !hub.error && !msgs.length && <p className="wcc-note">No messages yet.</p>}
               {msgs.map((m, i) => (
                 <Fragment key={i}>
                   {dayOf(m.at) !== dayOf(msgs[i - 1]?.at) && <p className="wcc-day">{dayOf(m.at)}</p>}
-                <div className={`wcc-msg ${m.dir === "out" ? "is-me" : ""}`}>
-                  <p>{m.text || (m.key ? `📨 ${m.key.replace(/_/g, " ")}` : "")}</p>
-                  <small>
-                    {tm(m.at)}
-                    {m.dir === "out" && (m.status === "read" ? " ✓✓" : m.status === "delivered" ? " ✓✓" : m.status === "failed" ? " ✗" : " ✓")}
-                    {m.auto ? " · automatic" : ""}
-                  </small>
-                </div>
+                  {m.sys ? (
+                    <p className="wcc-sys">
+                      ⏹ {m.text} · {tm(m.at)}
+                    </p>
+                  ) : (
+                    <div className={`wcc-msg ${m.dir === "out" ? "is-me" : ""} ${m.channel === "email" ? "is-mail" : ""} ${m.status === "failed" ? "is-bad" : ""}`}>
+                      <b className="wcc-msg__k">
+                        {m.channel === "email" ? "✉️ Email" : m.dir === "in" ? "💬 Creator replied" : m.drip ? `🟢 WhatsApp · ${m.title}` : m.key ? `🟢 WhatsApp · ${m.key.replace(/_/g, " ")}` : "🟢 WhatsApp"}
+                        {m.dir === "out" ? (m.auto ? " · automatic" : " · by the team") : ""}
+                      </b>
+                      {m.parts ? (
+                        <p>
+                          {m.parts.map((pt, j) => (pt.v ? <mark key={j}>{pt.t}</mark> : <Fragment key={j}>{pt.t}</Fragment>))}
+                        </p>
+                      ) : (
+                        m.text && <p>{m.text}</p>
+                      )}
+                      {m.follow && <p className="wcc-follow">↻ {m.follow}</p>}
+                      <small>
+                        {tm(m.at)}
+                        {m.dir === "out" &&
+                          (m.status === "failed"
+                            ? ` · ✗ not sent${m.error ? " — " + String(m.error).slice(0, 90) : ""}`
+                            : m.status === "queued"
+                              ? " · ⏳ waiting to send"
+                              : m.drip
+                                ? " · ✓ sent to Snapto"
+                                : m.status === "read"
+                                  ? " · ✓✓ read"
+                                  : m.status === "delivered"
+                                    ? " · ✓✓ delivered"
+                                    : " · ✓ sent")}
+                      </small>
+                    </div>
+                  )}
                 </Fragment>
               ))}
               <span ref={endRef} />
             </div>
-            <form className="wcc-send" onSubmit={send}>
-              <input id="wcc-msg" className="ga-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message — goes as a WhatsApp update" aria-label="Message" />
-              <button type="submit" className="ga-btn ga-btn--primary" aria-label="Send" disabled={!text.trim() || sending}>
-                ➤
-              </button>
-            </form>
-            {h.session_open === false && <p className="wcc-note">They haven’t replied in 24 h — your message goes inside the approved “campaign update” template.</p>}
+            {canSend ? (
+              <>
+                <form className="wcc-send" onSubmit={send}>
+                  <input id="wcc-msg" className="ga-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a WhatsApp message…" aria-label="Message" />
+                  <button type="submit" className="ga-btn ga-btn--primary" aria-label="Send" disabled={!text.trim() || sending}>
+                    {sending ? "…" : "➤"}
+                  </button>
+                </form>
+                <p className="wcc-note">✓ They messaged in the last 24 h — you can reply here{winLeft ? ` (window open for ${winLeft} more)` : ""}.</p>
+              </>
+            ) : (
+              <p className="wcc-closed">
+                🔒 Typing a message is only possible within 24 hours of the creator’s last WhatsApp message.
+                {lastIn ? ` Their last message was on ${new Date(lastIn).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}.` : " They haven’t messaged yet."}{" "}
+                Their step messages keep going automatically.
+              </p>
+            )}
           </div>
 
           <div className="wcc-side">
@@ -497,14 +623,13 @@ export default function WorkspaceCreator() {
         select.ga-input { appearance: none; -webkit-appearance: none; }
         .wcc { padding: 22px 22px 40px; }
         .wcc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-        .wcc-back { display: none; }
         .wcc-grid { display: grid; grid-template-columns: minmax(0, 625fr) minmax(0, 432fr); gap: 18px; margin-top: 13px; align-items: start; }
 
         .wcc-chat { overflow: hidden; border-radius: 16px; border: 1px solid var(--ad-line); background: #fff; }
         .wcc-chat__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 65px; padding: 0 16px; background: #0d5c4a; }
         .wcc-chat__head b { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .wcc-open { flex-shrink: 0; height: 41px; display: inline-flex; align-items: center; padding: 0 15px; border-radius: 10px; background: #fff; font-size: 14px; font-weight: 800; color: var(--ad-primary-ink); }
-        .wcc-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; padding: 13px 14px 14px; background: #f3f0e8; }
+        .wcc-msgs { display: flex; flex-direction: column; gap: 10px; height: min(62vh, 600px); min-height: 320px; overflow-y: auto; padding: 13px 14px 14px; background: #f3f0e8; }
         .wcc-day { align-self: center; margin: 10px auto 2px; padding: 3px 10px; border-radius: 999px; background: rgba(127,127,127,.14); font-size: 11px; color: var(--ga-muted, #8a8f9c); }
         .wcc-pp { margin-top: 18px; }
         .wcc-pub { max-width: 720px; }
@@ -516,9 +641,22 @@ export default function WorkspaceCreator() {
         .wcc-msg p { white-space: pre-line; font-size: 13px; line-height: 1.33; color: var(--ad-ink); }
         .wcc-msg small { display: block; margin-top: 4px; text-align: right; font-size: 12px; color: var(--ad-muted); }
         .wcc-msg.is-me { align-self: flex-end; width: auto; max-width: 88%; background: #d9fdd3; }
+        .wcc-msg.is-mail { background: #eef0ff; }
+        .wcc-msg.is-bad { background: #fde8e8; }
+        .wcc-msg__k { display: block; margin-bottom: 4px; font-size: 11.5px; font-weight: 800; color: #3b4a43; }
+        .wcc-msg p { white-space: pre-wrap; word-break: break-word; }
+        .wcc-msg mark { background: rgba(13, 92, 74, 0.12); color: inherit; border-radius: 3px; padding: 0 2px; }
+        .wcc-follow { margin-top: 5px; font-size: 12px; color: #5b6b63; }
+        .wcc-sys { align-self: center; max-width: 92%; padding: 4px 11px; border-radius: 999px; background: rgba(102, 87, 233, 0.1); font-size: 11.5px; font-weight: 700; color: #4b3fc4; text-align: center; }
+        .wcc-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 9px 16px; border-bottom: 1px solid var(--ad-line); background: #fff; font-size: 13px; font-weight: 800; }
+        .wcc-sum span { font-size: 11.5px; font-weight: 600; color: var(--ga-muted, #8a8f9c); }
+        .wcc-top { justify-content: space-between; }
+        .wcc-close { flex-shrink: 0; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 16px; font-weight: 800; color: var(--ad-ink, #1d1f27); cursor: pointer; }
+        .wcc-close:hover { border-color: var(--ad-primary); color: var(--ad-primary); }
         .wcc-msg.is-me small { margin-top: 0; }
-        .wcc-send { display: flex; gap: 8px; padding: 11px 14px 0; }
-        .wcc-send .ga-input { width: 173px; height: 42px; flex: 0 1 173px; }
+        .wcc-send { display: flex; gap: 8px; padding: 11px 14px 0; border-top: 1px solid var(--ad-line); }
+        .wcc-send .ga-input { width: auto; min-width: 0; height: 42px; flex: 1 1 auto; }
+        .wcc-closed { margin: 0; padding: 12px 16px 14px; border-top: 1px solid var(--ad-line); background: #fafaf7; font-size: 12.5px; line-height: 1.5; color: var(--ad-muted); }
         .wcc-send .ga-input::placeholder { color: #757575; }
         .wcc-send .ga-btn { width: 43px; height: 42px; padding: 0; font-size: 14px; }
         .wcc-note { padding: 10px 14px 12px; font-size: 12px; color: var(--ad-muted); }
@@ -546,7 +684,6 @@ export default function WorkspaceCreator() {
         @media (max-width: 1180px) { .wcc-grid { grid-template-columns: 1fr; } .wcc-send .ga-input { flex: 1; width: auto; } }
         @media (max-width: 640px) {
           .wcc { padding: 16px 14px 24px; }
-          .wcc-back { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--ad-soft); font-weight: 800; }
           .wcc-chat__head { height: auto; padding: 12px; flex-wrap: wrap; }
           .wcc-open { height: 36px; }
           .wcc-box { padding: 18px 14px; }
