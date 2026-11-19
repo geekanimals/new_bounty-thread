@@ -5,7 +5,7 @@ import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead } from "@/components/admin/ui";
 import { useRpc, errText } from "@/lib/supabase";
-import { campTypeLabel, campStatusPick, campInBucket, statusTone, APPLICANT_PENDING, REPORT_APPROVED, BP_FAIL, inviteStepRank, fmtDate } from "@/components/admin/campaign/live";
+import { campTypeLabel, campStatusPick, campInBucket, statusTone, REPORT_APPROVED, inviteStepRank, fmtDate } from "@/components/admin/campaign/live";
 
 /* Campaign list ke tabs — har tab apna route (Back ek step) */
 const TABS = [
@@ -22,21 +22,23 @@ const TABS = [
 ];
 
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
-const sum = (o, pred) => Object.entries(o || {}).reduce((n, [k, v]) => n + (pred(k) ? Number(v) || 0 : 0), 0);
+// "__reg" jaise keys ginti nahi, alag info hain
+const sum = (o, pred) => Object.entries(o || {}).reduce((n, [k, v]) => n + (!k.startsWith("__") && pred(k) ? Number(v) || 0 : 0), 0);
 
-/* admin_campaigns ki ek row → list ki row (purane adminCampaigns jaisa hisaab) */
-// Same rules as the campaign workspace (Overview + Creators boxes): creators in the campaign (not dropped / declined)
-// + bulk-upload invites that have not joined yet; Approved and Done count both too.
+/* admin_campaigns ki ek row → list ki row */
+// Bilkul campaign ke Creators tab wale boxes jaisa hisaab (same rows: campaign ke log + jo invite abhi join nahi hue):
+//  Creators = Total (rejected bhi) · Approved = brand ne haan kaha · Done = post up
+//  awaiting screening = Applied box (applied / eligible + invite wale jo Geek OS par aa gaye, abhi join nahi hue)
 function toRow(c, inv = {}) {
   const pc = c.pipeline_stage_counts || {};
   const iv = inv || {};
-  const applied = (Number(c.applied) || 0) + sum(pc, (k) => !BP_FAIL.includes(k)) + sum(iv, () => true);
+  const applied = (Number(c.applied) || 0) + sum(pc, () => true) + sum(iv, () => true);
   const approved = (Number(c.approved) || 0) + sum(pc, REPORT_APPROVED) + sum(iv, (k) => inviteStepRank(k) >= 3);
   const done = sum(pc, (k) => k === "published" || k === "completed") + sum(iv, (k) => k === "posted");
-  const pending = sum(pc, (k) => APPLICANT_PENDING.includes(k)) + Math.max(0, (Number(c.applied) || 0) - (Number(c.approved) || 0) - (Number(c.declined) || 0));
+  const pending = sum(pc, (k) => k === "applied" || k === "eligible") + (Number(iv.__reg) || 0) + Math.max(0, (Number(c.applied) || 0) - (Number(c.approved) || 0) - (Number(c.declined) || 0));
   const status = campStatusPick(c.status);
   const risk =
-    status === "Approval" ? "Waiting for approval" : pending ? `${pending} awaiting screening` : status === "Draft" ? "Not visible to creators" : status === "Completed" ? "Closed" : approved && done >= approved ? "All posted" : "On track";
+    status === "Approval" ? "Waiting for approval" : status === "Completed" ? "Closed" : status === "Draft" ? "Not visible to creators" : pending ? `${pending} awaiting screening` : approved && done >= approved ? "All posted" : "On track";
   return { id: c.id, raw: c, name: c.name || "Untitled", brand: c.brand || c.org_name || "", type: (campTypeLabel(c.campaign_type, c.barter_subtype) || c.campaign_type || "—").replace(" · Normal", ""), status, applied, approved, done, ends: c.end_date ? fmtDate(c.end_date) : "—", risk };
 }
 
