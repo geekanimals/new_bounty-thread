@@ -322,6 +322,15 @@ export default function WorkspaceCreators() {
           <div>
             <h2 className="ga-h2">Creator journey</h2>
             <p className="wcr-sub">Every creator by the step they are on — tap a box to filter.</p>
+            {/* ek list load nahi hui (DB slow) to ginti adhoori hoti hai — chupchaap galat number mat dikhao */}
+            {err && all.length > 0 && (
+              <p className="wcr-warn">
+                ⚠ Part of the list did not load (the database was slow), so these counts may be short.{" "}
+                <button type="button" className="wcr-txt" onClick={reload}>
+                  Retry
+                </button>
+              </p>
+            )}
           </div>
           <div className="wcr-head__act">
             <Link href={`/vault/campaigns/${c.id}/upload`} className="wcr-link">
@@ -546,6 +555,7 @@ export default function WorkspaceCreators() {
         .wcr-txt:disabled { cursor: default; }
         .wcr-pick { margin: 20px 0 0 8px; }
         .wcr-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+        .wcr-warn { margin: 8px 0 0; padding: 7px 10px; border-radius: 9px; background: #fff7e6; color: #b45309; font-size: 12.5px; }
         .wcr-empty { padding: 24px; text-align: center; font-size: 13px; color: var(--ad-muted); }
 
         @media (max-width: 1023px) { .wcr-boxes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
