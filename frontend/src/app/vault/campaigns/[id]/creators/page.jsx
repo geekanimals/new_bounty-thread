@@ -31,6 +31,7 @@ const BOXES = [
   { l: "No video yet", s: "got product", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9 && (c.sheet ?? c.step) < 11) },
   { l: "Client approved", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage))) },
   { l: "Done", s: "every post up", f: (c) => !c.failed && (c.posted) },
+  { l: "Unread replies", s: "creator wrote back", f: (c, u) => !c.failed && (u[(c.id[0] === "p" ? "p:" : "i:") + c.id.slice(2)]?.n || 0) > 0 },
 ];
 
 /* Figma: Campaign workspace — Creators (journey + rows) — barter_tracker + campaign_people */
@@ -45,6 +46,8 @@ export default function WorkspaceCreators() {
   const prog = useRpc("admin", "api.campaign_deliverable_progress", { p_campaign: id }, { skip: !on });
   // har creator ke WhatsApp / email / reminder ginti + aakhri message (purana ucStatsLoad)
   const mstats = useRpc("admin", "api.campaign_msg_stats", { p_campaign: id }, { skip: !on });
+  // naye creator replies (Snapto webhook → wa_messages) — har minute taaza; chat kholte hi sab ke liye "read"
+  const unread = useRpc("admin", "api.campaign_unread", { p_campaign: id }, { skip: !on, refreshMs: 60000 });
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   // sheet upload / profile / contact — email, city, followers jo tracker mein nahi aate
   const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
@@ -83,10 +86,11 @@ export default function WorkspaceCreators() {
       };
     });
   }, [bt.data, people.data, prog.data, camp, extras.data]);
-  const counts = BOXES.map((b) => all.filter(b.f).length);
+  const U = useMemo(() => unread.data || {}, [unread.data]);
+  const counts = BOXES.map((b) => all.filter((c) => b.f(c, U)).length);
 
   const rows = useMemo(() => {
-    let r = all.filter(BOXES[box].f).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
+    let r = all.filter((c) => BOXES[box].f(c, U)).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
     if (who === "Creator’s turn") r = r.filter((x) => x.turnWho === "creator");
     if (who === "Our turn") r = r.filter((x) => x.turnWho === "you");
     if (who === "On Geek OS") r = r.filter((x) => x.registered);
@@ -114,7 +118,7 @@ export default function WorkspaceCreators() {
     if (sort === "Followers: low → high") r.sort((a, b) => a.followersN - b.followersN);
     if (sort === "Most views") r.sort((a, b) => views(b) - views(a));
     return r;
-  }, [all, box, q, sort, who, size, posted, fit, bmatch.data]);
+  }, [all, box, q, sort, who, size, posted, fit, bmatch.data, U]);
 
   // screening chips: kitne match / nahi / info missing (Applied wale)
   const fitN = useMemo(() => {
@@ -479,6 +483,7 @@ export default function WorkspaceCreators() {
               busy={busy === x.id}
               onChat={() => router.push(`/vault/campaigns/${c.id}/creators/${x.id}`)}
               stats={(mstats.data || {})[keyOf(x.id)]}
+              unread={(U[keyOf(x.id)] || {}).n || 0}
               match={x.pid ? (bmatch.data || {})[x.pid] : null}
             />
           ))}

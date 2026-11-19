@@ -790,7 +790,7 @@ export function CreatorHead({ withCheck = true }) {
   );
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0 }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const no = c.no ?? 0;
@@ -911,8 +911,9 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
               ✗ Reject
             </button>
           )}
-          <button type="button" className="jr-chat" onClick={onChat} aria-label={`Chat with ${c.name}`} title="Chat">
+          <button type="button" className={`jr-chat ${unread > 0 ? "has-new" : ""}`} onClick={onChat} aria-label={unread > 0 ? `Chat with ${c.name} — ${unread} new repl${unread === 1 ? "y" : "ies"}` : `Chat with ${c.name}`} title={unread > 0 ? `${unread} new repl${unread === 1 ? "y" : "ies"} — open the chat` : "Chat"}>
             💬
+            {unread > 0 && <span className="jr-badge">{unread > 9 ? "9+" : unread}</span>}
           </button>
           {href ? (
             <Link href={href} className="jr-more" aria-label={`Open ${c.name}`}>
@@ -967,6 +968,9 @@ const JR_CSS = `
   .jr-rej:hover { border-color: #d6453d; }
   .jr-chat { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 15px; color: var(--ad-primary-ink); }
   .jr-chat:hover { border-color: var(--ad-primary); }
+  .jr-chat { position: relative; }
+  .jr-chat.has-new { border-color: #e5484d; }
+  .jr-badge { position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: #e5484d; color: #fff; font-size: 10.5px; font-weight: 800; line-height: 1; box-shadow: 0 0 0 2px #fff; }
   .jr-more { display: inline-flex; align-items: center; height: 32px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; font-weight: 800; color: #6657e9; white-space: nowrap; }
   .jr-more:hover { border-color: var(--ad-primary); background: var(--ad-soft-2); }
   .jr-matchrow { grid-column: 1 / -1; }

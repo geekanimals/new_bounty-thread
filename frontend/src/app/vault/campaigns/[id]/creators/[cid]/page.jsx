@@ -43,9 +43,9 @@ export default function WorkspaceCreator() {
   const { c: camp } = useCampaign(id);
   const bt = useRpc("admin", "api.barter_tracker", { p_campaign: id }, { skip: !on || !isP });
   const people = useRpc("admin", "api.campaign_people", { p_campaign: id }, { skip: !on });
-  const hub = useRpc("admin", isP ? "api.campaign_creator_hub" : "api.invite_messages", isP ? { p_participation: rid } : { p_invite: rid }, { skip: !on });
+  const hub = useRpc("admin", isP ? "api.campaign_creator_hub" : "api.invite_messages", isP ? { p_participation: rid } : { p_invite: rid }, { skip: !on, refreshMs: 30000 });
   // Snapto WhatsApp drips (jo asal mein jaate hain) — hub mein nahi aate
-  const drips = useRpc("admin", "api.creator_drip_log", isP ? { p_participation: rid, p_invite: null } : { p_participation: null, p_invite: rid }, { skip: !on });
+  const drips = useRpc("admin", "api.creator_drip_log", isP ? { p_participation: rid, p_invite: null } : { p_participation: null, p_invite: rid }, { skip: !on, refreshMs: 60000 });
   const pauses = useRpc("admin", "api.admin_msg_pauses", {}, { skip: !on });
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on || !isP });
   const [text, setText] = useState("");
@@ -125,6 +125,11 @@ export default function WorkspaceCreator() {
     }),
     [msgs, lastOut],
   );
+  // chat khula = creator ke replies sab ke liye "read" (list ka 🔴 badge hat jaata hai); naya reply aaye to phir se
+  useEffect(() => {
+    if (!on || !phone) return;
+    rpc("admin", "api.mark_chat_seen", { p_campaign: id, p_phone: phone });
+  }, [on, id, phone, lastIn]);
   const msgCount = { wa: msgs.filter((m) => !m.sys && m.channel === "whatsapp" && m.dir === "out").length, em: msgs.filter((m) => m.channel === "email").length, in: msgs.filter((m) => m.dir === "in").length };
 
   // ✕ / Esc — wapas creators list par (filters wahi rehte hain jab history se lautte hain)
