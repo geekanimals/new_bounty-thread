@@ -63,12 +63,13 @@ export default function WorkspaceCreators() {
   const [toast, setToast] = useToast(3200);
   const [askEl, ask] = useAsk();
 
+  // button tab tak "Saving…" jab tak list ka naya data (step) aa na jaaye; baaki numbers peeche se
   const reload = () => {
-    bt.reload(true);
-    people.reload(true);
     prog.reload(true);
     mstats.reload(true);
     extras.reload(true);
+    unread.reload(true);
+    return Promise.all([bt.reload(true), people.reload(true)]);
   };
   const all = useMemo(() => {
     const ex = extras.data || {};
@@ -265,8 +266,13 @@ export default function WorkspaceCreators() {
   const act = async (x) => {
     if (!x.act) return;
     setBusy(x.id);
-    await runAction(x.act.key, x, { ...ctx, match: (bmatch.data || {})[x.pid], campaignName: camp?.name });
-    setBusy("");
+    try {
+      await runAction(x.act.key, x, { ...ctx, match: (bmatch.data || {})[x.pid], campaignName: camp?.name });
+    } catch (e) {
+      setToast(e?.message || String(e));
+    } finally {
+      setBusy("");
+    }
   };
 
   /* 💬 WhatsApp to selected — har creator ko uske ABHI ke step ka naya Utility message (Snapto drip, api.snapto_send_current_step).

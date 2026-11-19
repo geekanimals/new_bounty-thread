@@ -63,10 +63,9 @@ export default function WorkspaceCreator() {
   const endRef = useRef(null);
 
   const reload = () => {
-    bt.reload(true);
-    people.reload(true);
     hub.reload(true);
     drips.reload(true);
+    return Promise.all([bt.reload(true), people.reload(true)]);
   };
   const rows = useMemo(() => buildRows({ tracker: bt.data, people: people.data, progress: {}, kind: camp?.campaign_type || "barter" }), [bt.data, people.data, camp]);
   const total = rows.filter((r) => !r.failed).length;
@@ -76,8 +75,9 @@ export default function WorkspaceCreator() {
   // Ek timeline: Snapto WhatsApp drips + team / creator WhatsApp + email. Jo kabhi gaya hi nahi (skipped / held —
   // purana WhatsApp template band hai, ya channel OFF) woh nahi dikhta.
   const msgs = useMemo(() => {
+    // sirf WhatsApp (email yahan nahi) — jo kabhi gaya hi nahi (skipped / held) woh bhi nahi
     const own = (Array.isArray(h.messages) ? h.messages : [])
-      .filter((m) => !["skipped", "held"].includes(m.status))
+      .filter((m) => (m.channel || "whatsapp") === "whatsapp" && !["skipped", "held"].includes(m.status))
       .map((m) => ({ ...m, channel: m.channel || "whatsapp" }));
     const vals = (a = {}) => ({
       name: firstName(a.creator_name || (x && x.name)),
@@ -325,8 +325,13 @@ export default function WorkspaceCreator() {
           busy={busy === "act"}
           onAction={async () => {
             setBusy("act");
-            await runAction(x.act.key, x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
-            setBusy("");
+            try {
+              await runAction(x.act.key, x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
+            } catch (e) {
+              setToast(e?.message || String(e));
+            } finally {
+              setBusy("");
+            }
           }}
           onChat={() => document.getElementById("wcc-msg")?.focus()}
           match={isP ? (bmatch.data || {})[rid] : null}
@@ -334,8 +339,13 @@ export default function WorkspaceCreator() {
             isP && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage)
               ? async () => {
                   setBusy("act");
-                  await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
-                  setBusy("");
+                  try {
+                    await runAction(x.x.stage === "sent_to_brand" ? "bpbrandno" : "bpreject", x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
+                  } catch (e) {
+                    setToast(e?.message || String(e));
+                  } finally {
+                    setBusy("");
+                  }
                 }
               : null
           }
@@ -353,7 +363,7 @@ export default function WorkspaceCreator() {
               </a>
             </div>
             <div className="wcc-sum">
-              🟢 {msgCount.wa} WhatsApp · ✉️ {msgCount.em} email · 💬 {msgCount.in} repl{msgCount.in === 1 ? "y" : "ies"}
+              🟢 {msgCount.wa} WhatsApp sent · 💬 {msgCount.in} repl{msgCount.in === 1 ? "y" : "ies"}
               <span>Snapto WhatsApp shows “sent to Snapto” — delivered / read is in Snapto → Reports.</span>
             </div>
             <div className="wcc-msgs">

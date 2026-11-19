@@ -52,7 +52,7 @@ export function nextAction(x, kind = "barter", progress = {}) {
     case "eligible":
       return { turn: "you", title: "Send them to the brand", text: "They cleared screening.", acts: [["bpsend", "📋 Send to brand", 1]] };
     case "sent_to_brand":
-      return { turn: "brand", title: "Waiting for the brand", text: "The brand approves in their Approvals page.", acts: [["bpbrand", "✅ Approved", 1], ["bpbrandno", "Brand said no"]] };
+      return { turn: "brand", title: "Waiting for the brand", text: "The brand approves in their Approvals page.", acts: [["bpbrand", "✅ Approve for brand", 1], ["bpbrandno", "Brand said no"]] };
     case "brand_confirmed":
     case "accepted":
       return ["paid", "barter_paid"].includes(kind)
@@ -549,7 +549,8 @@ export async function runAction(key, row, ctx) {
       return false;
     }
     say(ok || "Done ✓");
-    if (reload) reload();
+    // naya data aane tak button "Saving…" rahe — warna row purani dikhti hai aur lagta hai kuch hua hi nahi
+    if (reload) await reload();
     return true;
   };
   const reasonPick = async (title) => {
@@ -790,16 +791,54 @@ export function CreatorHead({ withCheck = true }) {
   );
 }
 
+// poora number (admin ke liye — brand side par yeh row hai hi nahi): +91 84476 62572
+function fullPhone(c) {
+  const r = rawPhone(c);
+  if (!r) return c.phone;
+  const cc = r.length > 10 ? r.slice(0, r.length - 10) : "";
+  const n = r.slice(-10);
+  return `${cc ? "+" + cc + " " : ""}${n.slice(0, 5)} ${n.slice(5)}`;
+}
+function CopyBtn({ text, what }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`jr-copy ${done ? "is-done" : ""}`}
+      title={done ? "Copied" : `Copy ${what}`}
+      aria-label={`Copy ${what}`}
+      onClick={async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(String(text || ""));
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        } catch {}
+      }}
+    >
+      {done ? "✓" : "⧉"}
+    </button>
+  );
+}
+
 export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0 }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const no = c.no ?? 0;
+  const atBrand = (c.kind === "p" ? c.x?.stage : c.i?.status) === "sent_to_brand";
   const ig = igOf(c);
   const last = stats && stats.last && stats.last.at ? stats.last : null;
   return (
     <div className={`jr ${open ? "is-open" : ""} ${onCheck ? "" : "jr--nocheck"}`}>
       {onCheck && <input type="checkbox" className="jr-check" checked={!!checked} onChange={onCheck} aria-label={`Select ${c.name}`} />}
-      <IgImg className="jr-av jr-av--img" handle={/^@/.test(c.name) ? c.name : c.handle} src={c.pic} fallback={<span className="jr-av">{initials(c.name.replace(/^@/, ""))[0]}</span>} />
+      {href ? (
+        <Link href={href} className="jr-avlink" aria-label={`Open ${c.name}'s full details`} title="Open full details">
+          <IgImg className="jr-av jr-av--img" handle={/^@/.test(c.name) ? c.name : c.handle} src={c.pic} fallback={<span className="jr-av">{initials(c.name.replace(/^@/, ""))[0]}</span>} />
+        </Link>
+      ) : (
+        <IgImg className="jr-av jr-av--img" handle={/^@/.test(c.name) ? c.name : c.handle} src={c.pic} fallback={<span className="jr-av">{initials(c.name.replace(/^@/, ""))[0]}</span>} />
+      )}
 
       {/* 1 · Creator */}
       <div className="jr-col jr-who">
@@ -830,20 +869,26 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
       {/* 2 · Contact */}
       <div className="jr-col jr-contact">
         {c.phone ? (
-          rawPhone(c) ? (
-            <a className="jr-lnk" href={`https://wa.me/${rawPhone(c)}`} target="_blank" rel="noopener noreferrer" title="Open their WhatsApp">
-              🟢 {c.phone}
-            </a>
-          ) : (
-            <span>🟢 {c.phone}</span>
-          )
+          <span className="jr-cpy">
+            {rawPhone(c) ? (
+              <a className="jr-lnk" href={`https://wa.me/${rawPhone(c)}`} target="_blank" rel="noopener noreferrer" title="Open their WhatsApp">
+                🟢 {fullPhone(c)}
+              </a>
+            ) : (
+              <span>🟢 {fullPhone(c)}</span>
+            )}
+            <CopyBtn text={rawPhone(c) ? "+" + rawPhone(c) : fullPhone(c)} what="number" />
+          </span>
         ) : (
           <span className="jr-dim">No WhatsApp</span>
         )}
         {emailOf(c) ? (
-          <a className="jr-lnk jr-ell" href={`mailto:${emailOf(c)}`} title={emailOf(c)}>
-            ✉️ {emailOf(c)}
-          </a>
+          <span className="jr-cpy">
+            <a className="jr-lnk jr-ell" href={`mailto:${emailOf(c)}`} title={emailOf(c)}>
+              ✉️ {emailOf(c)}
+            </a>
+            <CopyBtn text={emailOf(c)} what="email" />
+          </span>
         ) : (
           <span className="jr-dim">No email</span>
         )}
@@ -895,9 +940,15 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
 
       {/* 5 · Action (fixed width, always on the right) */}
       <div className="jr-act">
+        {/* brand ke paas hai → pehle saaf dikhe "Sent to brand", approve sirf chhota sa option (brand ki taraf se) */}
+        {atBrand && (
+          <span className="jr-state" title="The brand approves in their Approvals page">
+            📤 Sent to brand <small>· waiting for the brand</small>
+          </span>
+        )}
         {c.act && (
-          <button type="button" className="ga-btn ga-btn--primary jr-btn" onClick={onAction} disabled={busy}>
-            {busy ? "…" : c.action}
+          <button type="button" className={`ga-btn ${atBrand ? "ga-btn--ghost jr-btn--soft" : "ga-btn--primary"} jr-btn`} onClick={onAction} disabled={busy} title={atBrand ? "Approve on the brand's behalf (asks for a note first)" : undefined}>
+            {busy ? "Saving…" : c.action}
           </button>
         )}
         <span className="jr-act2">
@@ -963,6 +1014,15 @@ const JR_CSS = `
   .jr-btn { height: 38px; padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .jr-act2 { display: flex; justify-content: flex-end; gap: 6px; }
   .jr-mini { height: 32px; padding: 0 10px; font-size: 12px; }
+  .jr-avlink { display: inline-flex; border-radius: 50%; }
+  .jr-avlink:hover { box-shadow: 0 0 0 2px var(--ad-primary); }
+  .jr-cpy { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+  .jr-copy { flex-shrink: 0; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12px; line-height: 1; color: var(--ad-muted); cursor: pointer; }
+  .jr-copy:hover { border-color: var(--ad-primary); color: var(--ad-primary); }
+  .jr-copy.is-done { border-color: #22a06b; color: #22a06b; }
+  .jr-state { height: 38px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 12px; border-radius: 10px; background: #eeebff; color: #4b3fc4; font-size: 13.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jr-state small { font-size: 11.5px; font-weight: 600; color: #6d63d6; }
+  .jr-btn--soft { height: 32px; font-size: 12.5px; border-color: var(--ad-line-2); color: var(--ad-primary-ink); }
   .jr-mini.is-on { border-color: var(--ad-primary); color: var(--ad-primary); }
   .jr-rej { color: #d6453d; }
   .jr-rej:hover { border-color: #d6453d; }

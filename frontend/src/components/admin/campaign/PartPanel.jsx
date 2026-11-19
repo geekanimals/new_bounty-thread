@@ -38,7 +38,7 @@ export function partActions(x, { ship: hasShip = true } = {}) {
   const A = [];
   if (st === "applied") A.push(["bpscreen", "✓ Screened", 1], ["bpreject", "Not a fit"]);
   if (st === "eligible") A.push(["bpsend", "📋 Send to brand", 1]);
-  if (st === "sent_to_brand") A.push(["bpbrand", "✅ Approved", 1], ["bpbrandno", "Brand said no"]);
+  if (st === "sent_to_brand") A.push(["bpbrand", "✅ Approve for brand", 1], ["bpbrandno", "Brand said no"]);
   if (["brand_confirmed", "accepted"].includes(st)) A.push(["bpcontract", "📜 Contract sent", 1]);
   if (st === "contract_sent") A.push(["bpcontract", "🔁 Resend contract (latest terms)"]);
   if (hasShip && ["address_confirmed", "accepted"].includes(st)) A.push(["bpship", "🚚 Courier sent", 1]);
