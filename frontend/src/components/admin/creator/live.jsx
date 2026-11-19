@@ -223,11 +223,11 @@ const pctOf = (c) => (c.complete ? 101 : c.total ? ((c.done || 0) / c.total) * 1
 /* ---------- Creator 360° (drawer) ---------- */
 const L = { prefer_not_to_say: "Prefer not to say", single: "Unmarried", married: "Married", divorced: "Divorced", widowed: "Widowed", non_binary: "Non-binary", female: "Female", male: "Male", other: "Other" };
 const STAGE = {
-  applied: ["Applied", "orange"], eligible: ["Eligible", "orange"], invited: ["Invited", "orange"], sent_to_brand: ["Sent to brand", "orange"], shortlisted: ["Shortlisted", "violet"],
+  applied: ["Applied", "orange"], eligible: ["Screened", "orange"], invited: ["Invited", "orange"], sent_to_brand: ["Sent to brand", "orange"], shortlisted: ["Shortlisted", "violet"],
   approved: ["Approved", "violet"], contract_sent: ["Contract sent", "violet"], contract_signed: ["Contract signed", "violet"], address_pending: ["Address pending", "orange"],
-  product_shipped: ["Product shipped", "violet"], delivered: ["Delivered", "violet"], content_pending: ["Video pending", "orange"], content_submitted: ["Video submitted", "violet"],
-  content_approved: ["Video approved", "green"], posted: ["Posted", "green"], completed: ["Completed", "green"], rejected: ["Rejected", "red"], dropped: ["Dropped", "red"],
-  ineligible: ["Not eligible", "red"], brand_declined: ["Brand declined", "red"],
+  product_shipped: ["Courier sent", "violet"], delivered: ["Courier delivered", "violet"], content_pending: ["Video pending", "orange"], content_submitted: ["Video submitted", "violet"],
+  content_approved: ["Client approved", "green"], posted: ["Posted", "green"], completed: ["Completed", "green"], rejected: ["Rejected", "red"], dropped: ["Dropped", "red"],
+  ineligible: ["Declined", "red"], brand_declined: ["Declined by brand", "red"],
 };
 export const stageOf = (s) => STAGE[s] || [cap1(String(s || "").replace(/_/g, " ")) || "—", ""];
 

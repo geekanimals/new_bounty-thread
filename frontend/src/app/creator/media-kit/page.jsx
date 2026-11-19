@@ -416,9 +416,10 @@ export default function MediaKit() {
                 <a className="bx-btn bx-btn--ghost" href={`https://wa.me/?text=${encodeURIComponent("My media kit: " + kitUrl)}`} target="_blank" rel="noreferrer">
                   <WhatsApp size={15} /> WhatsApp
                 </a>
-                <button type="button" className="bx-btn bx-btn--ghost" onClick={() => flash("PDF download is coming soon — share the link for now")}>
+                {/* poora rangeen kit — /kit page ?print=1 khulke browser ka "Save as PDF" */}
+                <a className="bx-btn bx-btn--ghost" href={`${kitUrl}${kitUrl.includes("?") ? "&" : "?"}print=1`} target="_blank" rel="noreferrer">
                   <Download size={14} /> Download PDF
-                </button>
+                </a>
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import FieldFocus from "@/components/creator/FieldFocus";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import { useCreator, saveSection, getMyPets, addPet, deletePet, PET_TYPES } from "@/services/creator";
@@ -86,6 +87,7 @@ export default function AboutYou() {
   return (
     <BountyShell>
       <title>About you — Bounty</title>
+      <FieldFocus />
       <Link href="/creator/profile" className="pf-back">
         ← My profile
       </Link>

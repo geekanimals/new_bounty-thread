@@ -114,6 +114,35 @@ export default function PublicKit() {
   const [embed, setEmbed] = useState(false);
   useEffect(() => setEmbed(new URLSearchParams(window.location.search).get("embed") === "1"), []);
 
+  // ?print=1 → poora kit rangeen PDF ki tarah (browser ka "Save as PDF") — creator app ka "Download PDF" yahi kholta hai
+  useEffect(() => {
+    if (st.phase !== "ok") return;
+    if (new URLSearchParams(window.location.search).get("print") !== "1") return;
+    const imgs = [...document.querySelectorAll(".pk img")];
+    const ready = Promise.all(imgs.map((im) => (im.complete ? 1 : new Promise((ok) => ((im.onload = ok), (im.onerror = ok), setTimeout(ok, 4000))))));
+    let done = false;
+    ready.then(() => {
+      if (!done) setTimeout(() => window.print(), 300);
+    });
+    return () => {
+      done = true;
+    };
+  }, [st.phase]);
+  const [copied, setCopied] = useState(false);
+  const shareKit = async () => {
+    const url = window.location.origin + window.location.pathname;
+    try {
+      if (navigator.share) return await navigator.share({ title: document.title, url });
+    } catch {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {}
+  };
+
   let body = null;
   if (st.phase === "ok") {
     const a = st.a;
@@ -152,6 +181,7 @@ export default function PublicKit() {
     body = (
       <>
         <section className="pk-hero">
+          <div className="pk-cover" aria-hidden="true" />
           {a.profile_picture_url ? (
             <img className="pk-av" src={safeUrl(a.profile_picture_url)} alt="" referrerPolicy="no-referrer" />
           ) : (
@@ -317,9 +347,18 @@ export default function PublicKit() {
         {!embed && (
           <header className="pk-top">
             <a href="/" className="pk-logo">
-              Geek
+              Geek <span>Media kit</span>
             </a>
-            <span className="pk-tag">Media kit</span>
+            {st.phase === "ok" && (
+              <div className="pk-actions">
+                <button type="button" className="pk-act" onClick={shareKit}>
+                  {copied ? "✓ Link copied" : "Share"}
+                </button>
+                <button type="button" className="pk-act pk-act--pri" onClick={() => window.print()}>
+                  ⬇ Download PDF
+                </button>
+              </div>
+            )}
           </header>
         )}
         {st.phase === "load" && <p className="pk-msg">Loading media kit…</p>}
@@ -332,76 +371,118 @@ export default function PublicKit() {
         )}
       </div>
       <style>{`
-        .pk { min-height: 100vh; background: #fcfdef; color: #23251a; }
+        .pk { min-height: 100vh; background: #f0f2f5; color: #1c1e21; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+        .pk * { box-sizing: border-box; }
         .pk--embed { background: transparent; min-height: 0; }
-        .pk-wrap { max-width: 820px; margin: 0 auto; padding: 22px 20px 56px; }
+        .pk-wrap { max-width: 980px; margin: 0 auto; padding: 0 20px 56px; }
         .pk--embed .pk-wrap { max-width: none; padding: 8px; }
-        .pk-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .pk-logo { font-family: var(--font-serif), Georgia, serif; font-size: 26px; font-weight: 600; color: #23251a; text-decoration: none; }
-        .pk-tag { font-size: 12px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #5d6b2e; }
-        .pk-msg { padding: 80px 0; text-align: center; color: #6b6d5c; }
-        .pk-hero { display: flex; gap: 22px; align-items: flex-start; padding: 26px; border-radius: 26px; background: linear-gradient(135deg, #33381f, #5d6b2e); color: #fcfdef; }
-        .pk-av { width: 104px; height: 104px; flex-shrink: 0; border-radius: 50%; object-fit: cover; border: 3px solid rgba(252,253,239,.6); }
-        .pk-av--ph { display: grid; place-items: center; background: #fcfdef; color: #33381f; font-size: 32px; font-weight: 700; }
-        .pk-id { min-width: 0; }
-        .pk-id h1 { margin: 0; font-family: var(--font-serif), Georgia, serif; font-size: 36px; font-weight: 500; line-height: 1.1; }
-        .pk-type { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(252,253,239,.16); font-family: var(--font-sans), sans-serif; font-size: 11px; font-weight: 600; }
-        .pk-handle { display: inline-block; margin-top: 4px; color: #e3e8c4; font-weight: 600; text-decoration: none; }
+        .pk-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 -20px 18px; padding: 12px 20px; background: rgba(255,255,255,.92); backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #dadde1; }
+        .pk-logo { display: inline-flex; align-items: baseline; gap: 8px; font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: #1c1e21; text-decoration: none; }
+        .pk-logo span { font-size: 13px; font-weight: 600; letter-spacing: 0; color: #65676b; }
+        .pk-actions { display: flex; gap: 8px; }
+        .pk-act { height: 36px; padding: 0 14px; border-radius: 8px; border: 0; background: #e4e6eb; color: #050505; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .pk-act:hover { background: #d8dadf; }
+        .pk-act--pri { background: #0866ff; color: #fff; }
+        .pk-act--pri:hover { background: #0659e0; }
+        .pk-msg { padding: 80px 0; text-align: center; color: #65676b; }
+
+        /* hero — Instagram gradient cover, photo on top */
+        .pk-hero { position: relative; display: flex; gap: 22px; align-items: flex-end; padding: 120px 26px 24px; border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); overflow: hidden; }
+        .pk-cover { position: absolute; inset: 0 0 auto 0; height: 132px; background: linear-gradient(115deg, #feda75 0%, #fa7e1e 22%, #d62976 48%, #962fbf 72%, #4f5bd5 100%); }
+        .pk-av { position: relative; z-index: 1; width: 132px; height: 132px; flex-shrink: 0; margin-top: -48px; border-radius: 50%; object-fit: cover; border: 5px solid #fff; background: #fff; box-shadow: 0 6px 20px -8px rgba(0,0,0,.35); }
+        .pk-av--ph { display: grid; place-items: center; background: #e7f3ff; color: #0866ff; font-size: 40px; font-weight: 800; }
+        .pk-id { position: relative; z-index: 1; min-width: 0; padding-bottom: 2px; }
+        .pk-id h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.6px; line-height: 1.15; color: #050505; }
+        .pk-type { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 3px 10px; border-radius: 999px; background: #e7f3ff; font-size: 12px; font-weight: 700; letter-spacing: 0; color: #0866ff; }
+        .pk-handle { display: inline-block; margin-top: 3px; color: #65676b; font-size: 15px; font-weight: 600; text-decoration: none; }
+        .pk-handle:hover { color: #0866ff; }
         .pk-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-        .pk-cats span { padding: 4px 10px; border-radius: 999px; background: rgba(252,253,239,.14); font-size: 12px; font-weight: 600; }
-        .pk-headline { margin: 12px 0 0; font-size: 15px; font-weight: 600; }
-        .pk-bio { margin: 8px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-line; color: #eef0dc; }
-        .pk-web { display: inline-block; margin-top: 10px; color: #fcfdef; font-size: 13px; font-weight: 600; word-break: break-all; }
-        .pk-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
-        .pk-tile { padding: 16px 14px; border-radius: 18px; background: #fff; border: 1px solid #e6e8d3; }
-        .pk-tile b { display: block; font-size: 22px; font-weight: 700; }
-        .pk-tile span { display: block; margin-top: 4px; font-size: 12px; color: #6b6d5c; }
-        .pk-tile--hero { background: #f0f2d9; border-color: #dfe3bd; }
-        .pk-card { margin-top: 14px; padding: 22px; border-radius: 22px; background: #fff; border: 1px solid #e6e8d3; }
-        .pk-card h2 { margin: 0 0 14px; font-family: var(--font-serif), Georgia, serif; font-size: 26px; font-weight: 500; }
+        .pk-cats span { padding: 5px 11px; border-radius: 999px; background: #f0f2f5; font-size: 12.5px; font-weight: 600; color: #050505; }
+        .pk-headline { margin: 12px 0 0; font-size: 15px; font-weight: 700; color: #050505; }
+        .pk-bio { margin: 8px 0 0; max-width: 620px; font-size: 14.5px; line-height: 1.55; white-space: pre-line; color: #1c1e21; }
+        .pk-web { display: inline-block; margin-top: 10px; color: #0866ff; font-size: 14px; font-weight: 600; word-break: break-all; text-decoration: none; }
+
+        /* stats */
+        .pk-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+        .pk-tile { padding: 16px; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+        .pk-tile b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.5px; color: #050505; }
+        .pk-tile span { display: block; margin-top: 4px; font-size: 13px; font-weight: 500; color: #65676b; }
+        .pk-tile--hero { background: linear-gradient(135deg, #0866ff, #5b8cff); }
+        .pk-tile--hero b, .pk-tile--hero span { color: #fff; }
+
+        /* cards */
+        .pk-card { margin-top: 12px; padding: 20px 22px; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+        .pk-card h2 { margin: 0 0 14px; font-size: 18px; font-weight: 800; letter-spacing: -.2px; color: #050505; }
         .pk-split { display: flex; height: 12px; border-radius: 999px; overflow: hidden; gap: 2px; }
-        .pk-seg--F { background: #c46a7a; } .pk-seg--M { background: #5d6b2e; } .pk-seg--U { background: #b7bd8f; }
-        .pk-keys { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 13px; color: #4a4c3c; }
-        .pk-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
-        .pk-chart { display: flex; gap: 10px; align-items: flex-end; height: 170px; margin-top: 18px; }
+        .pk-seg--F { background: #d62976; } .pk-seg--M { background: #0866ff; } .pk-seg--U { background: #bcc0c4; }
+        .pk-keys { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 13.5px; color: #1c1e21; }
+        .pk-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 2px; }
+        .pk-chart { display: flex; gap: 10px; align-items: flex-end; height: 180px; margin-top: 18px; padding-top: 6px; border-bottom: 1px solid #e4e6eb; }
         .pk-col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; }
-        .pk-val { font-size: 11px; font-weight: 700; color: #4a4c3c; }
+        .pk-val { font-size: 11.5px; font-weight: 700; color: #1c1e21; }
         .pk-bars { flex: 1; width: 100%; display: flex; gap: 3px; align-items: flex-end; justify-content: center; margin: 6px 0; }
-        .pk-vbar { width: 30%; max-width: 16px; border-radius: 4px 4px 0 0; }
-        .pk-age { font-size: 11px; color: #6b6d5c; }
-        .pk-geo { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .pk-geo h3 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
-        .pk-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 44px; gap: 8px; align-items: center; margin-bottom: 7px; font-size: 13px; }
+        .pk-vbar { width: 30%; max-width: 18px; border-radius: 5px 5px 0 0; }
+        .pk-age { padding-bottom: 6px; font-size: 11.5px; color: #65676b; }
+        .pk-geo { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+        .pk-geo h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: #050505; }
+        .pk-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 48px; gap: 10px; align-items: center; margin-bottom: 9px; font-size: 13.5px; }
         .pk-row__l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pk-track { height: 7px; border-radius: 999px; background: #f0f2d9; overflow: hidden; }
-        .pk-track i { display: block; height: 100%; background: #5d6b2e; border-radius: inherit; }
-        .pk-row__v { text-align: right; font-weight: 600; }
-        .pk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-        .pk-post { position: relative; display: block; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: #f0f2d9; }
-        .pk-post img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; }
-        .pk-noimg { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #6b6d5c; }
-        .pk-badge { position: absolute; z-index: 2; top: 8px; right: 8px; color: #fff; font-size: 13px; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
-        .pk-meta { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; padding: 18px 8px 7px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; font-size: 11.5px; font-weight: 600; }
-        .pk-port { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-        .pk-brand { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 14px; background: #f7f8e6; }
-        .pk-brand__ic { width: 38px; height: 38px; flex-shrink: 0; border-radius: 11px; display: grid; place-items: center; background: #5d6b2e; color: #fcfdef; font-size: 13px; font-weight: 700; }
+        .pk-track { height: 8px; border-radius: 999px; background: #e4e6eb; overflow: hidden; }
+        .pk-track i { display: block; height: 100%; background: linear-gradient(90deg, #0866ff, #5b8cff); border-radius: inherit; }
+        .pk-row__v { text-align: right; font-weight: 700; }
+
+        /* posts */
+        .pk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+        .pk-post { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: 10px; overflow: hidden; background: #e4e6eb; }
+        .pk-post img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; transition: transform .25s; }
+        .pk-post:hover img { transform: scale(1.03); }
+        .pk-noimg { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #65676b; }
+        .pk-badge { position: absolute; z-index: 2; top: 8px; right: 8px; color: #fff; font-size: 14px; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+        .pk-meta { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; background: linear-gradient(transparent, rgba(0,0,0,.65)); color: #fff; font-size: 12px; font-weight: 700; }
+        .pk-port { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+        .pk-brand { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 10px; background: #f0f2f5; }
+        .pk-brand__ic { width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, #962fbf, #4f5bd5); color: #fff; font-size: 13px; font-weight: 800; }
         .pk-brand b { display: block; font-size: 14px; }
-        .pk-brand small { display: block; font-size: 12px; color: #6b6d5c; }
-        .pk-foot { margin-top: 30px; text-align: center; font-size: 13px; color: #6b6d5c; }
-        .pk-foot a { color: #5d6b2e; font-weight: 600; }
-        @media (max-width: 720px) {
-          .pk-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .pk-tile--hero { grid-column: 1 / -1; }
+        .pk-brand small { display: block; font-size: 12.5px; color: #65676b; }
+        .pk-foot { margin-top: 28px; text-align: center; font-size: 13px; color: #65676b; }
+        .pk-foot a { color: #0866ff; font-weight: 600; text-decoration: none; }
+
+        @media (max-width: 860px) {
+          .pk-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .pk-tile--hero { grid-column: span 3; }
         }
-        @media (max-width: 560px) {
-          .pk-wrap { padding: 16px 14px 44px; }
-          .pk-hero { flex-direction: column; align-items: center; text-align: center; padding: 22px 16px; }
+        @media (max-width: 600px) {
+          .pk-wrap { padding: 0 12px 40px; }
+          .pk-top { margin: 0 -12px 12px; padding: 10px 12px; }
+          .pk-logo { font-size: 19px; }
+          .pk-act { height: 34px; padding: 0 11px; font-size: 13px; }
+          .pk-hero { flex-direction: column; align-items: center; text-align: center; padding: 96px 16px 20px; }
+          .pk-cover { height: 110px; }
+          .pk-av { width: 112px; height: 112px; margin-top: -40px; }
           .pk-cats { justify-content: center; }
-          .pk-id h1 { font-size: 30px; }
-          .pk-card { padding: 18px 14px; }
+          .pk-id h1 { font-size: 25px; }
+          .pk-bio { margin-left: auto; margin-right: auto; }
+          .pk-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .pk-tile--hero { grid-column: 1 / -1; }
+          .pk-tile b { font-size: 21px; }
+          .pk-card { padding: 16px 14px; }
           .pk-geo { grid-template-columns: 1fr; }
           .pk-chart { gap: 4px; height: 150px; }
-          .pk-grid { gap: 5px; }
+          .pk-grid { gap: 4px; }
+        }
+
+        /* PDF (Download PDF / ?print=1) — poore rang, har section ek saath */
+        @media print {
+          @page { size: A4; margin: 10mm; }
+          .pk, .pk * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .pk { background: #f0f2f5 !important; }
+          .pk-top { position: static; margin: 0 0 10px; border: 0; background: transparent; backdrop-filter: none; }
+          .pk-actions { display: none !important; }
+          .pk-wrap { max-width: none; padding: 0; }
+          .pk-hero, .pk-card, .pk-tile { box-shadow: none !important; border: 1px solid #dadde1; }
+          .pk-hero, .pk-card, .pk-tiles, .pk-post { break-inside: avoid; page-break-inside: avoid; }
+          .pk-post img { transform: none !important; }
+          .pk-foot { margin-top: 12px; }
         }
       `}</style>
     </main>

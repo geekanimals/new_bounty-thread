@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import BrandShell from "@/components/brands/BrandShell";
 import { BrLoading, BrError, BrAvatar } from "@/components/brands/BrandStates";
-import { useBrand, canAct, reloadPortal, parseCreatorId, useCreatorCard, setFavorite, approveCreator, short as fmt, igUrl } from "@/services/brand";
+import { useBrand, canAct, reloadPortal, parseCreatorId, useCreatorCard, setFavorite, approveCreator, short as fmt, igUrl, getCreatorEligibility } from "@/services/brand";
 import { ArrowLeft, Check, Bookmark, Instagram, Play, Eye, ShieldCheck } from "@/components/ui/Icons";
 
 const POST_G = [
@@ -29,6 +29,16 @@ export default function CreatorProfile() {
   const { pid, inv } = parseCreatorId(id);
   const b = useBrand();
   const card = useCreatorCard(pid, inv);
+  // campaign brief se match — har criteria ✓/✗ aur creator ki value (brand ke liye)
+  const [elig, setElig] = useState(null);
+  useEffect(() => {
+    if (!pid) return;
+    let on = true;
+    getCreatorEligibility(pid).then((r) => on && !r.error && setElig(r.data || null));
+    return () => {
+      on = false;
+    };
+  }, [pid]);
   const [busy, setBusy] = useState(false);
   const [approved, setApproved] = useState(false);
   const [toast, setToast] = useState("");
@@ -144,6 +154,25 @@ export default function CreatorProfile() {
               </span>
             ))}
           </div>
+
+          {elig && (elig.criteria || []).length > 0 && (
+            <div className={`cp-elig ${elig.eligible === false ? "is-no" : "is-ok"}`}>
+              <p className="cp-label">
+                Fit for this campaign · {elig.eligible === false ? "doesn't match every criterion yet" : "matches the brief ✓"}
+              </p>
+              <ul>
+                {elig.criteria.map((c) => (
+                  <li key={c.need} className={c.ok ? "ok" : "no"}>
+                    <span className="cp-elig__i">{c.ok ? "✓" : "✗"}</span>
+                    <span>
+                      <b>{c.need}</b>
+                      <small>{c.have}</small>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="cp-grid">
             <div>
@@ -288,7 +317,17 @@ export default function CreatorProfile() {
           .cp-foot .br-btn { width: 100%; }
           .cp-approved { justify-content: center; }
         }
-      `}</style>
+              .cp-elig { margin: 4px 0 18px; padding: 14px; border-radius: 14px; border: 1px solid #e3e6ef; background: #fafbff; }
+        .cp-elig.is-ok { border-color: #cdeedd; background: #f4fbf7; }
+        .cp-elig.is-no { border-color: #f3dcc3; background: #fffaf3; }
+        .cp-elig ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+        .cp-elig li { display: flex; gap: 8px; align-items: flex-start; padding: 9px 10px; border-radius: 10px; background: #fff; border: 1px solid #edf0f5; }
+        .cp-elig li b { display: block; font-size: 12.5px; }
+        .cp-elig li small { display: block; margin-top: 2px; font-size: 12px; color: #6b7280; }
+        .cp-elig__i { flex-shrink: 0; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font-size: 11px; font-weight: 800; color: #fff; }
+        .cp-elig li.ok .cp-elig__i { background: #22a06b; }
+        .cp-elig li.no .cp-elig__i { background: #e5484d; }
+`}</style>
     </BrandShell>
   );
 }

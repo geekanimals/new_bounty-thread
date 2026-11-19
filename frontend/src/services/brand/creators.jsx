@@ -24,6 +24,8 @@ export const parseCreatorId = (id) => {
 
 /** Creator profile card (purana openCard → api.brand_creator_card) → { data, error } */
 export const getCreatorCard = (pid, inv) => api("brand_creator_card", { p_participation: pid || null, p_invite: inv || null });
+/** Is creator ka campaign brief se match (followers, gender, age, city …) — sirf ✓/✗ + value, koi contact nahi */
+export const getCreatorEligibility = (pid) => api("brand_creator_eligibility", { p_participation: pid });
 
 /** React: creator card → { data, loading, error, reload, setSaved } */
 export function useCreatorCard(pid, inv) {

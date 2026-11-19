@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertBell } from "@/components/admin/DeliveryAlerts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -297,6 +298,7 @@ export default function AdminShell({ children, wide = false }) {
             <button type="button" className="as-icon" onClick={() => setPanel("agent")} aria-label="AI Assistant" title="AI Assistant">
               ♧
             </button>
+            {authed && <AlertBell />}
             <Link href="/vault/settings" className="as-icon" aria-label="Settings" title="Settings">
               ⚙
             </Link>

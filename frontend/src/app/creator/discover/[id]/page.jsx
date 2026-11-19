@@ -1,5 +1,7 @@
 "use client";
 
+import { STEP_NAME } from "@/lib/steps";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -11,13 +13,7 @@ import { ArrowLeft, Gift, Film, Users, Calendar, ShieldCheck, Megaphone, Lock, F
 
 const JOURNEY_ICONS = ["✎", "✓", "📦", "🎬", "📊"];
 // participation stage → chhota label (purane STAGE_SHORT / spill)
-const STAGE = {
-  applied: "Applied", eligible: "Applied", shortlisted: "Shortlisted", invited: "Invited", sent_to_brand: "With brand",
-  brand_confirmed: "Selected", accepted: "Selected", contract_sent: "Sign contract", contract_signed: "Contract signed",
-  address_confirmed: "Address confirmed", product_sent: "Product sent", content_created: "Creating", content_submitted: "Video sent",
-  changes_requested: "Changes requested", content_approved: "Approved", published: "Live", completed: "Completed",
-  ineligible: "Not eligible", brand_declined: "Not selected", rejected: "Not selected", dropped: "Dropped",
-};
+const STAGE = { ...STEP_NAME, invited: "Invited" };
 
 /**
  * /creator/discover/[id] — campaign ka brief (Supabase) + Apply.
@@ -116,6 +112,19 @@ export default function CampaignBrief() {
   };
 
   const notOk = why ? (why.criteria || []).filter((c) => !c.ok) : [];
+  // sirf jo profile mein BHARA hi nahi hai uske liye seedha us field par le jaane wala button (85 followers jaisi asli kami par nahi)
+  const fixOf = (c, cid) => {
+    const have = String(c.have || "");
+    if (!/not in your profile|not set in your profile|no city|no categories|not connected|not yet|add it/i.test(have)) return null;
+    const back = `&back=${encodeURIComponent(`/creator/discover/${cid}`)}`;
+    const k = String(c.key || "").toLowerCase();
+    if (k === "gender") return { label: "Add your gender", href: `/creator/profile/about?focus=ab-gender${back}` };
+    if (k === "age") return { label: "Add your birthday", href: `/creator/profile/about?focus=ab-dob${back}` };
+    if (k === "location" || k === "city") return { label: "Add your city", href: `/creator/profile/content?focus=yc-city${back}` };
+    if (k === "categories" || k === "category") return { label: "Pick your categories", href: `/creator/profile/content?focus=yc-cats${back}` };
+    if (k === "instagram" || k === "followers" || k === "engagement") return { label: "Connect Instagram", href: `/creator/profile/instagram?x=1${back}` };
+    return { label: "Update your profile", href: `/creator/profile?x=1${back}` };
+  };
   const fixable = notOk.some((c) => /not in your profile|not set in your profile|no city|no categories|not connected/i.test(c.have || ""));
   const line = (label, v) => {
     v = codeFill(x, v);
@@ -218,6 +227,33 @@ export default function CampaignBrief() {
             ) : applied ? (
               <>
                 <div className="cb-done">✓ {stage ? STAGE[stage] || "Applied" : `Applied${appliedAs ? " as @" + appliedAs : ""}`}</div>
+                {/* invite se jude par profile brief se match nahi karti → brand ko tabhi jaayenge jab yeh bhar dein */}
+                {["applied", "eligible", undefined, null, ""].includes(stage) && el && el.eligible === false && (
+                  <div className="cb-why cb-why--hold">
+                    <p>
+                      <b>One step left:</b> the brand needs these details before we can send you to them.
+                    </p>
+                    <ul>
+                      {(el.criteria || [])
+                        .filter((c) => !c.ok)
+                        .map((c) => {
+                          const fx = fixOf(c, x.campaign_id || id);
+                          return (
+                            <li key={c.key || c.need}>
+                              ✗ <b>{c.need}</b>
+                              <br />
+                              <small>{c.have}</small>
+                              {fx && (
+                                <Link href={fx.href} className="cb-fix">
+                                  {fx.label} →
+                                </Link>
+                              )}
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                )}
                 <p>
                   {x.my_participation_id ? (
                     <Link href={`/creator/my-campaigns/${x.my_participation_id}`}>Track it in My campaigns →</Link>
@@ -266,13 +302,21 @@ export default function CampaignBrief() {
                   <div className="cb-why">
                     <p>The brand requires the criteria below. Your profile doesn&apos;t match {notOk.length === 1 ? "this one" : "these"}:</p>
                     <ul>
-                      {notOk.map((c) => (
-                        <li key={c.key || c.need}>
-                          ✗ <b>{c.need}</b>
-                          <br />
-                          <small>{c.have}</small>
-                        </li>
-                      ))}
+                      {notOk.map((c) => {
+                        const fx = fixOf(c, x.campaign_id || id);
+                        return (
+                          <li key={c.key || c.need}>
+                            ✗ <b>{c.need}</b>
+                            <br />
+                            <small>{c.have}</small>
+                            {fx && (
+                              <Link href={fx.href} className="cb-fix">
+                                {fx.label} →
+                              </Link>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                     {fixable ? (
                       <p>
@@ -429,6 +473,8 @@ export default function CampaignBrief() {
         .cb-why p { margin: 0 0 8px !important; }
         .cb-why ul { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 6px; }
         .cb-why li { padding: 8px 10px; border-radius: 10px; background: rgba(255,211,196,.12); font-size: 12.5px; color: #ffd3c4; line-height: 1.4; }
+        .cb-fix { display: inline-flex; align-items: center; margin-top: 8px; padding: 7px 12px; border-radius: 999px; background: #fbf1dc; color: #1b2a20 !important; font-size: 12.5px; font-weight: 800; text-decoration: none !important; }
+        .cb-fix:hover { background: #fff; }
         .cb-why li b { color: #fbf3e2; }
         .cb-why small { color: #e9cdbd; }
         .cb-pick { display: grid; gap: 8px; margin-bottom: 12px; text-align: left; }

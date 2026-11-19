@@ -26,11 +26,11 @@ const BOXES = [
   { t: "ship", l: "Contract signed", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 5) },
   { t: "ship", l: "Address confirmed", s: "brief sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 6) },
   { t: "ship", l: "Courier sent", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 7) },
-  { t: "ship", l: "Delivered", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9) },
+  { t: "ship", l: "Courier delivered", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9) },
   { t: "content", l: "Video submitted", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11) },
   { t: "content", l: "No video yet", s: "got product", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 9 && (c.sheet ?? c.step) < 11) },
   { t: "content", l: "Client approved", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage))) },
-  { t: "good", l: "Done", s: "every post up", f: (c) => !c.failed && (c.posted) },
+  { t: "good", l: "Posted", s: "every post up", f: (c) => !c.failed && (c.posted) },
 ];
 
 /* Figma: Campaign workspace — Creators (journey + rows) — barter_tracker + campaign_people */
@@ -120,6 +120,17 @@ export default function WorkspaceCreators() {
     return r;
   }, [all, box, q, sort, who, size, posted, fit, bmatch.data, U]);
 
+  // ek jagah filters: kya koi filter laga hai + sab saaf karo
+  const sentIdx = BOXES.findIndex((b) => b.l === "Sent to brand");
+  const fActive = !!q.trim() || box !== 0 || who !== "Everyone" || size !== "Any size" || posted !== "Posted or not" || fit !== "Brief match: all";
+  const clearFilters = () => {
+    setQ("");
+    setBox(0);
+    setWho("Everyone");
+    setSize("Any size");
+    setPosted("Posted or not");
+    setFit("Brief match: all");
+  };
   // screening chips: kitne match / nahi / info missing (Applied wale)
   const fitN = useMemo(() => {
     const m = { ok: 0, no: 0, missing: 0 };
@@ -367,21 +378,64 @@ export default function WorkspaceCreators() {
         <h2 className="ga-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${BOXES[box].l.toLowerCase()}`}</h2>
         <p className="wcr-sub">Tap a creator to open every step, chat and action.</p>
 
-        <div className="wcr-filters">
-          <input className="ga-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
-          {[
-            [sort, setSort, ["Sort: furthest step", "Sort: earliest step", "Followers: high → low", "Followers: low → high", "Name A → Z", "Most views"], "Sort"],
-            [who, setWho, ["Everyone", "Our turn", "Creator’s turn", "On Geek OS", "Not yet on Geek"], "Who"],
-            [size, setSize, ["Any size", "Nano · under 10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K+"], "Follower size"],
-            [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
-            [fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "? Info missing in profile", "Not checked (not on Geek OS / past screening)"], "Brief match"],
-          ].map(([v, set, opts, label]) => (
-            <select key={label} className="ga-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
-              {opts.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          ))}
+        {/* Saare filter, sort aur screening ek hi jagah */}
+        <div className="wcr-fpanel">
+          <div className="wcr-filters">
+            <input className="ga-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
+            {[
+              [sort, setSort, ["Sort: furthest step", "Sort: earliest step", "Followers: high → low", "Followers: low → high", "Name A → Z", "Most views"], "Sort"],
+              [who, setWho, ["Everyone", "Our turn", "Creator’s turn", "On Geek OS", "Not yet on Geek"], "Who"],
+              [size, setSize, ["Any size", "Nano · under 10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K+"], "Follower size"],
+              [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
+              [fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "? Info missing in profile", "Not checked (not on Geek OS / past screening)"], "Brief match"],
+            ].map(([v, set, opts, label]) => (
+              <select key={label} className="ga-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
+                {opts.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            ))}
+            {fActive && (
+              <button type="button" className="wcr-txt wcr-clear" onClick={clearFilters}>
+                ✕ Clear filters
+              </button>
+            )}
+          </div>
+          <div className="wcr-screen">
+            <span className="wcr-screen__l">Screening:</span>
+            {[
+              ["✓ Matches the brief", fitN.ok, "ok"],
+              ["✗ Doesn’t match", fitN.no, "no"],
+              ["? Info missing in profile", fitN.missing, "missing"],
+            ].map(([l, c, k]) => (
+              <button
+                key={k}
+                type="button"
+                className={`wcr-fit wcr-fit--${k} ${fit === l ? "is-on" : ""}`}
+                onClick={() => {
+                  setFit(fit === l ? "Brief match: all" : l);
+                  if (fit !== l) setBox(BOXES.findIndex((b) => b.l === "Applied"));
+                }}
+              >
+                {l} · {c}
+              </button>
+            ))}
+            {sentIdx >= 0 && (
+              <button type="button" className={`wcr-fit wcr-fit--sent ${box === sentIdx ? "is-on" : ""}`} onClick={() => setBox(box === sentIdx ? 0 : sentIdx)}>
+                📤 Sent to brand · {counts[sentIdx]}
+              </button>
+            )}
+            {needN > 0 && (
+              <button type="button" className={`wcr-need ${who === "Our turn" ? "is-on" : ""}`} onClick={() => setWho(who === "Our turn" ? "Everyone" : "Our turn")}>
+                {who === "Our turn" ? "✕ Show everyone" : `⚡ ${needN} need${needN > 1 ? "" : "s"} you — do it now`}
+              </button>
+            )}
+            <button type="button" className="wcr-fit" onClick={() => (setBox(3), setSel(all.filter((x) => !x.failed && x.registered && !x.ig).map((x) => x.id)))}>
+              📸 Pick everyone without Instagram
+            </button>
+            <span className="wcr-screen__sp" />
+            <span className="wcr-count">Showing {rows.length}</span>
+          </div>
         </div>
 
         <div className="wcr-bulk">
@@ -412,27 +466,12 @@ export default function WorkspaceCreators() {
               </button>
             </>
           )}
-        </div>
-        <div className="wcr-screen">
-          <span className="wcr-screen__l">Screening (Applied):</span>
-          {[
-            ["✓ Matches the brief", fitN.ok, "ok"],
-            ["✗ Doesn’t match", fitN.no, "no"],
-            ["? Info missing in profile", fitN.missing, "missing"],
-          ].map(([l, c, k]) => (
-            <button
-              key={k}
-              type="button"
-              className={`wcr-fit wcr-fit--${k} ${fit === l ? "is-on" : ""}`}
-              onClick={() => {
-                setFit(fit === l ? "Brief match: all" : l);
-                if (fit !== l) setBox(BOXES.findIndex((b) => b.l === "Applied"));
-              }}
-            >
-              {l} · {c}
-            </button>
-          ))}
           <span className="wcr-screen__sp" />
+          {noPost.length > 0 && (
+            <button type="button" className="wcr-block" disabled={busy === "block"} onClick={blockNoPost} title="Got the product but never posted">
+              {busy === "block" ? "Blocking…" : `⛔ Blocklist who didn't post (${noPost.length})`}
+            </button>
+          )}
           <button type="button" className="wcr-txt" disabled={busy === "xlsx"} onClick={dlXlsx} title="Exactly the list below, as it is filtered">
             {busy === "xlsx" ? "Preparing…" : `⬇ Excel (${rows.length})`}
           </button>
@@ -442,18 +481,6 @@ export default function WorkspaceCreators() {
           <Link href={`/vault/campaigns/${c.id}/upload`} className="wcr-txt" title="Paste a Google Sheet link — new creators are added, the ones already here are skipped">
             📄 Add from a sheet link
           </Link>
-        </div>
-        <div className="wcr-chips">
-          {needN > 0 && (
-            <button type="button" className={`wcr-need ${who === "Our turn" ? "is-on" : ""}`} onClick={() => setWho(who === "Our turn" ? "Everyone" : "Our turn")}>
-              {who === "Our turn" ? "✕ Show everyone" : `⚡ ${needN} need${needN > 1 ? "" : "s"} you — do it now`}
-            </button>
-          )}
-          {noPost.length > 0 && (
-            <button type="button" className="wcr-block" disabled={busy === "block"} onClick={blockNoPost} title="Got the product but never posted">
-              {busy === "block" ? "Blocking…" : `⛔ Blocklist who didn't post (${noPost.length})`}
-            </button>
-          )}
         </div>
         {waOpen && (
           <WaPanel
@@ -472,9 +499,6 @@ export default function WorkspaceCreators() {
             }}
           />
         )}
-        <button type="button" className="wcr-txt wcr-pick" onClick={() => (setBox(3), setSel(all.filter((x) => !x.failed && x.registered && !x.ig).map((x) => x.id)))}>
-          📸 Pick everyone without Instagram
-        </button>
 
         <div className="wcr-rows">
           {rows.length > 0 && <CreatorHead />}
@@ -558,7 +582,13 @@ export default function WorkspaceCreators() {
         .wcr-box.is-on strong, .wcr-box.is-on .wcr-box__l { color: #fff; }
         .wcr-box.is-on .wcr-box__l i { background: #fff; }
 
-        .wcr-filters { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 25px; }
+        .wcr-fpanel { margin-top: 20px; padding: 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fbfbff; }
+        .wcr-fpanel .wcr-screen { margin-top: 12px; padding: 0; background: none; }
+        .wcr-filters { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+        .wcr-clear { font-size: 13px; }
+        .wcr-count { font-size: 12.5px; font-weight: 700; color: var(--ad-muted); }
+        .wcr-fit--sent { color: #6657e9; }
+        .wcr-fpanel .wcr-need { height: 32px; font-size: 12.5px; }
         .wcr-search { width: 270px; height: 43px; }
         .wcr-search::placeholder { color: #757575; }
         .wcr-sel { width: auto; height: 43px; padding: 0 30px 0 12px; font-size: 14px; color: #293652; appearance: none; background: #fff; }

@@ -1,3 +1,4 @@
+import { STEP_NAME } from "@/lib/steps";
 /**
  * Creator ke pure helpers — koi Supabase call nahi, koi React nahi. Sirf data → text / shape.
  * Purane app ke bounty-creator.js / bounty-pages.js / operations.js / bounty-welcome.js ke helpers ka naya ghar.
@@ -20,11 +21,7 @@ export const STAGE_TXT = {
   published: "Post live — waiting for verification", brand_confirmed: "Brand confirmed you", accepted: "Confirmed — next step coming", sent_to_brand: "With the brand for review",
   shortlisted: "Shortlisted", eligible: "Eligible — waiting for the brand", applied: "Applied — waiting for the brand", completed: "Completed",
 };
-export const STAGE_SHORT = {
-  changes_requested: "Changes requested", content_created: "Draft due", contract_sent: "Sign agreement", contract_signed: "Confirm address",
-  content_approved: "Approved — post it", product_sent: "Kit on the way", invited: "Invited", content_submitted: "Draft in review", address_confirmed: "Awaiting product",
-  published: "Post live", brand_confirmed: "Confirmed", accepted: "Confirmed", sent_to_brand: "With the brand", shortlisted: "Shortlisted", eligible: "In review", applied: "Applied", completed: "Completed",
-};
+export const STAGE_SHORT = { ...STEP_NAME, invited: "Invited" };
 // jo creator ke haath mein nahi (wait) — "Action needed" se bahar
 const WAIT_ST = ["applied", "eligible", "sent_to_brand", "shortlisted", "content_submitted", "published", "address_confirmed", "accepted", "brand_confirmed"];
 // "what to do first" order (purane AI_ACTION_ORDER jaisa)

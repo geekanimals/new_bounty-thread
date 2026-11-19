@@ -142,7 +142,9 @@ function CreatorsTab({ d, c, reload }) {
               <th>Stage</th>
               <th>Video</th>
               <th>Post</th>
+              <th>Followers</th>
               <th>Views</th>
+              <th>Likes</th>
               <th>Eng.</th>
               <th>City</th>
               <th />
@@ -204,6 +206,7 @@ function CreatorsTab({ d, c, reload }) {
                       <span className="cc-dash">—</span>
                     )}
                   </td>
+                  <td className="cc-muted">{cr.followers !== "—" ? cr.followers : "—"}</td>
                   <td>
                     {hasStats ? (
                       <strong>{bShort(tot.views)}</strong>
@@ -213,6 +216,7 @@ function CreatorsTab({ d, c, reload }) {
                       </span>
                     )}
                   </td>
+                  <td>{hasStats ? <strong>{bShort(tot.likes)}</strong> : <span className="cc-dash">—</span>}</td>
                   <td className="cc-muted">{hasStats ? bEr(tot) : "—"}</td>
                   <td className="cc-muted">{cr.city || "—"}</td>
                   <td>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import FieldFocus from "@/components/creator/FieldFocus";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import { CATEGORIES, LANGUAGES } from "@/components/creator/data";
@@ -147,6 +148,7 @@ export default function YourContent() {
   return (
     <BountyShell>
       <title>What you create — Bounty</title>
+      <FieldFocus />
       <Link href="/creator/profile" className="pf-back">
         ← My profile
       </Link>
@@ -157,7 +159,7 @@ export default function YourContent() {
         <p className="yc-label">
           Categories <small>pick up to 3</small>
         </p>
-        <div className="yc-cats">
+        <div className="yc-cats" id="yc-cats" tabIndex={-1}>
           {CATEGORIES.map((c) => (
             <button key={c.id} type="button" className={`yc-cat ${cats.includes(c.id) ? "is-on" : ""}`} onClick={() => toggleCat(c.id)} aria-pressed={cats.includes(c.id)}>
               <img src={c.img} alt="" loading="lazy" />

@@ -51,8 +51,8 @@ export const DECLINED = ["ineligible", "brand_declined", "dropped", "rejected"];
 export const grp = (st) => (PENDING.includes(st) ? "pending" : DECLINED.includes(st) ? "declined" : "approved");
 export const STAGE_LABEL = {
   applied: "Applied",
-  eligible: "Screened ✓",
-  sent_to_brand: "Awaiting brand",
+  eligible: "Screened",
+  sent_to_brand: "Sent to brand",
   brand_confirmed: "Approved",
   ineligible: "Declined",
   brand_declined: "Declined",

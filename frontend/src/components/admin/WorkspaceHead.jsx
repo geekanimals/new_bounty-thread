@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { PageHead } from "@/components/admin/ui";
 import { useCampaign, typeShort, campStatusPick } from "@/components/admin/campaign/live";
 import ShareCampaign from "@/components/admin/campaign2/ShareCampaign";
+import { CampaignAlertBanner } from "@/components/admin/DeliveryAlerts";
 
 /* Campaign workspace ke tabs (Figma) — har tab apna route */
 export const WS_TABS = [
@@ -61,6 +62,8 @@ export default function WorkspaceHead({ id, title, sub, actions, campaign }) {
           </Link>
         ))}
       </nav>
+      {/* WhatsApp jo creators tak nahi pahuncha — laal patti + pop-up */}
+      {id && id !== "sample" && <CampaignAlertBanner id={id} />}
       <style>{`
         .wh-back { display: inline-flex; align-items: center; gap: 4px; color: #5b5fe8; font-weight: 700; letter-spacing: .02em; text-decoration: none; }
         .wh-back:hover { text-decoration: underline; }

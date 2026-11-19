@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import FieldFocus from "@/components/creator/FieldFocus";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import { useCreator, switchIg, fmtFollowers, startInstagramConnect, getIgAccounts, disconnectIg, setExperienceVisible } from "@/services/creator";
@@ -66,6 +67,7 @@ export default function InstagramPrivacy() {
   return (
     <BountyShell>
       <title>Instagram & privacy — Bounty</title>
+      <FieldFocus />
       <Link href="/creator/profile" className="pf-back ig-back">
         ← My profile
       </Link>
