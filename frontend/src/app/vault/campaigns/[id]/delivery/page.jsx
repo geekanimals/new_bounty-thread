@@ -15,6 +15,9 @@ import { DRIPS } from "@/components/admin/msg/snaptoDrips";
  * "Sent" for a drip = handed to Snapto; delivered / read is in Snapto → Reports.
  */
 const DONE = { join: "joined the campaign", profile: "completed the profile", instagram: "connected Instagram", contract: "signed the contract", address: "confirmed the address", video: "uploaded the video", post: "added the post link" };
+// Snapto drip timelines (Snapto → Automation → Drips): pehla WhatsApp kitni der baad, kul kitne
+const TL = { "01": [10, 3], "02": [60, 4], "04": [2940, 4], "05": [60, 4], "06": [60, 4], "07": [1, 1], "08": [5, 4], "09": [5, 4], "10": [60, 4], "12": [60, 4], "13": [5, 4], "14": [1, 1] };
+const ago = (m) => (m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.floor(m / 1440)} day${m >= 2880 ? "s" : ""}${m % 1440 ? ` ${Math.round((m % 1440) / 60)} h` : ""}`);
 const when = (t) => (t ? new Date(t).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
 
 /** one row → { what, status, tone, reason, fix, code } in plain words */
@@ -22,7 +25,7 @@ function explain(r) {
   const drip = r.source === "drip";
   const what = drip
     ? r.kind === "done"
-      ? `Stop drip — ${DONE[r.drip] || r.drip}`
+      ? `Reminders stopped — ${DONE[r.drip] || r.drip}`
       : `WhatsApp drip ${r.drip} · ${(DRIPS[r.drip] && DRIPS[r.drip].name) || "drip"}`
     : `${r.channel === "email" ? "Email" : "WhatsApp"} · ${r.title || r.template || "step update"}`;
   const err = String(r.error || "");
@@ -57,9 +60,21 @@ function explain(r) {
       fix: "",
     };
   if (r.status === "failed") return { what, code: "failed", status: "Failed", tone: "red", reason: err || "Failed to send.", fix: /template|WA_UPDATE/i.test(err) ? "WhatsApp template missing — the drips handle WhatsApp now." : /smtp|email/i.test(err) ? "Check the email settings (SMTP)." : "Retry from Messaging & bot → Retry failed." };
-  if (r.status === "stopped") return { what, code: "stopped", status: "Drip stopped", tone: "violet", reason: /stop-bad-number/.test(r.id) ? "Stopped by us — the number was wrong." : `The creator ${DONE[r.drip] || "finished the task"} — the reminders stop.`, fix: "" };
+  if (r.status === "stopped") return { what, code: "stopped", status: "Drip stopped", tone: "violet", reason: /stop-bad-number/.test(r.id) ? "Stopped by us — the number was wrong." : `No message. The creator ${DONE[r.drip] || "finished the task"}, so the pending reminders for that step are cancelled.`, fix: "" };
   if (r.status === "queued" || r.status === "sending") return { what, code: "queued", status: "Waiting", tone: "orange", reason: "Waiting to be sent (goes within a minute).", fix: "" };
-  return { what, code: "sent", status: drip ? "Sent to Snapto" : "Sent", tone: "green", reason: drip ? "Handed to Snapto — the drip's messages go on its timeline. Delivered / read: Snapto → Reports." : "Sent.", fix: "" };
+  if (drip && TL[r.drip]) {
+    const [m, n] = TL[r.drip];
+    const first = r.at ? new Date(new Date(r.at).getTime() + m * 60000) : null;
+    return {
+      what: `WhatsApp reminders scheduled · ${(DRIPS[r.drip] && DRIPS[r.drip].name) || r.drip}`,
+      code: "scheduled",
+      status: "Scheduled",
+      tone: "violet",
+      reason: `No message at this moment. Snapto sends the 1st WhatsApp about ${ago(m)} later${first ? ` (around ${when(first)})` : ""}${n > 1 ? `, then up to ${n - 1} more, one at a time` : ""}. It stops as soon as the creator does this step or replies.`,
+      fix: "",
+    };
+  }
+  return { what, code: "sent", status: drip ? "Sent once" : "Sent", tone: "green", reason: drip ? "One WhatsApp sent now (a single reminder, no follow-ups). Delivered / read: Snapto → Reports." : r.channel === "email" ? "Email sent." : "Sent.", fix: "" };
 }
 
 const REASON_TITLE = { fixed: "Old wrong number — corrected since", bad_number: "Wrong WhatsApp number", opted_out: "Replied STOP", held: "Held — channel OFF", failed: "Failed", skipped: "Skipped", past_step: "Not needed (already past the step)" };
@@ -79,7 +94,8 @@ export default function DeliveryLog() {
   const bad = (r) => ["bad_number", "opted_out", "held", "failed"].includes(r.x.code);
   const F = {
     all: ["All", () => true],
-    sent: ["Sent", (r) => r.x.code === "sent"],
+    sent: ["Sent now", (r) => r.x.code === "sent"],
+    scheduled: ["Reminders scheduled", (r) => r.x.code === "scheduled"],
     bad: ["Not delivered", bad],
     queued: ["Waiting", (r) => r.x.code === "queued"],
     stopped: ["Drip stopped / skipped", (r) => ["stopped", "skipped", "past_step"].includes(r.x.code)],
@@ -103,6 +119,17 @@ export default function DeliveryLog() {
       return !t || [r.who, r.handle, r.to, r.x.what, r.error].filter(Boolean).join(" ").toLowerCase().includes(t);
     });
   const shown = list.slice(0, 400);
+  // ek hi creator ki ek hi minute ki sab entries = ek row (join par 4 line alag-alag na dikhen)
+  const groups = (() => {
+    const out = [];
+    shown.forEach((r) => {
+      const k = `${r.member_id || r.who || r.to}|${String(r.at || "").slice(0, 16)}`;
+      const g = out.length && out[out.length - 1].k === k ? out[out.length - 1] : null;
+      if (g) g.rows.push(r);
+      else out.push({ k, id: r.id, rows: [r] });
+    });
+    return out;
+  })();
 
   return (
     <AdminShell>
@@ -139,6 +166,9 @@ export default function DeliveryLog() {
             <b>WhatsApp is OFF</b> {sw.wa_global === false ? "in Settings (all campaigns)" : "for this campaign"} — new drip messages are not sent.
           </Note>
         )}
+        <Note tone="green" icon="ℹ️">
+          One row = everything that happened for a creator at that moment. <b>Scheduled</b> and <b>Reminders stopped</b> are not messages: Snapto sends the WhatsApp later, one at a time, on the drip&apos;s timeline (shown in each line). Only <b>Sent</b> / <b>Sent once</b> lines are messages that went right then.
+        </Note>
         <div className="dl-tiles">
           {Object.entries(F).map(([k, [l]]) => (
             <button key={k} type="button" className={`dl-tile ${f === k ? "is-on" : ""} dl-tile--${k}`} onClick={() => setF(k)}>
@@ -194,84 +224,100 @@ export default function DeliveryLog() {
             </thead>
             <tbody>
               <TableState cols={6} loading={loading && !data} error={!data && error} onRetry={reload} empty={data && !shown.length && "Nothing in this view."} />
-              {shown.map((r) => {
-                const isOpen = open === r.id;
+              {groups.map((g) => {
+                const r = g.rows[0];
+                const isOpen = open === g.id;
+                const msgs = g.rows.filter((x) => ["sent", "bad_number", "failed", "fixed"].includes(x.x.code));
                 return [
-                  <tr key={r.id} className={`dl-row ${isOpen ? "is-open" : ""}`} onClick={() => setOpen(isOpen ? null : r.id)}>
+                  <tr key={g.id} className={`dl-row ${isOpen ? "is-open" : ""}`} onClick={() => setOpen(isOpen ? null : g.id)}>
                     <td className="dl-mute">{when(r.at)}</td>
                     <td>
-                      <b>{r.who || "—"}</b>
-                      {r.handle && <small className="dl-sub">@{String(r.handle).replace(/^@/, "")}</small>}
+                      <b>{g.rows.map((x) => x.who).find(Boolean) || "—"}</b>
+                      {(() => { const h = g.rows.map((x) => x.handle).find(Boolean); return h && <small className="dl-sub">@{String(h).replace(/^@/, "")}</small>; })()}
+                      {g.rows.length > 1 && <small className="dl-sub dl-now">{msgs.length ? `${msgs.length} message${msgs.length > 1 ? "s" : ""} at this moment` : "no message at this moment"}</small>}
                     </td>
-                    <td>{r.x.what}</td>
-                    <td className={r.channel === "whatsapp" && r.phone_ok === false ? "dl-badnum" : "dl-mute"}>{r.to || "—"}</td>
                     <td>
-                      <span className={`ga-badge ga-badge--${r.x.tone}`}>{r.x.status}</span>
+                      {g.rows.map((x) => (
+                        <div key={x.id} className="dl-line">{x.x.what}</div>
+                      ))}
                     </td>
-                    <td className="dl-reason">{r.x.reason}</td>
+                    <td className={r.channel === "whatsapp" && r.phone_ok === false ? "dl-badnum" : "dl-mute"}>{g.rows.map((x) => x.to).find(Boolean) || "—"}</td>
+                    <td>
+                      {g.rows.map((x) => (
+                        <div key={x.id} className="dl-line">
+                          <span className={`ga-badge ga-badge--${x.x.tone}`}>{x.x.status}</span>
+                        </div>
+                      ))}
+                    </td>
+                    <td className="dl-reason">
+                      {g.rows.map((x) => (
+                        <div key={x.id} className="dl-line">{x.x.reason}</div>
+                      ))}
+                    </td>
                   </tr>,
-                  isOpen && (
-                    <tr key={`${r.id}o`} className="dl-open">
-                      <td colSpan={6}>
+                  isOpen &&
+                    g.rows.map((r) => (
+                      <tr key={`${r.id}o`} className="dl-open">
+                        <td colSpan={6}>
                         <div className="dl-box">
-                          <div>
-                            <em>What happened</em>
-                            <p>{r.x.reason}</p>
-                            {r.x.fix && <p className="dl-fix">👉 {r.x.fix}</p>}
-                            {r.error && (
-                              <>
-                                <em>Raw error</em>
-                                <code>{r.error}</code>
-                              </>
-                            )}
-                          </div>
-                          <div>
-                            <em>Details</em>
-                            <dl>
-                              <dt>Channel</dt>
-                              <dd>{r.source === "drip" ? "WhatsApp · Snapto drip" : r.channel === "email" ? "Email" : "WhatsApp"}</dd>
-                              <dt>To</dt>
-                              <dd>{r.to || "—"}</dd>
-                              <dt>Created</dt>
-                              <dd>{when(r.at)}</dd>
-                              <dt>Sent</dt>
-                              <dd>{when(r.sent_at)}</dd>
-                              <dt>Tries</dt>
-                              <dd>{r.tries ?? "—"}</dd>
-                              {r.attrs && Object.keys(r.attrs).length > 0 && (
+                            <div>
+                              <em>What happened</em>
+                              <p>{r.x.reason}</p>
+                              {r.x.fix && <p className="dl-fix">👉 {r.x.fix}</p>}
+                              {r.error && (
                                 <>
-                                  <dt>Values sent</dt>
-                                  <dd>
-                                    {Object.entries(r.attrs)
-                                      .map(([k, v]) => `${k}: ${v}`)
-                                      .join(" · ")}
-                                  </dd>
+                                  <em>Raw error</em>
+                                  <code>{r.error}</code>
                                 </>
                               )}
-                            </dl>
-                            <div className="dl-links">
-                              {r.member_id && (
-                                <Link href={`/vault/creators/${r.member_id}/profile`} className="ga-btn ga-btn--ghost ga-btn--sm" onClick={(e) => e.stopPropagation()}>
-                                  👤 Open creator
-                                </Link>
-                              )}
-                              <button
-                                type="button"
-                                className="ga-btn ga-btn--ghost ga-btn--sm"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try { await navigator.clipboard.writeText([r.who, r.to, r.x.what, r.x.status, r.x.reason, r.error].filter(Boolean).join(" · ")); } catch {}
-                                  show("Copied ✓");
-                                }}
-                              >
-                                Copy details
-                              </button>
+                            </div>
+                            <div>
+                              <em>Details</em>
+                              <dl>
+                                <dt>Channel</dt>
+                                <dd>{r.source === "drip" ? "WhatsApp · Snapto drip" : r.channel === "email" ? "Email" : "WhatsApp"}</dd>
+                                <dt>To</dt>
+                                <dd>{r.to || "—"}</dd>
+                                <dt>Created</dt>
+                                <dd>{when(r.at)}</dd>
+                                <dt>Sent</dt>
+                                <dd>{when(r.sent_at)}</dd>
+                                <dt>Tries</dt>
+                                <dd>{r.tries ?? "—"}</dd>
+                                {r.attrs && Object.keys(r.attrs).length > 0 && (
+                                  <>
+                                    <dt>Values sent</dt>
+                                    <dd>
+                                      {Object.entries(r.attrs)
+                                        .map(([k, v]) => `${k}: ${v}`)
+                                        .join(" · ")}
+                                    </dd>
+                                  </>
+                                )}
+                              </dl>
+                              <div className="dl-links">
+                                {r.member_id && (
+                                  <Link href={`/vault/creators/${r.member_id}/profile`} className="ga-btn ga-btn--ghost ga-btn--sm" onClick={(e) => e.stopPropagation()}>
+                                    👤 Open creator
+                                  </Link>
+                                )}
+                                <button
+                                  type="button"
+                                  className="ga-btn ga-btn--ghost ga-btn--sm"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try { await navigator.clipboard.writeText([r.who, r.to, r.x.what, r.x.status, r.x.reason, r.error].filter(Boolean).join(" · ")); } catch {}
+                                    show("Copied ✓");
+                                  }}
+                                >
+                                  Copy details
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ),
+                          </td>
+                      </tr>
+                    )),
                 ];
               })}
             </tbody>
@@ -284,7 +330,7 @@ export default function DeliveryLog() {
         .dl-acts { display: flex; gap: 8px; align-items: center; }
         .dl-sel { height: 36px; padding: 0 10px; width: auto; }
         .dl-b { height: 36px; padding: 0 12px; }
-        .dl-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+        .dl-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
         .dl-tile { display: flex; flex-direction: column; align-items: flex-start; padding: 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; text-align: left; cursor: pointer; }
         .dl-tile b { font-family: var(--ad-head); font-size: 24px; color: var(--ad-ink); }
         .dl-tile span { margin-top: 4px; font-size: 12px; color: var(--ad-muted); }
@@ -318,6 +364,9 @@ export default function DeliveryLog() {
         .dl-box dl { display: grid; grid-template-columns: 90px 1fr; gap: 4px 10px; margin-top: 6px; font-size: 12.5px; }
         .dl-box dt { color: var(--ad-muted); }
         .dl-box dd { color: var(--ad-ink); word-break: break-word; }
+        .dl-line { min-height: 22px; padding: 2px 0; }
+        .dl-line + .dl-line { border-top: 1px dashed var(--ad-line); margin-top: 4px; padding-top: 6px; }
+        .dl-now { margin-top: 4px; color: #6657e9 !important; font-weight: 700; }
         .dl-links { display: flex; gap: 8px; margin-top: 10px; }
         @media (max-width: 900px) { .dl-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dl-box { grid-template-columns: 1fr; } }
       `}</style>
