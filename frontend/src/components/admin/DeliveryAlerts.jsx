@@ -140,17 +140,7 @@ export function CampaignAlertBanner({ id }) {
   const n = Number(d.open) || 0;
   const items = d.items || [];
   const people = groupAlerts(items).length;
-  // naya alert aaya → ek baar khud pop-up (har naye alert par, ek session mein ek hi baar)
-  useEffect(() => {
-    if (!n || !items[0]) return;
-    const k = `dla-pop:${id}:${items[0].id}`;
-    try {
-      if (sessionStorage.getItem(k)) return;
-      sessionStorage.setItem(k, "1");
-    } catch {}
-    const t = setTimeout(() => setShow(true), 0);
-    return () => clearTimeout(t);
-  }, [n, items, id]);
+  // pop-up khud nahi khulta — banner par tap karo tab dikhta hai
   if (!on || !n) return null;
   const seen = async () => {
     setBusy(true);
@@ -192,9 +182,10 @@ export function CampaignAlertBanner({ id }) {
         ${CSS}
         .dla-banner { display: block; width: 100%; margin: -10px 0 18px; padding: 11px 14px; border-radius: 12px; border: 1px solid #f3c4c4; background: #fff1f1; color: #a3262b; font-size: 13.5px; text-align: left; cursor: pointer; }
         .dla-banner:hover { background: #ffe8e8; }
-        .dla-modal { width: min(520px, 94vw); }
+        .dla-modal { width: min(560px, 94vw); padding: 22px 24px 20px; }
+        .dla-modal .dla-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
         .dla-mhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .dla-mhead h2 { margin: 0; font-size: 18px; }
+        .dla-mhead h2 { margin: 0; font-size: 18px; line-height: 1.3; }
         .dla-x { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--ad-line-2, #e2e4ee); background: #fff; font-weight: 800; cursor: pointer; }
         .dla-sub { margin: 6px 0 12px; font-size: 13px; color: var(--ad-muted, #7a8099); }
         .dla-mbody { max-height: 55vh; overflow-y: auto; }

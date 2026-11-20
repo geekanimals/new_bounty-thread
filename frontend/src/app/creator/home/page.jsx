@@ -6,7 +6,7 @@ import BountyShell from "@/components/creator/BountyShell";
 import CampaignCard from "@/components/creator/CampaignCard";
 import { useSession, useMyIg, isLive, needsMe, stepOf, STAGE_TXT, STAGE_SHORT, profileProgress, homeCard, coverOf, useMyCampaignRows, useOpenCampaigns, useMyProfile, useProfileRequirements, useCovers } from "@/services/creator";
 import { RumiTip } from "@/components/creator/OnboardShell";
-import { STEPS, DREAM_BRANDS, TYPE_LABEL, getSidekick } from "@/components/creator/data";
+import { stepsFor, DREAM_BRANDS, TYPE_LABEL, getSidekick } from "@/components/creator/data";
 import { ArrowRight } from "@/components/ui/Icons";
 
 /* stage → card par chhoti line (Figma "note") */
@@ -65,7 +65,8 @@ export default function CreatorHome() {
   const runningList = (
     <ul className="hm-list">
       {running.slice(0, 4).map((m) => {
-        const idx = STEPS.findIndex((x) => x.key === stepOf(m.stage));
+        const steps = stepsFor(m);
+        const idx = steps.findIndex((x) => x.key === stepOf(m));
         return (
           <li key={m.participation_id || m.campaign_id}>
             <Link href={`/creator/my-campaigns/${m.participation_id || m.campaign_id}`}>
@@ -77,8 +78,8 @@ export default function CreatorHome() {
               <span className="hm-list__txt">
                 <strong>{m.campaign || "Campaign"}</strong>
                 <small className={m.stage === "changes_requested" ? "is-red" : ""}>{stageNote(m)}</small>
-                <span className="hm-steps" aria-label={`Step ${idx + 1} of ${STEPS.length}`}>
-                  {STEPS.map((st, i) => (
+                <span className="hm-steps" aria-label={`Step ${idx + 1} of ${steps.length}`}>
+                  {steps.map((st, i) => (
                     <i key={st.key} className={i <= idx ? "is-on" : ""} />
                   ))}
                 </span>

@@ -90,7 +90,10 @@ export function useMyCampaigns({ skip = false, live = true } = {}) {
       const tk = await apiCreator("my_track_links");
       const tks = {};
       ((!tk.error && tk.data) || []).forEach((t) => (tks[t.participation_id] = t));
-      const list = (r.data || []).map((c) => ({ ...c, _flow: flows[c.participation_id] || null, _trk: tks[c.participation_id] || null }));
+      // Physical visit: kab aana hai (date + slot) · visited
+      const vs = Object.values(flows).some((f) => f && f.kind === "visit") ? await apiCreator("my_visits") : null;
+      const visits = (vs && !vs.error && vs.data) || {};
+      const list = (r.data || []).map((c) => ({ ...c, _flow: flows[c.participation_id] || null, _trk: tks[c.participation_id] || null, _visit: visits[c.participation_id] || null }));
       const s = JSON.stringify(list);
       if (silent && s === sig.current) return;
       sig.current = s;

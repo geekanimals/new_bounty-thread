@@ -61,7 +61,7 @@ export function stepOf(c) {
   if (["invited", "shortlisted", "applied", "eligible", "sent_to_brand"].includes(s)) return "applied";
   if (["brand_confirmed", "accepted"].includes(s)) return "selected";
   if (s === "contract_sent") return "agreement";
-  if (s === "contract_signed") return noShip(c) ? "draft" : "address";
+  if (s === "contract_signed") return c._flow && c._flow.kind === "visit" ? "visit" : noShip(c) ? "draft" : "address";
   if (["address_confirmed", "product_sent", "product_delivered"].includes(s)) return noShip(c) ? "draft" : "package";
   if (["content_created", "changes_requested", "content_submitted"].includes(s)) return "draft";
   if (s === "content_approved") return "post";
@@ -224,7 +224,14 @@ export function compLine(c) {
   if (k === "visit") return c.visit && c.visit.mode === "experience" ? "Free experience" : "Visit + payment";
   return c.product_value ? "Products worth " + money(c.product_value) : c.product || "Product";
 }
-export const compSub = (c) => (kindOf(c) === "visit" ? (c.visit && c.visit.mode === "experience" ? "📍 Visit · experience" : "📍 Visit + payment") : { paid: "Payment", barter_paid: "Payment + product" }[kindOf(c)] || "Product");
+const VISIT_COVER = { food: "food", stay: "stay", entry: "entry", travel: "travel", service: "service" };
+const visitSub = (v) => {
+  v = v || {};
+  const cov = (v.covers || []).map((k) => VISIT_COVER[k] || k).join(" + ");
+  const pay = v.mode === "experience" ? "No payment" : v.pay_mode !== "full_after" && v.advance_pct ? `${v.advance_pct}% advance, rest after posting` : "Paid after posting";
+  return `📍 ${[cov ? cov.charAt(0).toUpperCase() + cov.slice(1) + " covered" : "", pay].filter(Boolean).join(" · ")}`;
+};
+export const compSub = (c) => (kindOf(c) === "visit" ? visitSub(c.visit) : { paid: "Payment", barter_paid: "Payment + product" }[kindOf(c)] || "Product");
 export const delivLine = (c) => (c.deliverables_text ? String(c.deliverables_text).split(/\n|;/)[0].slice(0, 40) : c.platforms ? String(c.platforms).split(",")[0] : "1 Reel");
 
 /** "Who can apply" lines: guest = who_can_apply (text), login = eligibility.criteria[].need */

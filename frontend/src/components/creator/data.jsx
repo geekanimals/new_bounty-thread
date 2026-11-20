@@ -59,12 +59,24 @@ export const TYPE_ICON = { barter: "🎁 Barter", paid: "💰 Paid", hybrid: "�
 
 /* Apply karne ke baad ka safar (campaign brief ki journey line) */
 export const APPLY_JOURNEY = ["Apply", "Get selected", "Receive kit", "Create", "Your analytics"];
+/* Har campaign type ki apni journey — [icon, label] */
+export function journeyFor(kind, visit) {
+  const paidVisit = !(visit && visit.mode === "experience");
+  if (kind === "visit")
+    return [["✎", "Apply"], ["✓", "Get selected"], ["📍", "Visit the place"], ["🎬", "Create"], paidVisit ? ["💰", "Get paid"] : ["📊", "Your analytics"]];
+  if (kind === "paid") return [["✎", "Apply"], ["✓", "Get selected"], ["✍️", "Sign agreement"], ["🎬", "Create"], ["💰", "Get paid"]];
+  if (kind === "barter_paid") return [["✎", "Apply"], ["✓", "Get selected"], ["📦", "Receive kit"], ["🎬", "Create"], ["💰", "Get paid"]];
+  return [["✎", "Apply"], ["✓", "Get selected"], ["📦", "Receive kit"], ["🎬", "Create"], ["📊", "Your analytics"]];
+}
+/* Video deadline kab se shuru hoti hai */
+export const deadlineFrom = (kind) => (kind === "visit" ? "your visit" : kind === "paid" ? "the brief" : "delivery");
 
 /* ---------- My campaigns (after Apply) ---------- */
 export const STEPS = [
   { key: "applied", label: "Applied" },
   { key: "selected", label: "Selected" },
   { key: "agreement", label: "Agreement" },
+  { key: "visit", label: "Visit" },
   { key: "address", label: "Address" },
   { key: "package", label: "Package" },
   { key: "draft", label: "Draft" },
@@ -72,6 +84,15 @@ export const STEPS = [
   { key: "verified", label: "Verified" },
   { key: "paid", label: "Paid" },
 ];
+
+/* Har campaign type ke apne steps: Barter / Barter + Paid → Address + Package · Paid → seedha video · Physical visit → Visit */
+export function stepsFor(m) {
+  const f = (m && m._flow) || {};
+  const visit = f.kind === "visit";
+  const ship = f.needs_product !== false;
+  const paid = !!f.paid;
+  return STEPS.filter((x) => (x.key === "visit" ? visit : x.key === "address" || x.key === "package" ? ship && !visit : true)).map((x) => (x.key === "paid" && !paid ? { ...x, label: "Done" } : x));
+}
 
 /* Command bar (⌘K) */
 export const COMMANDS = [

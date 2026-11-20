@@ -32,6 +32,27 @@ const BOXES = [
   { t: "content", l: "Client approved", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage))) },
   { t: "good", l: "Posted", s: "every post up", f: (c) => !c.failed && (c.posted) },
 ];
+/* Har campaign type ke apne boxes: Paid mein courier nahi · Physical visit mein Visit booked → Visited */
+const SHIP_L = ["Address confirmed", "Courier sent", "Courier delivered"];
+function boxesFor(kind, V) {
+  if (kind !== "paid" && kind !== "visit") return BOXES;
+  const vOf = (c) => (V && ((c.pid && V.p[c.pid]) || (c.iid && V.i[c.iid]))) || null;
+  const out = [];
+  BOXES.forEach((b) => {
+    if (SHIP_L.includes(b.l)) {
+      if (kind === "visit" && b.l === "Address confirmed") {
+        out.push({ t: "ship", l: "Visit booked", s: "date + slot set", f: (c) => !c.failed && !!(vOf(c) && vOf(c).visit_on) });
+        out.push({ t: "ship", l: "Visited", s: "came to the place", f: (c) => !c.failed && !!(vOf(c) && vOf(c).visited_at) });
+        out.push({ t: "bad", l: "Missed visit", s: "needs a new date", f: (c) => !c.failed && !!(vOf(c) && vOf(c).missed_at) });
+      }
+      return;
+    }
+    if (b.l === "No video yet")
+      out.push(kind === "visit" ? { ...b, s: "visited, no video", f: (c) => !c.failed && !!(vOf(c) && vOf(c).visited_at) && (c.sheet ?? c.step) < 11 } : { ...b, s: "brief sent" });
+    else out.push(b);
+  });
+  return out;
+}
 
 /* Figma: Campaign workspace — Creators (journey + rows) — barter_tracker + campaign_people */
 export default function WorkspaceCreators() {
@@ -50,6 +71,18 @@ export default function WorkspaceCreators() {
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   // sheet upload / profile / contact — email, city, followers jo tracker mein nahi aate
   const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  const kind = camp?.campaign_type || "barter";
+  // Physical visit: har creator ki booking (date + slot) aur visited / missed
+  const visits = useRpc("admin", "api.visit_list", { p_campaign: id }, { skip: !on || kind !== "visit" });
+  const V = useMemo(() => {
+    const m = { i: {}, p: {} };
+    (Array.isArray(visits.data) ? visits.data : []).forEach((v) => {
+      if (v.invite_id) m.i[v.invite_id] = v;
+      if (v.participation_id) m.p[v.participation_id] = v;
+    });
+    return m;
+  }, [visits.data]);
+  const BX = useMemo(() => boxesFor(kind, V), [kind, V]);
   const [box, setBox] = useState(0);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Sort: furthest step");
@@ -87,10 +120,10 @@ export default function WorkspaceCreators() {
     });
   }, [bt.data, people.data, prog.data, camp, extras.data]);
   const U = useMemo(() => unread.data || {}, [unread.data]);
-  const counts = BOXES.map((b) => all.filter((c) => b.f(c, U)).length);
+  const counts = BX.map((b) => all.filter((c) => b.f(c, U)).length);
 
   const rows = useMemo(() => {
-    let r = all.filter((c) => BOXES[box].f(c, U)).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
+    let r = all.filter((c) => (BX[box] || BX[0]).f(c, U)).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
     if (who === "Creator’s turn") r = r.filter((x) => x.turnWho === "creator");
     if (who === "Our turn") r = r.filter((x) => x.turnWho === "you");
     if (who === "On Geek OS") r = r.filter((x) => x.registered);
@@ -118,10 +151,10 @@ export default function WorkspaceCreators() {
     if (sort === "Followers: low → high") r.sort((a, b) => a.followersN - b.followersN);
     if (sort === "Most views") r.sort((a, b) => views(b) - views(a));
     return r;
-  }, [all, box, q, sort, who, size, posted, fit, bmatch.data, U]);
+  }, [all, box, q, sort, who, size, posted, fit, bmatch.data, U, BX]);
 
   // ek jagah filters: kya koi filter laga hai + sab saaf karo
-  const sentIdx = BOXES.findIndex((b) => b.l === "Sent to brand");
+  const sentIdx = BX.findIndex((b) => b.l === "Sent to brand");
   const fActive = !!q.trim() || box !== 0 || who !== "Everyone" || size !== "Any size" || posted !== "Posted or not" || fit !== "Brief match: all";
   const clearFilters = () => {
     setQ("");
@@ -153,7 +186,7 @@ export default function WorkspaceCreators() {
       }),
     ];
   };
-  const fname = (ext) => `${(camp?.name || "campaign").replace(/[^\w]+/g, "-")}-${BOXES[box].l.toLowerCase().replace(/\s+/g, "-")}${fit !== "Brief match: all" ? "-" + fit.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase() : ""}.${ext}`;
+  const fname = (ext) => `${(camp?.name || "campaign").replace(/[^\w]+/g, "-")}-${(BX[box] || BX[0]).l.toLowerCase().replace(/\s+/g, "-")}${fit !== "Brief match: all" ? "-" + fit.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase() : ""}.${ext}`;
   const dlCsv = () => (rows.length ? (downloadFile(fname("csv"), sheetRows()), setToast(`⬇ ${rows.length} creators — CSV`)) : setToast("Nothing in this view"));
   const dlXlsx = async () => {
     if (!rows.length) return setToast("Nothing in this view");
@@ -362,7 +395,7 @@ export default function WorkspaceCreators() {
           </div>
         </div>
         <div className="wcr-boxes">
-          {BOXES.map((b, i) => (
+          {BX.map((b, i) => (
             <button key={b.l} type="button" className={`wcr-box wcr-box--${b.t || "all"} ${box === i ? "is-on" : ""} ${counts[i] ? "" : "is-zero"}`} onClick={() => setBox(i)} aria-pressed={box === i} title={b.s ? `${b.l} — ${b.s}` : b.l}>
               <span className="wcr-box__l">
                 <i aria-hidden="true" />
@@ -374,8 +407,10 @@ export default function WorkspaceCreators() {
         </div>
       </section>
 
+      {kind === "visit" && <VisitPanel campaignId={id} all={all} V={V} reload={() => visits.reload(true)} venues={camp?.contract_terms?.visit?.venues || []} />}
+
       <section className="ga-card wcr-card wcr-list">
-        <h2 className="ga-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${BOXES[box].l.toLowerCase()}`}</h2>
+        <h2 className="ga-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${(BX[box] || BX[0]).l.toLowerCase()}`}</h2>
         <p className="wcr-sub">Tap a creator to open every step, chat and action.</p>
 
         {/* Saare filter, sort aur screening ek hi jagah */}
@@ -414,7 +449,7 @@ export default function WorkspaceCreators() {
                 className={`wcr-fit wcr-fit--${k} ${fit === l ? "is-on" : ""}`}
                 onClick={() => {
                   setFit(fit === l ? "Brief match: all" : l);
-                  if (fit !== l) setBox(BOXES.findIndex((b) => b.l === "Applied"));
+                  if (fit !== l) setBox(BX.findIndex((b) => b.l === "Applied"));
                 }}
               >
                 {l} · {c}
@@ -622,5 +657,115 @@ export default function WorkspaceCreators() {
         }
       `}</style>
     </AdminShell>
+  );
+}
+
+/* Physical visit — kaun kab aayega (date + slot) · Visited / Missed */
+function VisitPanel({ campaignId, all, V, reload, venues }) {
+  const [edit, setEdit] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
+  const list = all
+    .filter((c) => !c.failed)
+    .map((c) => ({ c, v: (c.pid && V.p[c.pid]) || (c.iid && V.i[c.iid]) || null }))
+    .sort((a, b) => String((a.v && a.v.visit_on) || "9999").localeCompare(String((b.v && b.v.visit_on) || "9999")) || String((a.v && a.v.slot) || "").localeCompare(String((b.v && b.v.slot) || "")));
+  const set = async (row, state, extra = {}) => {
+    setBusy(row.c.id + state);
+    setMsg("");
+    const { error } = await rpc("admin", "api.visit_set", { p_campaign: campaignId, p_invite: row.c.pid ? null : row.c.iid || null, p_participation: row.c.pid || null, p_state: state, p_on: extra.on || null, p_slot: extra.slot || null, p_note: null });
+    setBusy("");
+    if (error) return setMsg(errText(error));
+    setEdit(null);
+    setMsg(state === "visited" ? `✓ ${row.c.name} marked visited` : state === "missed" ? `${row.c.name} marked missed — set a new date` : `✓ Visit saved for ${row.c.name}`);
+    reload();
+  };
+  const fd = (d) => (d ? new Date(d + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "No date yet");
+  const booked = list.filter((x) => x.v && x.v.visit_on).length;
+  const done = list.filter((x) => x.v && x.v.visited_at).length;
+  return (
+    <section className="ga-card wcr-card vp">
+      <div className="vp-head">
+        <div>
+          <h2 className="ga-h2">📍 Visits</h2>
+          <p className="wcr-sub">
+            {booked} booked · {done} visited{venues[0] && venues[0].name ? ` · ${venues[0].name}` : ""} — no message goes to the creator from here.
+          </p>
+        </div>
+      </div>
+      {msg && <p className="vp-msg">{msg}</p>}
+      <div className="vp-list">
+        {list.map((row) => {
+          const v = row.v || {};
+          const st = v.visited_at ? "visited" : v.missed_at ? "missed" : v.visit_on ? "booked" : "none";
+          const ed = edit && edit.id === row.c.id;
+          return (
+            <div key={row.c.id} className={`vp-row vp-row--${st}`}>
+              <div className="vp-who">
+                <b>{row.c.name}</b>
+                <span>{row.c.handle}</span>
+              </div>
+              {ed ? (
+                <div className="vp-edit">
+                  <input type="date" className="ga-input" value={edit.on} onChange={(e) => setEdit({ ...edit, on: e.target.value })} aria-label="Visit date" />
+                  <input className="ga-input" value={edit.slot} onChange={(e) => setEdit({ ...edit, slot: e.target.value })} placeholder="e.g. Dinner 7:30 PM" aria-label="Slot" />
+                  <button type="button" className="ga-btn ga-btn--primary" disabled={!edit.on || !!busy} onClick={() => set(row, "booked", { on: edit.on, slot: edit.slot })}>
+                    Save
+                  </button>
+                  <button type="button" className="ga-btn" onClick={() => setEdit(null)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="vp-when">
+                  <b>{fd(v.visit_on)}</b>
+                  <span>{v.slot || v.note || ""}</span>
+                </div>
+              )}
+              <span className={`vp-chip vp-chip--${st}`}>{st === "visited" ? "✓ Visited" : st === "missed" ? "Missed" : st === "booked" ? "Booked" : "Not booked"}</span>
+              {!ed && (
+                <div className="vp-acts">
+                  <button type="button" className="ga-btn" onClick={() => setEdit({ id: row.c.id, on: v.visit_on || "", slot: v.slot || "" })}>
+                    {v.visit_on ? "Change" : "Book visit"}
+                  </button>
+                  {v.visit_on && !v.visited_at && (
+                    <button type="button" className="ga-btn ga-btn--primary" disabled={!!busy} onClick={() => set(row, "visited")}>
+                      Visited
+                    </button>
+                  )}
+                  {v.visit_on && !v.visited_at && !v.missed_at && (
+                    <button type="button" className="ga-btn" disabled={!!busy} onClick={() => set(row, "missed")}>
+                      Missed
+                    </button>
+                  )}
+                  {v.visited_at && (
+                    <button type="button" className="ga-btn" disabled={!!busy} onClick={() => set(row, "booked")}>
+                      Undo
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {!list.length && <p className="wcr-sub">No creators yet.</p>}
+      </div>
+      <style>{`
+        .vp { margin-top: 18px; }
+        .vp-msg { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #4b3fd6; }
+        .vp-list { display: grid; gap: 8px; margin-top: 12px; }
+        .vp-row { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(170px, 1.4fr) auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--ad-line); border-radius: 12px; background: #fff; }
+        .vp-who, .vp-when { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .vp-who b, .vp-when b { font-size: 14px; color: var(--ad-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-who span, .vp-when span { font-size: 12.5px; color: var(--ad-muted, #6b7280); }
+        .vp-edit { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .vp-edit .ga-input { width: auto; min-width: 140px; }
+        .vp-chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #eef0f5; color: #4b5563; white-space: nowrap; }
+        .vp-chip--booked { background: #fff4dc; color: #a16207; }
+        .vp-chip--visited { background: #dcf5e7; color: #15803d; }
+        .vp-chip--missed { background: #fde2e2; color: #b91c1c; }
+        .vp-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        @media (max-width: 860px) { .vp-row { grid-template-columns: 1fr 1fr; } .vp-acts { justify-content: flex-start; } }
+      `}</style>
+    </section>
   );
 }

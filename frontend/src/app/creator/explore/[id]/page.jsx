@@ -6,17 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import Logo from "@/components/creator/Logo";
 import GuestNav from "@/components/creator/GuestNav";
 import { RumiTip } from "@/components/creator/OnboardShell";
-import { TYPE_LABEL } from "@/components/creator/data";
+import { TYPE_LABEL, journeyFor, deadlineFrom } from "@/components/creator/data";
 import { useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, rememberApply, safeLink } from "@/services/creator";
 import { Gift, Film, Users, Calendar, ShieldCheck, Sparkle, Lock, ChevronDown } from "@/components/ui/Icons";
 
-const JOURNEY = [
-  { icon: "✎", label: "Apply" },
-  { icon: "✓", label: "Get selected" },
-  { icon: "📦", label: "Receive kit" },
-  { icon: "🎬", label: "Create" },
-  { icon: "📊", label: "Your analytics" },
-];
 
 /**
  * /creator/explore/[id] — guest campaign brief (public.explore_campaigns).
@@ -47,7 +40,8 @@ export default function GuestBrief() {
     );
 
   const k = kindOf(x);
-  const noProd = k === "paid";
+  const noProd = k === "paid" || k === "visit";
+  const vz = k === "visit" && x.visit && typeof x.visit === "object" ? x.visit : null;
   const t = x.terms || {};
   const b = x.video_brief || {};
   const who = whoList(x);
@@ -61,7 +55,7 @@ export default function GuestBrief() {
     rewardNote: compSub(x),
     deliver: delivLine(x),
     who: who.length ? who.join(" • ") : "Open to every creator",
-    deadline: t.content_days ? `${t.content_days} days after ${noProd ? "the brief" : "delivery"}` : x.ends_on ? `Till ${fdate(x.ends_on)}` : "Shown in your agreement",
+    deadline: t.content_days ? `${t.content_days} days after ${deadlineFrom(k)}` : x.ends_on ? `Till ${fdate(x.ends_on)}` : "Shown in your agreement",
     usage: t.ad_rights_months ? `${t.ad_rights_months} month${t.ad_rights_months > 1 ? "s" : ""}` : "None",
     collab: t.collab_rights ? "Required" : "Not required",
     excl: t.exclusivity || "None",
@@ -161,10 +155,10 @@ export default function GuestBrief() {
             </div>
 
             <ol className="gb-journey">
-              {JOURNEY.map((j) => (
-                <li key={j.label}>
-                  <span>{j.icon}</span>
-                  {j.label}
+              {journeyFor(k, vz).map(([ic, j]) => (
+                <li key={j}>
+                  <span>{ic}</span>
+                  {j}
                 </li>
               ))}
             </ol>
@@ -207,7 +201,7 @@ export default function GuestBrief() {
                 <ul>
                   {t.content_days && (
                     <li>
-                      Post within <b>{t.content_days} days</b> of {noProd ? "getting the video brief" : "receiving the product"}
+                      Post within <b>{t.content_days} days</b> of {k === "visit" ? "your visit" : noProd ? "getting the video brief" : "receiving the product"}
                     </li>
                   )}
                   <li>
@@ -233,7 +227,7 @@ export default function GuestBrief() {
               </div>
             </details>
 
-            <RumiTip className="gb-rumi" text="The deadline starts after delivery — read the brief first." />
+            <RumiTip className="gb-rumi" text={`The deadline starts after ${deadlineFrom(k)} — read the brief first.`} />
           </section>
         </div>
       </main>

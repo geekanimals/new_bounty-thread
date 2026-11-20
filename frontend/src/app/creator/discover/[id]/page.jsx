@@ -8,10 +8,9 @@ import { useParams, useRouter } from "next/navigation";
 import BountyShell, { ConnectInstagramSheet } from "@/components/creator/BountyShell";
 import { RumiTip } from "@/components/creator/OnboardShell";
 import { useSession, useJoinGate, useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, checkEligibility, applyTo, myApplyProfiles, codeFill, safeLink, errText } from "@/services/creator";
-import { TYPE_LABEL, APPLY_JOURNEY, getSidekick } from "@/components/creator/data";
+import { TYPE_LABEL, journeyFor, deadlineFrom, getSidekick } from "@/components/creator/data";
 import { ArrowLeft, Gift, Film, Users, Calendar, ShieldCheck, Megaphone, Lock, FileText, ChevronDown } from "@/components/ui/Icons";
 
-const JOURNEY_ICONS = ["✎", "✓", "📦", "🎬", "📊"];
 // participation stage → chhota label (purane STAGE_SHORT / spill)
 const STAGE = { ...STEP_NAME, invited: "Invited" };
 
@@ -81,7 +80,7 @@ export default function CampaignBrief() {
   const stage = x.my_stage;
   const applied = !!stage || !!appliedAs;
   const tags = [].concat(x.hashtags || [], (x.mentions || []).map((m) => (String(m).charAt(0) === "@" ? m : "@" + m)));
-  const deadline = t.content_days ? `${t.content_days} days after ${noProd ? "the brief" : "delivery"}` : x.ends_on ? `Till ${fdate(x.ends_on)}` : "Shown in your agreement";
+  const deadline = t.content_days ? `${t.content_days} days after ${deadlineFrom(k)}` : x.ends_on ? `Till ${fdate(x.ends_on)}` : "Shown in your agreement";
   const usage = t.ad_rights_months ? `${t.ad_rights_months} month${t.ad_rights_months > 1 ? "s" : ""}` : "None";
 
   // ---------- Apply ----------
@@ -207,9 +206,9 @@ export default function CampaignBrief() {
           </div>
 
           <ol className="cb-journey">
-            {APPLY_JOURNEY.map((j, i) => (
+            {journeyFor(k, vz).map(([ic, j]) => (
               <li key={j}>
-                <span>{JOURNEY_ICONS[i]}</span>
+                <span>{ic}</span>
                 {j}
               </li>
             ))}
@@ -420,7 +419,7 @@ export default function CampaignBrief() {
                 <ul>
                   {t.content_days && (
                     <li>
-                      Post within <b>{t.content_days} days</b> of {noProd ? "getting the video brief" : "receiving the product"}
+                      Post within <b>{t.content_days} days</b> of {k === "visit" ? "your visit" : noProd ? "getting the video brief" : "receiving the product"}
                     </li>
                   )}
                   <li>
@@ -436,14 +435,14 @@ export default function CampaignBrief() {
                       Add the brand as an Instagram <b>collaborator</b> on the post
                     </li>
                   )}
-                  {k && k !== "barter" && (
+                  {k && k !== "barter" && !(vz && vz.mode === "experience") && (
                     <li>
                       <b>Paid:</b> your fee is written into your own agreement
                     </li>
                   )}
                   {t.blacklist_clause && (
                     <li>
-                      Not delivering after you {noProd ? "sign" : "receive the product"} blocks your account
+                      Not delivering after you {k === "visit" ? "visit" : noProd ? "sign" : "receive the product"} blocks your account
                       {t.reship_clause && !noProd ? " and you must re-ship the product" : ""}
                     </li>
                   )}
@@ -466,7 +465,7 @@ export default function CampaignBrief() {
             )}
           </div>
 
-          <RumiTip className="cb-rumi" name={sk.name} img={sk.img} text="The deadline starts after delivery — read the brief first." />
+          <RumiTip className="cb-rumi" name={sk.name} img={sk.img} text={`The deadline starts after ${deadlineFrom(k)} — read the brief first.`} />
         </section>
       </div>
 

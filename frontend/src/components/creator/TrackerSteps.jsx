@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { RumiTip } from "@/components/creator/OnboardShell";
 import { useSession, useMyCampaigns, useCovers, coverOf, typeKey, compLine, delivLine, fdate, stepOf, noShip, noteOf, DECLINED, errText } from "@/services/creator";
-import { STEPS, TYPE_LABEL, getSidekick } from "@/components/creator/data";
+import { stepsFor, TYPE_LABEL, getSidekick } from "@/components/creator/data";
 import { ArrowLeft, Check, WhatsApp, FileText, Gift, Film, Calendar } from "@/components/ui/Icons";
 
 /* Har step ka apna page (Back button ek step peeche) — step key → route.
@@ -35,9 +35,7 @@ export function useTracker() {
   // Paid aur Barter + Paid dono mein payment hota hai (hybrid = product bhi + payment bhi)
   const isPaid = !!(m._flow && m._flow.paid) || ["paid", "barter_paid"].includes(m.campaign_type) || ["cash", "hybrid"].includes(m.comp_type);
   // Paid / product-free campaign mein address + package nahi hota (purane noShip)
-  const steps = STEPS.filter((x) => ship || (x.key !== "address" && x.key !== "package")).map((x) =>
-    x.key === "paid" && !isPaid ? { ...x, label: "Done" } : x
-  );
+  const steps = stepsFor(m).map((x) => (x.key === "paid" ? { ...x, label: isPaid ? "Paid" : "Done" } : x));
   const t = (m.contract && m.contract.content_days) || (m.terms && m.terms.content_days);
   const c = {
     id: m.campaign_id,
@@ -47,9 +45,9 @@ export function useTracker() {
     img: coverOf(m, covers),
     rewardKit: compLine(m),
     deliver: delivLine(m),
-    deadline: m.deadline ? `Due ${fdate(m.deadline)}` : t ? `${t} days after ${ship ? "delivery" : "the brief"}` : "Shown in your agreement",
+    deadline: m.deadline ? `Due ${fdate(m.deadline)}` : t ? `${t} days after ${m._flow && m._flow.kind === "visit" ? "your visit" : ship ? "delivery" : "the brief"}` : "Shown in your agreement",
   };
-  const afterSign = ship ? `${base}/address` : `${base}/draft`;
+  const afterSign = m._flow && m._flow.kind === "visit" ? `${base}/visit` : ship ? `${base}/address` : `${base}/draft`;
   return { loading, error, reload, id: m.participation_id, m, c, isPaid, ship, steps, base, afterSign, step: stepOf(m) };
 }
 

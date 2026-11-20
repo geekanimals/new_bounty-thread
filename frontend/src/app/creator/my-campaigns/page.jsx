@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import { RumiTip } from "@/components/creator/OnboardShell";
-import { useSession, useJoinGate, useMyCampaigns, useCovers, coverOf, typeKey, compLine, stepOf, groupOf, noteOf, dateOf, noShip, needsAction, DECLINED, errText } from "@/services/creator";
-import { STEPS, TYPE_LABEL, getSidekick } from "@/components/creator/data";
+import { useSession, useJoinGate, useMyCampaigns, useCovers, coverOf, typeKey, compLine, stepOf, groupOf, noteOf, dateOf, needsAction, DECLINED, errText } from "@/services/creator";
+import { stepsFor, TYPE_LABEL, getSidekick } from "@/components/creator/data";
 import { ArrowRight } from "@/components/ui/Icons";
 import { currentPath } from "@/components/creator/TrackerSteps";
 
@@ -123,7 +123,7 @@ export default function MyCampaigns() {
             const revision = m.stage === "changes_requested";
             const act = needsAction(m);
             // paid / product-free campaign mein address + package nahi
-            const steps = STEPS.filter((x) => !noShip(m) || (x.key !== "address" && x.key !== "package"));
+            const steps = stepsFor(m);
             const idx = m.stage === "completed" ? steps.length - 1 : steps.findIndex((x) => x.key === step);
             const label = (steps[idx] || {}).label;
             const pill = declined
