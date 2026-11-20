@@ -45,6 +45,7 @@ export const DEFAULT_DRAFT = {
   rights: "1",
   brief: "",
   dBriefs: {}, // har deliverable ka brief: { reel: { central: true, text: "" }, ... }
+  refImgs: [], // reference images (creator ko brief mein dikhte hain): [{ url, note }]
   dos: "",
   donts: "",
   message: "",
@@ -137,6 +138,7 @@ function draftFromRow(c) {
     rights: String(ct.ad_rights_months ?? 1),
     brief: vb.what_to_shoot || c.brief || "",
     dBriefs: vb.deliverable_briefs && typeof vb.deliverable_briefs === "object" ? vb.deliverable_briefs : {},
+    refImgs: Array.isArray(vb.reference_images) ? vb.reference_images.filter((x) => x && x.url) : [],
     dos: vb.dos || "",
     donts: vb.donts || "",
     message: vb.key_messages || "",
@@ -443,6 +445,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
       ...((d._row && d._row.video_brief) || (d._prefill && d._prefill.video_brief) || {}),
       what_to_shoot: String(d.brief || "").trim() || null,
       deliverable_briefs: deliverableBriefs(d),
+      reference_images: (Array.isArray(d.refImgs) ? d.refImgs : []).filter((x) => x && x.url).map((x) => ({ url: x.url, note: String(x.note || "").trim().slice(0, 300) || null })),
       key_messages: String(d.message || "").trim() || null,
       dos: String(d.dos || "").trim() || null,
       donts: String(d.donts || "").trim() || null,

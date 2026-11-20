@@ -19,7 +19,8 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
   const central = String(fill(b.what_to_shoot) || "").trim();
   const db = b.deliverable_briefs && typeof b.deliverable_briefs === "object" ? b.deliverable_briefs : null;
   const items = db ? KINDS.filter((k) => db[k.key]) : [];
-  if (!central && !items.length) return null;
+  const refs = Array.isArray(b.reference_images) ? b.reference_images.filter((x) => x && /^https?:\/\//.test(String(x.url || ""))) : [];
+  if (!central && !items.length && !refs.length) return null;
   const count = (k) => {
     const m = String(deliverables || "").match(k.re);
     return m ? Number(m[1]) : 0;
@@ -71,7 +72,24 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
           </div>
         </>
       )}
+      {refs.length > 0 && (
+        <>
+          <p className="bb-k bb-k--sec">Reference — copy this style</p>
+          <div className="bb-refs">
+            {refs.map((r, i) => (
+              <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="bb-ref">
+                <img src={r.url} alt={r.note || "Reference"} loading="lazy" />
+                {r.note && <span>{r.note}</span>}
+              </a>
+            ))}
+          </div>
+        </>
+      )}
       <style>{`
+        .bb-refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 10px; }
+        .bb-ref { display: grid; gap: 6px; padding: 8px; border-radius: 14px; background: #fffaf0; border: 1px solid #e8dcc0; color: inherit; text-decoration: none; }
+        .bb-ref img { width: 100%; max-height: 360px; object-fit: contain; border-radius: 10px; background: #fff; }
+        .bb-ref span { font-size: 12.5px; line-height: 1.45; color: #2a1e14; }
         .bb { display: grid; gap: 10px; margin: 6px 0 12px; min-width: 0; }
         .bb-k { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: #8a6b32; }
         .bb-k small { font-weight: 500; letter-spacing: 0; text-transform: none; color: #8f8169; }
