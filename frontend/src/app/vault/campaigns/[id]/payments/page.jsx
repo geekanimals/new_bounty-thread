@@ -68,6 +68,9 @@ export default function CampaignPayments() {
   const { id } = useParams();
   const [toast, show] = useToast();
   const { data, error, loading, reload } = useRpc("admin", "api.campaign_payments", { p_campaign: id }, { skip: !id || id === "sample" });
+  // sheet se fee / UPI aa gayi, par creator abhi Geek OS par join nahi hua — join karte hi neeche list mein aa jaata hai
+  const staged = useRpc("admin", "api.payment_stage_list", { p_campaign: id }, { skip: !id || id === "sample" });
+  const stagedRows = Array.isArray(staged.data) ? staged.data : [];
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(() => new Set()); // payout ids
@@ -394,7 +397,7 @@ export default function CampaignPayments() {
         active="payments"
         items={[
           // Physical visit mein koi product nahi jaata — Shipping tab nahi
-          ...(kind === "visit" ? [] : [{ k: "shipping", label: "📦 Shipping", href: `/vault/campaigns/${id}/fulfilment` }]),
+          kind === "visit" ? { k: "visits", label: "📍 Visits", href: `/vault/campaigns/${id}/fulfilment` } : { k: "shipping", label: "📦 Shipping", href: `/vault/campaigns/${id}/fulfilment` },
           { k: "payments", label: "💰 Payments", href: `/vault/campaigns/${id}/payments` },
         ]}
       />
@@ -565,6 +568,50 @@ export default function CampaignPayments() {
           <TextBtn onClick={bulkFile}>⬇️ RazorpayX bulk file</TextBtn>
         </div>
       </Panel>
+
+      {stagedRows.length > 0 && (
+        <Panel className="py py-staged" title={`🕓 Fees from the sheet — waiting for ${stagedRows.length} creator${stagedRows.length > 1 ? "s" : ""} to join`} sub="These fees and UPI / bank details came from the bulk sheet. Each creator moves into the list above with this fee as soon as they join Geek OS — nothing to do here.">
+          <div className="pys-wrap">
+            <table className="pys-t">
+              <thead>
+                <tr>
+                  <th>Creator</th>
+                  <th>Fee</th>
+                  <th>Advance</th>
+                  <th>Pay to</th>
+                  <th>Terms</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stagedRows.map((r) => (
+                  <tr key={r.stage_id}>
+                    <td>
+                      <b>{r.name || r.handle}</b>
+                      <small>{[r.handle ? "@" + r.handle : "", r.phone].filter(Boolean).join(" · ")}</small>
+                    </td>
+                    <td>
+                      <b>₹{Number(r.amount || 0).toLocaleString("en-IN")}</b>
+                    </td>
+                    <td>{r.advance_pct ? `${r.advance_pct}% · ₹${Math.round((Number(r.amount || 0) * r.advance_pct) / 100).toLocaleString("en-IN")}` : "—"}</td>
+                    <td>{r.upi ? `UPI ${r.upi}` : r.account_last4 ? `A/c ••${r.account_last4}${r.ifsc ? " · " + r.ifsc : ""}` : <span className="pys-miss">Not given — creator adds it after joining</span>}</td>
+                    <td className="pys-terms">{r.terms || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <style>{`
+            .py-staged { margin-top: 18px; }
+            .pys-wrap { overflow-x: auto; }
+            .pys-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+            .pys-t th { text-align: left; padding: 9px 10px; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--ad-muted, #7a8099); border-bottom: 1px solid var(--ad-line, #e6e8f0); }
+            .pys-t td { padding: 10px; border-bottom: 1px solid var(--ad-line, #eef0f5); vertical-align: top; }
+            .pys-t td small { display: block; margin-top: 2px; font-size: 12px; color: var(--ad-muted, #7a8099); }
+            .pys-terms { max-width: 360px; font-size: 12.5px; color: #4b5563; }
+            .pys-miss { color: #b45309; font-size: 12.5px; }
+          `}</style>
+        </Panel>
+      )}
 
       {modal && <PayModal modal={modal} days={data?.due_days} connected={!!prov.connected} onClose={() => setModal(null)} onDone={(m) => (setModal(null), after(m))} />}
       {fees && (

@@ -9,6 +9,7 @@ import { Stats } from "@/components/admin/ui";
 import { SubTabs } from "@/components/admin/campaign2/kit";
 import { useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast, fmtDate } from "@/components/admin/campaign/live";
+import VisitPanel from "@/components/admin/campaign/VisitPanel";
 
 const STATUSES = ["All statuses", "To send", "In transit", "Received", "No address"];
 const SHIP_STAGES = ["contract_signed", "address_confirmed", "product_sent", "product_delivered", "content_created", "content_submitted", "changes_requested", "content_approved", "published", "completed"];
@@ -58,6 +59,21 @@ export default function WorkspaceFulfilment() {
   const rows = all.filter((s) => st === STATUSES[0] || s.status === st).filter((s) => `${s.who} ${s.camp} ${s.product} ${s.courier}`.toLowerCase().includes(q.trim().toLowerCase()));
   const loading = bt.loading || people.loading;
   const v = (n) => (loading ? "…" : n);
+  // Physical visit: koi parcel nahi — yahan Visits (kaun kab aayega) dikhta hai
+  if (camp && camp.campaign_type === "visit")
+    return (
+      <AdminShell>
+        <WorkspaceHead id={id} campaign={camp} />
+        <SubTabs
+          active="visits"
+          items={[
+            { k: "visits", label: "📍 Visits", href: `/vault/campaigns/${id}/fulfilment` },
+            { k: "payments", label: "💰 Payments", href: `/vault/campaigns/${id}/payments` },
+          ]}
+        />
+        <VisitPanel campaignId={id} venues={(camp.contract_terms && camp.contract_terms.visit && camp.contract_terms.visit.venues) || []} />
+      </AdminShell>
+    );
   return (
     <AdminShell>
       <WorkspaceHead id={id} campaign={camp} />
