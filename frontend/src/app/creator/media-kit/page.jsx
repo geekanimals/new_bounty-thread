@@ -43,6 +43,59 @@ function audienceRows(aud) {
 }
 const imgOf = (m) => (m.media_type === "VIDEO" ? m.thumbnail_url || m.media_url : m.media_url);
 
+/** Video — beech mein bada ▶ button; dabane par yahin chalta hai (controls ke saath) */
+function VideoPlay({ src, poster, className = "" }) {
+  const [on, setOn] = useState(false);
+  return on ? (
+    <video
+      className={className}
+      src={src}
+      poster={poster || undefined}
+      controls
+      autoPlay
+      playsInline
+      ref={(el) => {
+        if (el && el.paused && !el.dataset.tried) {
+          el.dataset.tried = "1";
+          el.play().catch(() => {});
+        }
+      }}
+    />
+  ) : (
+    <button type="button" className={`mk-play ${className}`} onClick={() => setOn(true)} aria-label="Play video">
+      {poster ? <img src={poster} alt="" referrerPolicy="no-referrer" loading="lazy" /> : <video src={src + "#t=0.5"} muted playsInline preload="metadata" />}
+      <span className="mk-play__b" aria-hidden="true">
+        ▶
+      </span>
+    </button>
+  );
+}
+
+/** Post tile — video ho to yahin play (beech mein ▶), photo ho to Instagram link */
+function PostTile({ p, children }) {
+  const vid = p.media_type === "VIDEO" && p.media_url;
+  if (vid)
+    return (
+      <figure className="mk-vid">
+        <VideoPlay src={p.media_url} poster={p.thumbnail_url} />
+        {children}
+        {p.permalink && (
+          <a className="mk-igl" href={p.permalink} target="_blank" rel="noopener noreferrer" title="Open on Instagram" aria-label="Open on Instagram">
+            ↗
+          </a>
+        )}
+      </figure>
+    );
+  return (
+    <a href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
+      <figure>
+        <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
+        {children}
+      </figure>
+    </a>
+  );
+}
+
 /**
  * /creator/media-kit — Instagram se auto-bana media kit (share, edit)
  * Data: social_accounts (purane mkFetchAcct) · har 60 sec instagram-media-sync (purane jaisa) · get_my_campaigns (campaign work)
@@ -209,6 +262,7 @@ export default function MediaKit() {
     ...(Array.isArray(E.portfolio) ? E.portfolio : []).filter((p) => p && p.brand),
   ];
   const mentions = Array.isArray(a.mentions) ? a.mentions : [];
+  const liveStories = (Array.isArray(a.recent_stories) ? a.recent_stories : []).filter((x) => x && (x.media_url || x.thumbnail_url));
   const syncTxt = syncedAt && now ? `Synced with Instagram ${Math.max(0, Math.round((now - syncedAt) / 1000))}s ago · auto-refreshes every 60s` : syncedAt ? "Synced with Instagram just now · auto-refreshes every 60s" : "Syncing with Instagram…";
   const avatar = a.profile_picture_url || sk.img;
 
@@ -301,6 +355,34 @@ export default function MediaKit() {
         </section>
       )}
 
+      {liveStories.length > 0 && (
+        <section className="bx-card mk-sec">
+          <h3>
+            Live stories <small>{liveStories.length} · gone 24 h after posting</small>
+          </h3>
+          <div className="mk-stories">
+            {liveStories.map((st) => {
+              const v = st.insights || {};
+              return (
+                <figure key={st.id} className="mk-story">
+                  {st.media_type === "VIDEO" ? (
+                    <VideoPlay src={st.media_url} poster={st.thumbnail_url} />
+                  ) : (
+                    <a href={st.permalink || st.media_url} target="_blank" rel="noopener noreferrer">
+                      <img src={st.media_url} alt="" referrerPolicy="no-referrer" loading="lazy" />
+                    </a>
+                  )}
+                  <figcaption>
+                    {v.views != null ? `👁 ${fmtNum(v.views)} views` : v.reach != null ? `👁 ${fmtNum(v.reach)} reached` : "👁 views soon"}
+                    {v.replies ? ` · 💬 ${fmtNum(v.replies)}` : ""}
+                  </figcaption>
+                </figure>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="bx-card mk-sec">
         <h3>
           Top performing posts <small>best of {n} posts · likes + comments</small>
@@ -310,14 +392,11 @@ export default function MediaKit() {
           items={top}
           empty={<p className="mk-none">Your posts show up here once Instagram has synced.</p>}
           render={(p, i) => (
-            <a key={p.id || i} href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
-              <figure>
-                <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
-                <figcaption>
-                  #{i + 1} · <Heart size={11} /> {fmtNum(p.like_count || 0)} · <Chat size={11} /> {fmtNum(p.comments_count || 0)}
-                </figcaption>
-              </figure>
-            </a>
+            <PostTile key={p.id || i} p={p}>
+              <figcaption>
+                #{i + 1} · <Heart size={11} /> {fmtNum(p.like_count || 0)} · <Chat size={11} /> {fmtNum(p.comments_count || 0)}
+              </figcaption>
+            </PostTile>
           )}
         />
       </section>
@@ -406,14 +485,11 @@ export default function MediaKit() {
             className="mk-show"
             items={showcase}
             render={(p, i) => (
-              <a key={p.id || i} href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
-                <figure>
-                  <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
-                  <figcaption>
-                    <Heart size={11} /> {fmtNum(p.like_count || 0)} <Chat size={11} /> {fmtNum(p.comments_count || 0)}
-                  </figcaption>
-                </figure>
-              </a>
+              <PostTile key={p.id || i} p={p}>
+                <figcaption>
+                  <Heart size={11} /> {fmtNum(p.like_count || 0)} <Chat size={11} /> {fmtNum(p.comments_count || 0)}
+                </figcaption>
+              </PostTile>
             )}
           />
         </section>
@@ -527,6 +603,22 @@ export default function MediaKit() {
         .mk-add { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; margin-left: 6px; border-radius: 999px; border: 1px solid #c9b38a; background: #fffaef; font-family: var(--bx-jak); font-size: 14px; font-weight: 700; color: #14231a; }
         .mk-none { margin: 0; font-size: 13px; color: #7a6a4a; }
         .mk-posts a, .mk-show a { display: contents; color: inherit; }
+        .mk-vid { position: relative; background: #000; }
+        .mk-vid video, .mk-vid .mk-play { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; background: #000; }
+        .mk-play { position: relative; padding: 0; border: 0; cursor: pointer; overflow: hidden; }
+        .mk-play img, .mk-play video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .mk-play__b { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; width: 56px; height: 56px; padding-left: 4px; border-radius: 50%; background: rgba(0,0,0,.55); border: 2px solid rgba(255,255,255,.85); color: #fff; font-size: 22px; transition: transform .15s, background .15s; }
+        .mk-play:hover .mk-play__b { transform: translate(-50%, -50%) scale(1.08); background: rgba(0,0,0,.7); }
+        .mk-story .mk-play { width: 100%; aspect-ratio: 9 / 16; background: #111; }
+        .mk-story .mk-play__b { width: 44px; height: 44px; font-size: 17px; }
+        .mk-vid figcaption { pointer-events: none; top: 8px; bottom: auto !important; }
+        .mk-vid .mk-igl { display: grid !important; }
+        .mk-igl { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff !important; font-size: 13px; text-decoration: none; }
+        .mk-stories { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
+        .mk-story { position: relative; flex: 0 0 150px; margin: 0; border-radius: 14px; overflow: hidden; background: #111; box-shadow: 0 0 0 2px #fbf1dc, 0 0 0 4px #d6823a; margin: 4px; }
+        .mk-story img, .mk-story video { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; }
+        .mk-story figcaption { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; font-size: 11.5px; font-weight: 700; }
+        @media (max-width: 600px) { .mk-story { flex-basis: 120px; } }
         .mk-port a, .mk-ment a { color: inherit; }
         .mk-sync { margin: 0; font-size: 12px; color: #7a6a4a; }
         .mk-hero { overflow: hidden; border-radius: 16px; }

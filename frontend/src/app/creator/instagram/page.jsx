@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { mixMusic, photoToVideo } from "@/lib/mixAudio";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
-import { useMyIg, getPostingRules, uploadIgMedia, publishToInstagram, recordCampaignPost, igUsers, campaignPieces, errText, syncIgMedia } from "@/services/creator";
+import { useMyIg, getPostingRules, uploadIgMedia, toInstagramJpeg, publishToInstagram, recordCampaignPost, igUsers, campaignPieces, errText, syncIgMedia } from "@/services/creator";
 
 const KINDS = {
   feed: { label: "Post", accept: "image/*,video/mp4,video/quicktime", multiple: true, max: 10, hint: "1 photo = post · 2–10 photos/videos = carousel. Any photo format — we turn it into a JPEG for Instagram.", btn: "Publish post", ok: "Posted to Instagram ✅" },
@@ -83,6 +84,27 @@ export default function PublishPage() {
   const previews = useMemo(() => files.map((f) => ({ url: URL.createObjectURL(f), video: /^video\//.test(f.type || ""), name: f.name })), [files]);
   // bina sound wali video pehle hi bata do (Instagram use silent post karta hai)
   const [silent, setSilent] = useState([]);
+  // apna music (Instagram API se Instagram ki library ka music nahi lagta) — browser mein video mein jodte hain
+  const [music, setMusic] = useState(null);
+  const [mStart, setMStart] = useState("0");
+  const [mVol, setMVol] = useState(100);
+  const [keepOrig, setKeepOrig] = useState(true);
+  const musicUrl = useMemo(() => (music ? URL.createObjectURL(music) : ""), [music]);
+  const firstVid = files.find((f) => /^video\//.test(f.type || ""));
+  const isVidF = (f) => /^video\//.test(f.type || "");
+  // song kahan lag sakta hai: reel (video), story (video ya photo → video), post (videos mein; ek photo → reel ban kar)
+  const photoToReel = kind === "feed" && files.length === 1 && !isVidF(files[0]);
+  const storyPhoto = kind === "story" && files.length === 1 && !isVidF(files[0]);
+  const canMusic = files.length > 0 && (kind === "reel" ? !!firstVid : kind === "story" ? true : files.some(isVidF) || photoToReel);
+  const musicNote = photoToReel
+    ? "With a song, your photo is posted as a Reel (a short video of the photo + song) — it still shows on your profile grid."
+    : storyPhoto
+      ? "With a song, your photo story becomes a short video story with the song."
+      : kind === "feed" && files.length > 1
+        ? "The song is added to the videos in your carousel. Instagram doesn't support songs on photos inside a carousel."
+        : "";
+  const [photoSecs, setPhotoSecs] = useState("15");
+  const vidHasSound = !!firstVid && !silent.includes(firstVid.name);
   useEffect(() => {
     let alive = true;
     Promise.all(files.filter((f) => /^video\//.test(f.type || "")).map(async (f) => ((await videoHasAudio(f)) === false ? f.name : null))).then((l) => alive && setSilent(l.filter(Boolean)));
@@ -203,14 +225,30 @@ export default function PublishPage() {
     try {
       island({ phase: "busy", text: `Posting your ${K.label.toLowerCase()}…`, pct: 4, thumb });
       const media = [];
-      for (let i = 0; i < files.length; i++) {
+      let sendFiles = files;
+      let sendKind = kind;
+      if (music && canMusic) {
+        setBusy("Adding music…");
+        island({ phase: "busy", text: "Adding music…", pct: 3, thumb });
+        const opt = { start: mStart, musicVol: mVol / 100 };
+        if (photoToReel || storyPhoto) {
+          // photo (story ka text bhi chhap ke) → song wala chhota video
+          const jpg = await toInstagramJpeg(files[0], kind === "story" ? "story" : "reel", kind === "story" ? { text: storyText, mentions: showMentions ? tagList.map((u) => "@" + u).join(" ") : "" } : null);
+          sendFiles = [await photoToVideo(jpg, music, { ...opt, seconds: photoSecs })];
+          if (photoToReel) sendKind = "reel";
+        } else {
+          sendFiles = [];
+          for (const f of files) sendFiles.push(isVidF(f) ? await mixMusic(f, music, { ...opt, keepOriginal: keepOrig, hasOrigAudio: !silent.includes(f.name) }) : f);
+        }
+      }
+      for (let i = 0; i < sendFiles.length; i++) {
         setBusy(`Uploading ${i + 1}/${files.length}…`);
         island({ phase: "busy", text: files.length > 1 ? `Uploading ${i + 1}/${files.length}…` : "Uploading…", pct: Math.round(((i + 0.3) / steps) * 100), thumb });
-        media.push(await uploadIgMedia(files[i], kind, kind === "story" ? { text: storyText, mentions: showMentions ? tagList.map((u) => "@" + u).join(" ") : "" } : null));
+        media.push(await uploadIgMedia(sendFiles[i], sendKind, sendKind === "story" && !isVidF(sendFiles[i]) ? { text: storyText, mentions: showMentions ? tagList.map((u) => "@" + u).join(" ") : "" } : null));
       }
-      const body = { kind, media, caption: kind === "story" ? "" : caption, user_tags: tagList, collaborators: kind === "story" ? [] : collabs };
-      if (kind === "reel") {
-        body.reel = { share_to_feed: shareFeed, audio_name: audio.trim() };
+      const body = { kind: sendKind, media, caption: sendKind === "story" ? "" : caption, user_tags: tagList, collaborators: sendKind === "story" ? [] : collabs };
+      if (sendKind === "reel") {
+        body.reel = { share_to_feed: kind === "reel" ? shareFeed : true, audio_name: kind === "reel" ? audio.trim() : "" };
         if (cover) {
           setBusy("Uploading cover…");
           body.reel.cover_url = (await uploadIgMedia(cover, "reel")).url;
@@ -234,7 +272,7 @@ export default function PublishPage() {
           notes.push(rr.error ? "couldn't record it on the campaign: " + errText(rr.error) : rr.data && rr.data.caption_check === "issues" ? "⚠️ the caption is missing something from the brief" : "recorded on the campaign ✓");
         } else if (!rule.can_record_post) notes.push("this campaign isn't at the posting step yet, so it wasn't recorded there");
       }
-      setDone({ text: notes.join(" · "), link: data && data.permalink });
+      setDone({ text: notes.join(" · "), link: data && data.permalink, video: !!vids.length });
       island({ phase: "done", text: kind === "story" ? "Your story is live" : kind === "reel" ? "Reel posted" : files.length > 1 ? "Carousel posted" : "Post done", thumb, link: data && data.permalink }, 6000);
       setFiles([]);
       setCover(null);
@@ -384,10 +422,62 @@ export default function PublishPage() {
               </label>
             )}
 
-            {silent.length > 0 && (
+            {silent.length > 0 && !(music && canMusic) && (
               <p className="pb-warn pb-silent">
-                🔇 {silent.join(", ")} has no sound — Instagram will post it without audio. Add sound to the video first, or add music in the Instagram app after posting.
+                🔇 {silent.join(", ")} has no sound — Instagram will post it without audio. Add a song below, or add music in the Instagram app after posting.
               </p>
+            )}
+
+            {canMusic && (
+              <div className="pb-music">
+                <span className="pb-l">🎵 Add music (optional)</span>
+                {!music ? (
+                  <label className="pb-file">
+                    <input type="file" accept="audio/*,.mp3,.m4a,.aac,.wav" onChange={(e) => { const f = (e.target.files || [])[0]; e.target.value = ""; if (f) setMusic(f); }} />
+                    <b>Choose a song</b>
+                    <small>MP3 / M4A from your phone — it&apos;s added into your video before posting</small>
+                  </label>
+                ) : (
+                  <div className="pb-mbox">
+                    <div className="pb-mrow">
+                      <b className="pb-mname">🎶 {music.name}</b>
+                      <button type="button" className="pb-mx" onClick={() => setMusic(null)} aria-label="Remove song">
+                        ✕
+                      </button>
+                    </div>
+                    <audio src={musicUrl} controls preload="metadata" className="pb-audio" />
+                    <div className="pb-mrow pb-mrow--wrap">
+                      <label className="pb-mf">
+                        Start the song at (seconds)
+                        <input className="bx-input" type="number" min="0" step="1" value={mStart} onChange={(e) => setMStart(e.target.value)} />
+                      </label>
+                      <label className="pb-mf">
+                        Song volume · {mVol}%
+                        <input type="range" min="10" max="150" step="5" value={mVol} onChange={(e) => setMVol(+e.target.value)} />
+                      </label>
+                    </div>
+                    {(photoToReel || storyPhoto) && (
+                      <label className="pb-mf">
+                        Video length (seconds)
+                        <select className="bx-input" value={photoSecs} onChange={(e) => setPhotoSecs(e.target.value)}>
+                          {(storyPhoto ? ["5", "10", "15", "30", "60"] : ["5", "10", "15", "30", "60"]).map((v) => (
+                            <option key={v} value={v}>
+                              {v} sec
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {musicNote && <small className="pb-muted">ℹ️ {musicNote}</small>}
+                    {firstVid && vidHasSound && (
+                      <label className="pb-check">
+                        <input type="checkbox" checked={keepOrig} onChange={(e) => setKeepOrig(e.target.checked)} /> Keep my video&apos;s own sound too (voice + song)
+                      </label>
+                    )}
+                    <small className="pb-muted">The song loops if it&apos;s shorter than your video. Use music you have the rights to — Instagram may mute copyrighted songs.</small>
+                  </div>
+                )}
+              </div>
             )}
 
             {kind !== "story" ? (
@@ -463,6 +553,15 @@ export default function PublishPage() {
                 )}
               </p>
             )}
+            {done && done.link && done.video && (
+              <p className="pb-addm">
+                🎵 Want Instagram&apos;s own music (trending audio)? Instagram doesn&apos;t let other apps add it —{" "}
+                <a href={done.link} target="_blank" rel="noopener noreferrer">
+                  open your post in the Instagram app ↗
+                </a>{" "}
+                and add it there if Instagram allows editing the audio.
+              </p>
+            )}
             <button type="button" className="bx-btn bx-btn--dark bx-btn--lg pb-go" disabled={!!busy} onClick={publish}>
               {busy || `${K.btn} →`}
             </button>
@@ -483,7 +582,10 @@ export default function PublishPage() {
                     <a key={x.id} href={x.permalink || "#"} target="_blank" rel="noopener noreferrer" className="pb-story">
                       <img src={x.media_type === "VIDEO" ? x.thumbnail_url || x.media_url : x.media_url} alt="" referrerPolicy="no-referrer" loading="lazy" />
                       {x.media_type === "VIDEO" && <i>▶</i>}
-                      <span>{ago(x.timestamp)}</span>
+                      <span>
+                        {ago(x.timestamp)}
+                        {x.insights && (x.insights.views != null || x.insights.reach != null) ? ` · 👁 ${x.insights.views ?? x.insights.reach}` : ""}
+                      </span>
                     </a>
                   ))}
                 </div>
@@ -552,6 +654,8 @@ export default function PublishPage() {
         .pb-center { text-align: center; }
         .pb-warn { margin: 6px 0 0; font-size: 12.5px; color: #b45309; }
         .pb-ok { margin: 0; padding: 10px 12px; border-radius: 12px; background: #dff0dc; color: #1f5f3a; font-size: 13px; font-weight: 600; }
+        .pb-addm { margin: 0; padding: 10px 12px; border-radius: 12px; background: #f3ecdc; border: 1px solid var(--bx-line); font-size: 12.5px; line-height: 1.5; color: #4a3d28; }
+        .pb-addm a { font-weight: 700; color: #123524; text-decoration: underline; }
         .pb-ok a { color: #1f5f3a; text-decoration: underline; }
         .pb-go { width: 100%; justify-content: center; }
         .pb-camp { padding: 12px 14px; border-radius: 12px; background: #fffaf0; border: 1px solid var(--bx-line); font-size: 13px; line-height: 1.55; }
@@ -577,6 +681,15 @@ export default function PublishPage() {
         .pb-thumb img, .pb-thumb video { width: 100%; height: 100%; object-fit: cover; }
         .pb-thumb i { position: absolute; top: 4px; right: 6px; color: #fff; font-style: normal; text-shadow: 0 1px 3px #000; }
         .pb-drop--on { cursor: default; }
+        .pb-music { display: grid; gap: 8px; }
+        .pb-mbox { display: grid; gap: 10px; padding: 12px; border-radius: 14px; background: #fffaf0; border: 1px solid var(--bx-line); }
+        .pb-mrow { display: flex; align-items: center; gap: 10px; }
+        .pb-mrow--wrap { flex-wrap: wrap; }
+        .pb-mname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+        .pb-mx { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--bx-line); background: #fff; cursor: pointer; }
+        .pb-audio { width: 100%; height: 36px; }
+        .pb-mf { flex: 1 1 200px; display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: #6b5a3a; }
+        .pb-mf input[type=range] { width: 100%; accent-color: #123524; }
         .pb-silent { margin: 0; padding: 10px 12px; border-radius: 12px; background: #fff4e6; border: 1px solid #fbdcb3; font-size: 13px; font-weight: 600; }
         .pb-cnt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--bx-ink); }
         .pb-cnt small { font-weight: 400; color: var(--bx-muted); }
