@@ -12,6 +12,24 @@ const KINDS = {
 };
 const CAP_MAX = 2200;
 
+/** MP4 / MOV mein sound track hai? (hdlr box ka type "soun") — null = pata nahi */
+async function videoHasAudio(file) {
+  try {
+    if (!/mp4|quicktime|m4v/i.test(file.type || "") || file.size > 60 * 1024 * 1024) return null;
+    const b = new Uint8Array(await file.arrayBuffer());
+    for (let i = 0; i < b.length - 20; i++) {
+      // "hdlr" = 68 64 6c 72
+      if (b[i] === 0x68 && b[i + 1] === 0x64 && b[i + 2] === 0x6c && b[i + 3] === 0x72) {
+        const t = String.fromCharCode(b[i + 12], b[i + 13], b[i + 14], b[i + 15]);
+        if (t === "soun") return true;
+      }
+    }
+    return false;
+  } catch {
+    return null;
+  }
+}
+
 /** Instagram kabhi apni bhasha (Hindi / Marathi…) mein error deta hai — hamesha saaf English mein dikhao */
 function englishError(msg, collabs, tags) {
   msg = String(msg || "").trim();
@@ -63,6 +81,15 @@ export default function PublishPage() {
   const [now, setNow] = useState(0);
   // chuni hui files ki chhoti photos (preview)
   const previews = useMemo(() => files.map((f) => ({ url: URL.createObjectURL(f), video: /^video\//.test(f.type || ""), name: f.name })), [files]);
+  // bina sound wali video pehle hi bata do (Instagram use silent post karta hai)
+  const [silent, setSilent] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    Promise.all(files.filter((f) => /^video\//.test(f.type || "")).map(async (f) => ((await videoHasAudio(f)) === false ? f.name : null))).then((l) => alive && setSilent(l.filter(Boolean)));
+    return () => {
+      alive = false;
+    };
+  }, [files]);
   useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u.url)), [previews]);
   // "5m ago" ke liye ghadi — har minute
   useEffect(() => {
@@ -357,6 +384,12 @@ export default function PublishPage() {
               </label>
             )}
 
+            {silent.length > 0 && (
+              <p className="pb-warn pb-silent">
+                🔇 {silent.join(", ")} has no sound — Instagram will post it without audio. Add sound to the video first, or add music in the Instagram app after posting.
+              </p>
+            )}
+
             {kind !== "story" ? (
               <label className="pb-f">
                 <span className="pb-l">
@@ -544,6 +577,7 @@ export default function PublishPage() {
         .pb-thumb img, .pb-thumb video { width: 100%; height: 100%; object-fit: cover; }
         .pb-thumb i { position: absolute; top: 4px; right: 6px; color: #fff; font-style: normal; text-shadow: 0 1px 3px #000; }
         .pb-drop--on { cursor: default; }
+        .pb-silent { margin: 0; padding: 10px 12px; border-radius: 12px; background: #fff4e6; border: 1px solid #fbdcb3; font-size: 13px; font-weight: 600; }
         .pb-cnt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--bx-ink); }
         .pb-cnt small { font-weight: 400; color: var(--bx-muted); }
         .pb-thumb__n { position: absolute; left: 5px; top: 5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; display: grid; place-items: center; }
