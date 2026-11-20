@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import { RumiTip } from "@/components/creator/OnboardShell";
+import MoreGrid from "@/components/creator/MoreGrid";
 import { useSession, errText, useMyIg, fmtK, fmtNum, fmtDate, engagement, useMyProfile, syncIgMedia, getCampaignWork, saveKitProfile, editsOf } from "@/services/creator";
 import { getSidekick } from "@/components/creator/data";
 import { Share, Edit, Copy, WhatsApp, Download, Close, Check, Heart, Chat, Instagram, ArrowRight } from "@/components/ui/Icons";
@@ -201,13 +202,13 @@ export default function MediaKit() {
   ];
   const audience = audienceRows(a.audience);
   const pins = (Array.isArray(E.pinned) ? E.pinned.map(String) : []).filter((id) => media.some((m) => String(m.id) === id));
-  const top = [...media].sort((x, y) => (Number(y.like_count) || 0) + (Number(y.comments_count) || 0) - ((Number(x.like_count) || 0) + (Number(x.comments_count) || 0))).slice(0, 3);
-  const showcase = [...pins.map((id) => media.find((m) => String(m.id) === id)), ...media.filter((m) => !pins.includes(String(m.id)))].slice(0, 9);
+  const top = [...media].sort((x, y) => (Number(y.like_count) || 0) + (Number(y.comments_count) || 0) - ((Number(x.like_count) || 0) + (Number(x.comments_count) || 0)));
+  const showcase = [...pins.map((id) => media.find((m) => String(m.id) === id)), ...media.filter((m) => !pins.includes(String(m.id)))].filter(Boolean);
   const portfolio = [
-    ...work.map((p) => ({ brand: p.brand || "Brand", note: `${p.campaign || "Campaign"} · ${p.media_type === "story" ? "Story" : "Reel"}${p.posted_at ? " · " + fmtDate(p.posted_at) : ""}`, url: p.permalink })),
+    ...work.map((p) => ({ brand: p.brand || "Brand", note: `${p.campaign || "Campaign"} · ${p.media_type === "story" ? "Story" : p.media_type === "post" ? "Post" : "Reel"}${p.posted_at ? " · " + fmtDate(p.posted_at) : ""}`, url: p.permalink, thumb: p.thumb, views: p.views, likes: p.likes, comments: p.comments, geek: true })),
     ...(Array.isArray(E.portfolio) ? E.portfolio : []).filter((p) => p && p.brand),
   ];
-  const mentions = Array.isArray(a.mentions) ? a.mentions.slice(0, 6) : [];
+  const mentions = Array.isArray(a.mentions) ? a.mentions : [];
   const syncTxt = syncedAt && now ? `Synced with Instagram ${Math.max(0, Math.round((now - syncedAt) / 1000))}s ago · auto-refreshes every 60s` : syncedAt ? "Synced with Instagram just now · auto-refreshes every 60s" : "Syncing with Instagram…";
   const avatar = a.profile_picture_url || sk.img;
 
@@ -304,8 +305,11 @@ export default function MediaKit() {
         <h3>
           Top performing posts <small>best of {n} posts · likes + comments</small>
         </h3>
-        <div className="mk-posts" data-scroll>
-          {top.map((p, i) => (
+        <MoreGrid
+          className="mk-posts"
+          items={top}
+          empty={<p className="mk-none">Your posts show up here once Instagram has synced.</p>}
+          render={(p, i) => (
             <a key={p.id || i} href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
               <figure>
                 <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
@@ -314,9 +318,8 @@ export default function MediaKit() {
                 </figcaption>
               </figure>
             </a>
-          ))}
-          {!top.length && <p className="mk-none">Your posts show up here once Instagram has synced.</p>}
-        </div>
+          )}
+        />
       </section>
 
       {show.portfolio && (
@@ -327,16 +330,37 @@ export default function MediaKit() {
               ✎ Edit
             </button>
           </h3>
-          {portfolio.length ? (
+          {portfolio.some((p) => p.geek) && (
+            <div className="mk-wkwrap">
+              <MoreGrid
+                min={150}
+                items={portfolio.filter((p) => p.geek)}
+                render={(p, i) => (
+                <a key={i} href={p.url} target="_blank" rel="noopener noreferrer" className="mk-workc">
+                  <span className="mk-workc__m">
+                    <i>{String(p.brand).slice(0, 2).toUpperCase()}</i>
+                    {p.thumb && <img src={p.thumb} alt="" referrerPolicy="no-referrer" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                    {(p.views || p.likes || p.comments) ? (
+                      <em>{p.views ? `▶ ${fmtK(p.views)}` : ""}{p.likes ? ` ♥ ${fmtK(p.likes)}` : ""}{p.comments ? ` 💬 ${fmtK(p.comments)}` : ""}</em>
+                    ) : null}
+                  </span>
+                  <b>{p.brand}</b>
+                  <small>{p.note}</small>
+                </a>
+                )}
+              />
+            </div>
+          )}
+          {portfolio.some((p) => !p.geek) ? (
             <ul className="mk-port">
-              {portfolio.map((p, i) => (
+              {portfolio.filter((p) => !p.geek).map((p, i) => (
                 <li key={i}>
                   <strong>{p.url ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.brand}</a> : p.brand}</strong>
                   <small>{p.note || "Brand collaboration"}</small>
                 </li>
               ))}
             </ul>
-          ) : (
+          ) : portfolio.length ? null : (
             <p className="mk-none">Campaigns you finish on Geek show up here automatically.</p>
           )}
         </section>
@@ -346,16 +370,27 @@ export default function MediaKit() {
         <section className="bx-card mk-sec">
           <h3>Mentions</h3>
           {mentions.length ? (
-            <ul className="mk-ment">
-              {mentions.map((m, i) => (
-                <li key={m.id || i}>
-                  <b>@{m.username || "tagged"}</b>{" "}
-                  <a href={m.permalink || "#"} target="_blank" rel="noopener noreferrer">
-                    tagged you{m.timestamp ? ` · ${fmtDate(m.timestamp)}` : ""}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <MoreGrid
+              className="mk-posts"
+              items={mentions}
+              render={(m, i) => (
+                <a key={m.id || i} href={m.permalink || "#"} target="_blank" rel="noopener noreferrer">
+                  <figure>
+                    {imgOf(m) ? <img src={imgOf(m)} alt="" referrerPolicy="no-referrer" loading="lazy" onError={(e) => (e.currentTarget.style.visibility = "hidden")} /> : <span className="mk-noimg">View on Instagram</span>}
+                    <span className="mk-by">@{m.username || "tagged"}</span>
+                    <figcaption>
+                      {m.like_count != null || m.comments_count != null ? (
+                        <>
+                          <Heart size={11} /> {fmtNum(m.like_count || 0)} · <Chat size={11} /> {fmtNum(m.comments_count || 0)}
+                        </>
+                      ) : (
+                        <>{m.timestamp ? fmtDate(m.timestamp) : "Tagged you"}</>
+                      )}
+                    </figcaption>
+                  </figure>
+                </a>
+              )}
+            />
           ) : (
             <p className="mk-none">No mentions yet — when accounts tag you, they show up here.</p>
           )}
@@ -367,8 +402,10 @@ export default function MediaKit() {
           <h3>
             Content showcase <small className="mk-right">{fmtNum(a.media_count || n)} posts</small>
           </h3>
-          <div className="mk-show" data-scroll>
-            {showcase.map((p, i) => (
+          <MoreGrid
+            className="mk-show"
+            items={showcase}
+            render={(p, i) => (
               <a key={p.id || i} href={p.permalink || "#"} target="_blank" rel="noopener noreferrer">
                 <figure>
                   <img src={imgOf(p)} alt="" referrerPolicy="no-referrer" loading="lazy" />
@@ -377,8 +414,8 @@ export default function MediaKit() {
                   </figcaption>
                 </figure>
               </a>
-            ))}
-          </div>
+            )}
+          />
         </section>
       )}
 
@@ -387,9 +424,6 @@ export default function MediaKit() {
           <strong>Work with {name}</strong>
           <small>Barters, paid campaigns &amp; brand collaborations — managed end-to-end in Geek Influencer OS.</small>
         </span>
-        <button type="button" className="bx-btn bx-btn--dark" onClick={() => flash("Publishing from here is coming soon")}>
-          Publish to Instagram →
-        </button>
       </section>
 
       <RumiTip className="mk-rumi" name={sk.name} img={sk.img} text="Brands open kits with a clear bio and 3+ showcase posts twice as often." />
@@ -523,16 +557,27 @@ export default function MediaKit() {
         .mk-empty { margin: 0; font-size: 13px; color: var(--bx-muted); }
         .mk-aud { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 22px; }
         .mk-aud span { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12.5px; }
-        .mk-posts, .mk-show { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; }
+        .mk-posts, .mk-show { overflow: visible; }
         .mk-posts::-webkit-scrollbar, .mk-show::-webkit-scrollbar { display: none; }
-        .mk-posts figure, .mk-show figure { position: relative; flex: 0 0 170px; margin: 0; border-radius: 12px; overflow: hidden; }
+        .mk-posts figure, .mk-show figure { position: relative; min-width: 0; margin: 0; border-radius: 12px; overflow: hidden; }
         .mk-posts img, .mk-show img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
         .mk-posts figcaption, .mk-show figcaption { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; font-size: 11px; font-weight: 600; }
+        .mk-wkwrap { margin-bottom: 12px; }
+        .mk-workc { display: grid; gap: 3px; color: inherit; text-decoration: none; min-width: 0; }
+        .mk-workc__m { position: relative; display: grid; place-items: center; aspect-ratio: 4 / 5; border-radius: 12px; overflow: hidden; background: #eadcb8; }
+        .mk-workc__m img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .mk-workc__m i { font-style: normal; font-weight: 800; font-size: 20px; color: #8a6b32; }
+        .mk-workc__m em { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 4px 7px; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; }
+        .mk-workc b { font-size: 13.5px; }
+        .mk-workc small { font-size: 11.5px; color: var(--bx-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .mk-port { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
         .mk-port li { padding: 10px 12px; border-radius: 12px; background: #fffaf0; border: 1px solid var(--bx-line); }
         .mk-port strong { display: block; font-size: 14px; }
         .mk-port small { font-size: 12px; color: var(--bx-text); }
         .mk-ment { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+        .mk-posts figure { background: #eadcb8; min-height: 120px; }
+        .mk-noimg { display: grid; place-items: center; aspect-ratio: 4 / 5; font-size: 12px; font-weight: 600; color: #6b5a3a; }
+        .mk-by { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 8px; border-radius: 999px; background: rgba(251,241,220,.92); color: #14231a; font-size: 11px; font-weight: 700; }
         .mk-work { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 18px; }
         .mk-work span { flex: 1; min-width: 220px; }
         .mk-work strong { display: block; font-family: var(--bx-serif); font-size: 15px; line-height: 18px; font-weight: 600; color: #14231a; }

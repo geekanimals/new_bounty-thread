@@ -1,5 +1,6 @@
 "use client";
 
+import BriefBlocks from "@/components/creator/BriefBlocks";
 import { useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -179,7 +180,7 @@ export default function GuestBrief() {
               </summary>
               <div className="gb-brief__body">
                 {line("Brief", x.brief)}
-                {line("What to shoot", b.what_to_shoot)}
+                <BriefBlocks brief={b} deliverables={x.deliverables_text || c.deliver} />
                 {line("Key messages", b.key_messages)}
                 {line("Do's", b.dos)}
                 {line("Don'ts", b.donts)}

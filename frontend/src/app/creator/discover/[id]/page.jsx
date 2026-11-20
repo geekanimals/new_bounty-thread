@@ -1,5 +1,6 @@
 "use client";
 
+import BriefBlocks from "@/components/creator/BriefBlocks";
 import { STEP_NAME } from "@/lib/steps";
 
 import { useEffect, useMemo, useState } from "react";
@@ -241,9 +242,10 @@ export default function CampaignBrief() {
                           const fx = fixOf(c, x.campaign_id || id);
                           return (
                             <li key={c.key || c.need}>
-                              ✗ <b>{c.need}</b>
-                              <br />
-                              <small>{c.have}</small>
+                              <span className="cb-why__t">
+                                ✗ <b>{c.need}</b>
+                                <small>{c.have}</small>
+                              </span>
                               {fx && (
                                 <Link href={fx.href} className="cb-fix">
                                   {fx.label} →
@@ -307,9 +309,10 @@ export default function CampaignBrief() {
                         const fx = fixOf(c, x.campaign_id || id);
                         return (
                           <li key={c.key || c.need}>
-                            ✗ <b>{c.need}</b>
-                            <br />
-                            <small>{c.have}</small>
+                            <span className="cb-why__t">
+                              ✗ <b>{c.need}</b>
+                              <small>{c.have}</small>
+                            </span>
                             {fx && (
                               <Link href={fx.href} className="cb-fix">
                                 {fx.label} →
@@ -352,7 +355,7 @@ export default function CampaignBrief() {
             {briefOpen && (
               <div className="cb-brief__body">
                 {line("Brief", x.brief)}
-                {line("What to shoot", b.what_to_shoot)}
+                <BriefBlocks brief={b} deliverables={x.deliverables_text} />
                 {line("Key messages", b.key_messages)}
                 {line("Do's", b.dos)}
                 {line("Don'ts", b.donts)}
@@ -505,10 +508,14 @@ export default function CampaignBrief() {
         .cb-why p { margin: 0 0 8px !important; }
         .cb-why ul { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 6px; }
         .cb-why li { padding: 8px 10px; border-radius: 10px; background: rgba(255,211,196,.12); font-size: 12.5px; color: #ffd3c4; line-height: 1.4; }
-        .cb-fix { display: inline-flex; align-items: center; margin-top: 8px; padding: 7px 12px; border-radius: 999px; background: #fbf1dc; color: #1b2a20 !important; font-size: 12.5px; font-weight: 800; text-decoration: none !important; }
+        .cb-why li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .cb-why__t { min-width: 0; }
+        .cb-why__t small { display: block; margin-top: 2px; }
+        .cb-fix { flex-shrink: 0; margin-left: auto; white-space: nowrap; display: inline-flex; align-items: center; margin-top: 0; padding: 7px 12px; border-radius: 999px; background: #fbf1dc; color: #1b2a20 !important; font-size: 12.5px; font-weight: 800; text-decoration: none !important; }
         .cb-fix:hover { background: #fff; }
         .cb-why li b { color: #fbf3e2; }
         .cb-why small { color: #e9cdbd; }
+        @media (max-width: 520px) { .cb-why li { flex-direction: column; align-items: flex-start; } .cb-fix { margin-left: 0; } }
         .cb-pick { display: grid; gap: 8px; margin-bottom: 12px; text-align: left; }
         .cb-pick__h { margin: 0 !important; }
         .cb-pick label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(251,243,226,.25); cursor: pointer; }

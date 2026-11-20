@@ -44,6 +44,7 @@ export const DEFAULT_DRAFT = {
   due: "7",
   rights: "1",
   brief: "",
+  dBriefs: {}, // har deliverable ka brief: { reel: { central: true, text: "" }, ... }
   dos: "",
   donts: "",
   message: "",
@@ -135,6 +136,7 @@ function draftFromRow(c) {
     due: String(ct.content_days ?? 7),
     rights: String(ct.ad_rights_months ?? 1),
     brief: vb.what_to_shoot || c.brief || "",
+    dBriefs: vb.deliverable_briefs && typeof vb.deliverable_briefs === "object" ? vb.deliverable_briefs : {},
     dos: vb.dos || "",
     donts: vb.donts || "",
     message: vb.key_messages || "",
@@ -284,6 +286,28 @@ export function useDraft() {
  * Campaign save — purane openCampaignModal ka submit: public.campaigns insert / update (same columns).
  * Lautata hai { id } ya throw karta hai.
  */
+/** Deliverable kinds (draft key → backend key) — har ek ka apna brief ho sakta hai */
+export const DELIV_KINDS = [
+  { key: "reel", k: "reels", label: "Reel", icon: "🎬" },
+  { key: "story", k: "stories", label: "Story", icon: "⭕" },
+  { key: "post", k: "posts", label: "Feed post", icon: "🖼" },
+  { key: "carousel", k: "carousels", label: "Carousel", icon: "🗂" },
+  { key: "google_review", k: "googleReviews", label: "Google review", icon: "⭐" },
+  { key: "district_review", k: "districtReviews", label: "District review", icon: "🎟️" },
+];
+/** sirf jo deliverable campaign mein hai (count > 0) unka brief save — central tick default ON */
+export function deliverableBriefs(d) {
+  const src = (d && d.dBriefs) || {};
+  const out = {};
+  DELIV_KINDS.forEach(({ key, k }) => {
+    if (!(Number(d[k]) > 0)) return;
+    const x = src[key] || {};
+    const text = String(x.text || "").trim();
+    out[key] = { central: x.central !== false, text: text || null };
+  });
+  return Object.keys(out).length ? out : null;
+}
+
 export async function saveCampaign(d, { draft = false } = {}) {
   const sb = sbFor("admin");
   const t = TYPE_KEYS[d.type] || "barter";
@@ -418,6 +442,7 @@ export async function saveCampaign(d, { draft = false } = {}) {
     video_brief: {
       ...((d._row && d._row.video_brief) || (d._prefill && d._prefill.video_brief) || {}),
       what_to_shoot: String(d.brief || "").trim() || null,
+      deliverable_briefs: deliverableBriefs(d),
       key_messages: String(d.message || "").trim() || null,
       dos: String(d.dos || "").trim() || null,
       donts: String(d.donts || "").trim() || null,

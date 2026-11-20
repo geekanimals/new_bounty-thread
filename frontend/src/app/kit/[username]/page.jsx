@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { rpc, safeUrl, fmtNum } from "@/lib/supabasePublic";
+import Logo from "@/components/creator/Logo";
+import MoreGrid from "@/components/creator/MoreGrid";
+import Link from "next/link";
 
 /* Bio + captions se account ki category (live app ke p.html wala hi logic) */
 const IG_CAT_WORDS = {
@@ -96,10 +99,12 @@ function audienceOf(aud) {
 export default function PublicKit() {
   const { username = "" } = useParams();
   const [st, setSt] = useState({ phase: "load" });
+  const [work, setWork] = useState([]);
   const u = decodeURIComponent(username).replace(/^@/, "").trim();
 
   useEffect(() => {
     if (!u) return setSt({ phase: "fail", msg: "This media kit link is incomplete." });
+    rpc("public_campaign_work", { p_username: u }).then((w) => setWork(Array.isArray(w) ? w : [])).catch(() => {});
     rpc("public_profile", { p_username: u })
       .then((rows) => {
         const a = Array.isArray(rows) ? rows[0] : null;
@@ -112,7 +117,12 @@ export default function PublicKit() {
 
   // ?embed=1 — app ke andar frame mein (bina header/footer). Render ke baad padhte hain (hydration safe).
   const [embed, setEmbed] = useState(false);
-  useEffect(() => setEmbed(new URLSearchParams(window.location.search).get("embed") === "1"), []);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    setEmbed(q.get("embed") === "1");
+    setPrinting(q.get("print") === "1");
+  }, []);
 
   // ?print=1 → poora kit rangeen PDF ki tarah (browser ka "Save as PDF") — creator app ka "Download PDF" yahi kholta hai
   useEffect(() => {
@@ -155,13 +165,15 @@ export default function PublicKit() {
     const eng = a.followers_count && n ? (((avgLikes + avgComments) / a.followers_count) * 100).toFixed(2) + "%" : "—";
     const cats = igCategories(a);
     const bio = E.bio || a.biography || "";
-    const tops = [...media].sort((x, y) => (Number(y.like_count) || 0) + (Number(y.comments_count) || 0) - ((Number(x.like_count) || 0) + (Number(x.comments_count) || 0))).slice(0, 3);
-    const mentions = Array.isArray(a.mentions) ? a.mentions.slice(0, 6) : [];
+    const tops = [...media].sort((x, y) => (Number(y.like_count) || 0) + (Number(y.comments_count) || 0) - ((Number(x.like_count) || 0) + (Number(x.comments_count) || 0)));
+    const mentions = Array.isArray(a.mentions) ? a.mentions : [];
+    // PDF mein pehle jaisa: top 3, baaki 9/12 — screen par ek line + Load more
+    const cut = (l, k) => (printing ? l.slice(0, k) : l);
     const portfolio = Array.isArray(E.portfolio) ? E.portfolio : [];
     const aud = audienceOf(a.audience);
     const maxCell = Math.max(0, ...aud.ages.flatMap((x) => [aud.cells[x].F, aud.cells[x].M, aud.cells[x].U]));
 
-    const Post = ({ m }) => {
+    const Post = ({ m, by }) => {
       const img = m.media_type === "VIDEO" ? m.thumbnail_url || m.media_url : m.media_url;
       const badge = m.media_type === "VIDEO" ? "▶" : m.media_type === "CAROUSEL_ALBUM" ? "❏" : "";
       return (
@@ -169,6 +181,7 @@ export default function PublicKit() {
           {img ? <img src={safeUrl(img)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} /> : null}
           <span className="pk-noimg">View on Instagram</span>
           {badge && <span className="pk-badge">{badge}</span>}
+          {by && m.username && <span className="pk-by">@{m.username}</span>}
           {(m.like_count != null || m.comments_count != null) && (
             <span className="pk-meta">
               ♥ {fmtNum(m.like_count)} · 💬 {fmtNum(m.comments_count)}
@@ -294,16 +307,29 @@ export default function PublicKit() {
         {tops.length > 0 && (
           <section className="pk-card">
             <h2>Top performing posts</h2>
-            <div className="pk-grid">
-              {tops.map((m, i) => (
-                <Post key={i} m={m} />
-              ))}
-            </div>
+            <MoreGrid className="pk-grid" min={180} all={printing} items={cut(tops, 3)} render={(m, i) => <Post key={i} m={m} />} />
           </section>
         )}
-        {portfolio.length > 0 && (
+        {(portfolio.length > 0 || work.length > 0) && (
           <section className="pk-card">
             <h2>Work portfolio</h2>
+            {work.length > 0 && (
+              <div className="pk-wkwrap">
+                <MoreGrid min={140} all={printing} items={cut(work, 12)} render={(p, i) => (
+                  <a key={i} href={safeUrl(p.permalink)} target="_blank" rel="noopener noreferrer" className="pk-workc">
+                    <span className="pk-workc__m">
+                      <i>{String(p.brand || "?").slice(0, 2).toUpperCase()}</i>
+                    {p.thumb && <img src={p.thumb} alt="" referrerPolicy="no-referrer" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                      {(p.views || p.likes || p.comments) ? (
+                        <em>{p.views ? `▶ ${fmtNum(p.views)}` : ""}{p.likes ? ` ♥ ${fmtNum(p.likes)}` : ""}{p.comments ? ` 💬 ${fmtNum(p.comments)}` : ""}</em>
+                      ) : null}
+                    </span>
+                    <b>{p.brand || "Brand"}</b>
+                    <small>{p.campaign || "Campaign"} · {p.media_type === "story" ? "Story" : p.media_type === "post" ? "Post" : "Reel"}</small>
+                  </a>
+                )} />
+              </div>
+            )}
             <div className="pk-port">
               {portfolio.map((p, i) => (
                 <div key={i} className="pk-brand">
@@ -317,24 +343,18 @@ export default function PublicKit() {
             </div>
           </section>
         )}
-        {mentions.length > 0 && (
-          <section className="pk-card">
-            <h2>Mentions</h2>
-            <div className="pk-grid">
-              {mentions.map((m, i) => (
-                <Post key={i} m={m} />
-              ))}
-            </div>
-          </section>
-        )}
+        <section className="pk-card">
+          <h2>Mentions</h2>
+          {mentions.length ? (
+            <MoreGrid className="pk-grid" min={180} all={printing} items={cut(mentions, 9)} render={(m, i) => <Post key={i} m={m} by />} />
+          ) : (
+            <p className="pk-none">No brand or creator has tagged @{a.username} yet.</p>
+          )}
+        </section>
         {media.length > 0 && (
           <section className="pk-card">
             <h2>Content showcase</h2>
-            <div className="pk-grid">
-              {media.slice(0, 9).map((m, i) => (
-                <Post key={i} m={m} />
-              ))}
-            </div>
+            <MoreGrid className="pk-grid" min={180} all={printing} items={cut(media, 9)} render={(m, i) => <Post key={i} m={m} />} />
           </section>
         )}
       </>
@@ -346,9 +366,10 @@ export default function PublicKit() {
       <div className="pk-wrap">
         {!embed && (
           <header className="pk-top">
-            <a href="/" className="pk-logo">
-              Geek <span>Media kit</span>
-            </a>
+            <Link href="/creator/media-kit" className="pk-logo" aria-label="Bounty — open your media kit">
+              <Logo tone="dark" size={24} />
+              <span className="pk-logo__t">Media kit</span>
+            </Link>
             {st.phase === "ok" && (
               <div className="pk-actions">
                 <button type="button" className="pk-act" onClick={shareKit}>
@@ -365,102 +386,120 @@ export default function PublicKit() {
         {st.phase === "fail" && <p className="pk-msg">{st.msg}</p>}
         {body}
         {!embed && (
-          <p className="pk-foot">
-            Media kit · <a href="/">Geek Influencer OS</a>
-          </p>
+          <footer className="pk-foot">
+            <Link href="/creator/media-kit" aria-label="Bounty — open your media kit">
+              <Logo tone="dark" size={17} />
+            </Link>
+            <span>by Geek Creative Agency</span>
+          </footer>
         )}
       </div>
       <style>{`
-        .pk { min-height: 100vh; background: #f0f2f5; color: #1c1e21; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+        .pk { --pk-ink: #14231a; --pk-text: #3e4b52; --pk-muted: #6b5a3a; --pk-card: #fbf1dc; --pk-line: #e2d3b0; --pk-green: #123524; --pk-gold: #e8b04a;
+          --bx-logo: var(--font-cinzel), "Cinzel", Georgia, serif; --bx-sans: var(--font-dm), "DM Sans", system-ui, sans-serif;
+          min-height: 100vh; position: relative; isolation: isolate; background: #f6ebd3; color: var(--pk-ink); font-family: var(--font-dm), "DM Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+        .pk::before { content: ""; position: fixed; inset: 0; z-index: -1; background: url("/creator/parchment.jpg") center / cover no-repeat, #f6ebd3; pointer-events: none; }
         .pk * { box-sizing: border-box; }
         .pk--embed { background: transparent; min-height: 0; }
-        .pk-wrap { max-width: 980px; margin: 0 auto; padding: 0 20px 56px; }
+        .pk--embed::before { display: none; }
+        .pk-wrap { max-width: 980px; margin: 0 auto; padding: 0 20px 40px; }
         .pk--embed .pk-wrap { max-width: none; padding: 8px; }
-        .pk-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 -20px 18px; padding: 12px 20px; background: rgba(255,255,255,.92); backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #dadde1; }
-        .pk-logo { display: inline-flex; align-items: baseline; gap: 8px; font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: #1c1e21; text-decoration: none; }
-        .pk-logo span { font-size: 13px; font-weight: 600; letter-spacing: 0; color: #65676b; }
+        .pk-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 -20px 18px; padding: 12px 20px; background: rgba(251,243,226,.92); backdrop-filter: saturate(160%) blur(10px); border-bottom: 1px solid var(--pk-line); }
+        .pk-logo { display: inline-flex; align-items: center; gap: 10px; color: var(--pk-ink); text-decoration: none; }
+        .pk-logo .pk-logo__t { padding-left: 10px; border-left: 1px solid var(--pk-line); font-size: 13px; font-weight: 600; color: var(--pk-muted); }
         .pk-actions { display: flex; gap: 8px; }
-        .pk-act { height: 36px; padding: 0 14px; border-radius: 8px; border: 0; background: #e4e6eb; color: #050505; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-        .pk-act:hover { background: #d8dadf; }
-        .pk-act--pri { background: #0866ff; color: #fff; }
-        .pk-act--pri:hover { background: #0659e0; }
-        .pk-msg { padding: 80px 0; text-align: center; color: #65676b; }
+        .pk-act { height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--pk-line); background: #fffaf0; color: var(--pk-ink); font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .pk-act:hover { background: #fff; }
+        .pk-act--pri { border-color: var(--pk-green); background: var(--pk-green); color: #fbf3e2; }
+        .pk-act--pri:hover { background: #1a4a33; }
+        .pk-msg { padding: 80px 0; text-align: center; color: var(--pk-muted); }
 
-        /* hero — Instagram gradient cover, photo on top */
-        .pk-hero { position: relative; display: flex; gap: 22px; align-items: flex-end; padding: 120px 26px 24px; border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); overflow: hidden; }
-        .pk-cover { position: absolute; inset: 0 0 auto 0; height: 132px; background: linear-gradient(115deg, #feda75 0%, #fa7e1e 22%, #d62976 48%, #962fbf 72%, #4f5bd5 100%); }
-        .pk-av { position: relative; z-index: 1; width: 132px; height: 132px; flex-shrink: 0; margin-top: -48px; border-radius: 50%; object-fit: cover; border: 5px solid #fff; background: #fff; box-shadow: 0 6px 20px -8px rgba(0,0,0,.35); }
-        .pk-av--ph { display: grid; place-items: center; background: #e7f3ff; color: #0866ff; font-size: 40px; font-weight: 800; }
-        .pk-id { position: relative; z-index: 1; min-width: 0; padding-bottom: 2px; }
-        .pk-id h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.6px; line-height: 1.15; color: #050505; }
-        .pk-type { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 3px 10px; border-radius: 999px; background: #e7f3ff; font-size: 12px; font-weight: 700; letter-spacing: 0; color: #0866ff; }
-        .pk-handle { display: inline-block; margin-top: 3px; color: #65676b; font-size: 15px; font-weight: 600; text-decoration: none; }
-        .pk-handle:hover { color: #0866ff; }
+        /* hero — creator media kit jaisa: hara-sunehra cover, photo upar */
+        .pk-hero { position: relative; display: flex; gap: 18px; align-items: flex-start; padding: 0 24px 22px; border-radius: 16px; background: var(--pk-card); border: 1px solid var(--pk-line); box-shadow: 0 10px 24px -20px rgba(60,40,10,.45); overflow: hidden; flex-wrap: wrap; }
+        .pk-cover { position: absolute; inset: 0 0 auto 0; height: 120px; background: linear-gradient(170deg, #0f3a28 0%, #1d5a3e 38%, #8d8a46 66%, #d9a94a 100%); }
+        .pk-av { position: relative; z-index: 1; width: 112px; height: 112px; flex-shrink: 0; margin-top: 64px; border-radius: 50%; object-fit: cover; border: 4px solid #fbf1dc; background: #fbf1dc; box-shadow: 0 10px 20px -10px rgba(0,0,0,.5); }
+        .pk-av--ph { display: grid; place-items: center; background: #e6e2c8; color: var(--pk-green); font-size: 36px; font-weight: 800; }
+        .pk-id { position: relative; z-index: 1; flex: 1; min-width: 220px; padding-top: 134px; }
+        .pk-id h1 { margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 24px; line-height: 31px; font-weight: 800; letter-spacing: -.2px; color: var(--pk-ink); }
+        .pk-type { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: 999px; background: #e6e2c8; font-size: 11px; font-weight: 600; letter-spacing: 0; color: #103b2a; }
+        .pk-handle { display: inline-block; margin-top: 1px; color: var(--pk-muted); font-size: 16px; font-weight: 500; text-decoration: none; }
+        .pk-handle:hover { color: var(--pk-green); }
         .pk-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-        .pk-cats span { padding: 5px 11px; border-radius: 999px; background: #f0f2f5; font-size: 12.5px; font-weight: 600; color: #050505; }
-        .pk-headline { margin: 12px 0 0; font-size: 15px; font-weight: 700; color: #050505; }
-        .pk-bio { margin: 8px 0 0; max-width: 620px; font-size: 14.5px; line-height: 1.55; white-space: pre-line; color: #1c1e21; }
-        .pk-web { display: inline-block; margin-top: 10px; color: #0866ff; font-size: 14px; font-weight: 600; word-break: break-all; text-decoration: none; }
+        .pk-cats span { padding: 4px 10px; border-radius: 999px; background: #fffaf0; border: 1px solid var(--pk-line); font-size: 12px; font-weight: 600; color: var(--pk-ink); }
+        .pk-headline { margin: 10px 0 0; font-size: 15px; font-weight: 700; color: var(--pk-ink); }
+        .pk-bio { margin: 8px 0 0; max-width: 620px; font-size: 14px; line-height: 21px; white-space: pre-line; color: var(--pk-ink); }
+        .pk-web { display: inline-block; margin-top: 10px; color: #2e9c94; font-size: 13.5px; font-weight: 700; word-break: break-all; text-decoration: none; }
 
         /* stats */
-        .pk-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
-        .pk-tile { padding: 16px; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
-        .pk-tile b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.5px; color: #050505; }
-        .pk-tile span { display: block; margin-top: 4px; font-size: 13px; font-weight: 500; color: #65676b; }
-        .pk-tile--hero { background: linear-gradient(135deg, #0866ff, #5b8cff); }
+        .pk-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 13px; margin-top: 16px; }
+        .pk-tile { padding: 18px 16px 15px; border-radius: 14px; background: var(--pk-card); border: 1px solid var(--pk-line); box-shadow: 0 10px 24px -20px rgba(60,40,10,.45); }
+        .pk-tile b { display: block; font-size: 24px; line-height: 31px; font-weight: 800; letter-spacing: -.5px; color: var(--pk-ink); }
+        .pk-tile span { display: block; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--pk-muted); }
+        .pk-tile--hero { background: linear-gradient(135deg, #1a4a33, #123524); border-color: #123524; }
         .pk-tile--hero b, .pk-tile--hero span { color: #fff; }
 
         /* cards */
-        .pk-card { margin-top: 12px; padding: 20px 22px; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
-        .pk-card h2 { margin: 0 0 14px; font-size: 18px; font-weight: 800; letter-spacing: -.2px; color: #050505; }
+        .pk-card { margin-top: 14px; padding: 18px 18px 20px; border-radius: 16px; background: var(--pk-card); border: 1px solid var(--pk-line); box-shadow: 0 10px 24px -20px rgba(60,40,10,.45); }
+        .pk-card h2 { margin: 0 0 14px; font-family: var(--font-fraunces), "Fraunces", Georgia, serif; font-size: 17px; font-weight: 600; color: var(--pk-ink); }
         .pk-split { display: flex; height: 12px; border-radius: 999px; overflow: hidden; gap: 2px; }
-        .pk-seg--F { background: #d62976; } .pk-seg--M { background: #0866ff; } .pk-seg--U { background: #bcc0c4; }
-        .pk-keys { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 13.5px; color: #1c1e21; }
+        .pk-seg--F { background: #c0702a; } .pk-seg--M { background: #1d5a3e; } .pk-seg--U { background: #c9b98f; }
+        .pk-keys { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--pk-ink); }
         .pk-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 2px; }
-        .pk-chart { display: flex; gap: 10px; align-items: flex-end; height: 180px; margin-top: 18px; padding-top: 6px; border-bottom: 1px solid #e4e6eb; }
+        .pk-chart { display: flex; gap: 10px; align-items: flex-end; height: 180px; margin-top: 18px; padding-top: 6px; border-bottom: 1px solid var(--pk-line); }
         .pk-col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; }
-        .pk-val { font-size: 11.5px; font-weight: 700; color: #1c1e21; }
+        .pk-val { font-size: 11.5px; font-weight: 700; color: var(--pk-ink); }
         .pk-bars { flex: 1; width: 100%; display: flex; gap: 3px; align-items: flex-end; justify-content: center; margin: 6px 0; }
         .pk-vbar { width: 30%; max-width: 18px; border-radius: 5px 5px 0 0; }
-        .pk-age { padding-bottom: 6px; font-size: 11.5px; color: #65676b; }
+        .pk-age { padding-bottom: 6px; font-size: 11.5px; color: var(--pk-muted); }
         .pk-geo { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
-        .pk-geo h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: #050505; }
-        .pk-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 48px; gap: 10px; align-items: center; margin-bottom: 9px; font-size: 13.5px; }
+        .pk-geo h3 { margin: 0 0 10px; font-size: 13.5px; font-weight: 700; color: var(--pk-ink); }
+        .pk-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 48px; gap: 10px; align-items: center; margin-bottom: 9px; font-size: 13px; }
         .pk-row__l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pk-track { height: 8px; border-radius: 999px; background: #e4e6eb; overflow: hidden; }
-        .pk-track i { display: block; height: 100%; background: linear-gradient(90deg, #0866ff, #5b8cff); border-radius: inherit; }
+        .pk-track { height: 8px; border-radius: 999px; background: #eadcb8; overflow: hidden; }
+        .pk-track i { display: block; height: 100%; background: linear-gradient(90deg, #123524, #2e7a52); border-radius: inherit; }
         .pk-row__v { text-align: right; font-weight: 700; }
 
         /* posts */
-        .pk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-        .pk-post { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: 10px; overflow: hidden; background: #e4e6eb; }
+        .pk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        .pk-post { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: 12px; overflow: hidden; background: #eadcb8; }
         .pk-post img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; transition: transform .25s; }
         .pk-post:hover img { transform: scale(1.03); }
-        .pk-noimg { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #65676b; }
+        .pk-noimg { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--pk-muted); }
         .pk-badge { position: absolute; z-index: 2; top: 8px; right: 8px; color: #fff; font-size: 14px; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
-        .pk-meta { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; background: linear-gradient(transparent, rgba(0,0,0,.65)); color: #fff; font-size: 12px; font-weight: 700; }
-        .pk-port { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
-        .pk-brand { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 10px; background: #f0f2f5; }
-        .pk-brand__ic { width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, #962fbf, #4f5bd5); color: #fff; font-size: 13px; font-weight: 800; }
+        .pk-none { margin: 0; font-size: 13px; color: var(--pk-muted); }
+        .pk-by { position: absolute; z-index: 2; top: 8px; left: 8px; max-width: calc(100% - 40px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 8px; border-radius: 999px; background: rgba(251,241,220,.92); color: #14231a; font-size: 11px; font-weight: 700; }
+        .pk-meta { position: absolute; z-index: 2; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; font-size: 11px; font-weight: 600; }
+        .pk-wkwrap { margin-bottom: 12px; }
+        .pk-workc { display: grid; gap: 3px; color: inherit; text-decoration: none; min-width: 0; break-inside: avoid; }
+        .pk-workc__m { position: relative; display: grid; place-items: center; aspect-ratio: 4 / 5; border-radius: 12px; overflow: hidden; background: #eadcb8; }
+        .pk-workc__m img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .pk-workc__m i { font-style: normal; font-weight: 800; font-size: 20px; color: #8a6b32; }
+        .pk-workc__m em { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 4px 7px; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; }
+        .pk-workc b { font-size: 13px; }
+        .pk-workc small { font-size: 11.5px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-port { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+        .pk-brand { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: #fffaf0; border: 1px solid var(--pk-line); }
+        .pk-brand__ic { width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, #1a4a33, #123524); color: #fbf3e2; font-size: 13px; font-weight: 800; }
         .pk-brand b { display: block; font-size: 14px; }
-        .pk-brand small { display: block; font-size: 12.5px; color: #65676b; }
-        .pk-foot { margin-top: 28px; text-align: center; font-size: 13px; color: #65676b; }
-        .pk-foot a { color: #0866ff; font-weight: 600; text-decoration: none; }
+        .pk-brand small { display: block; font-size: 12px; color: var(--pk-text); }
+        .pk-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 30px; text-align: center; }
+        .pk-foot a { color: var(--pk-ink); text-decoration: none; }
+        .pk-foot > span { font-size: 12px; font-weight: 500; letter-spacing: .4px; color: var(--pk-muted); }
 
         @media (max-width: 860px) {
           .pk-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .pk-tile--hero { grid-column: span 3; }
         }
         @media (max-width: 600px) {
-          .pk-wrap { padding: 0 12px 40px; }
+          .pk-wrap { padding: 0 12px 32px; }
           .pk-top { margin: 0 -12px 12px; padding: 10px 12px; }
-          .pk-logo { font-size: 19px; }
-          .pk-act { height: 34px; padding: 0 11px; font-size: 13px; }
-          .pk-hero { flex-direction: column; align-items: center; text-align: center; padding: 96px 16px 20px; }
-          .pk-cover { height: 110px; }
-          .pk-av { width: 112px; height: 112px; margin-top: -40px; }
+          .pk-logo .pk-logo__t { display: none; }
+          .pk-act { height: 34px; padding: 0 12px; font-size: 12.5px; }
+          .pk-hero { flex-direction: column; align-items: center; text-align: center; padding: 0 16px 20px; }
+          .pk-av { margin-top: 56px; width: 104px; height: 104px; }
+          .pk-id { padding-top: 0; }
+          .pk-id h1 { justify-content: center; font-size: 22px; }
           .pk-cats { justify-content: center; }
-          .pk-id h1 { font-size: 25px; }
           .pk-bio { margin-left: auto; margin-right: auto; }
           .pk-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
           .pk-tile--hero { grid-column: 1 / -1; }
@@ -468,18 +507,18 @@ export default function PublicKit() {
           .pk-card { padding: 16px 14px; }
           .pk-geo { grid-template-columns: 1fr; }
           .pk-chart { gap: 4px; height: 150px; }
-          .pk-grid { gap: 4px; }
+          .pk-grid { gap: 6px; }
         }
 
         /* PDF (Download PDF / ?print=1) — poore rang, har section ek saath */
         @media print {
           @page { size: A4; margin: 10mm; }
           .pk, .pk * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .pk { background: #f0f2f5 !important; }
+          .pk { background: #f6ebd3 !important; } .pk::before { position: absolute; }
           .pk-top { position: static; margin: 0 0 10px; border: 0; background: transparent; backdrop-filter: none; }
           .pk-actions { display: none !important; }
           .pk-wrap { max-width: none; padding: 0; }
-          .pk-hero, .pk-card, .pk-tile { box-shadow: none !important; border: 1px solid #dadde1; }
+          .pk-hero, .pk-card, .pk-tile { box-shadow: none !important; border: 1px solid #e2d3b0; }
           .pk-hero, .pk-card, .pk-tiles, .pk-post { break-inside: avoid; page-break-inside: avoid; }
           .pk-post img { transform: none !important; }
           .pk-foot { margin-top: 12px; }

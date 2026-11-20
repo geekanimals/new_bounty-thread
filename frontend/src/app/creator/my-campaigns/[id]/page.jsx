@@ -1,5 +1,6 @@
 "use client";
 
+import BriefBlocks from "@/components/creator/BriefBlocks";
 import { useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
@@ -185,7 +186,7 @@ export default function CampaignOverview() {
                 🎟️ Say this code in your video: {m._trk.code ? <b>{m._trk.code}</b> : <i>being set up — it shows here before you shoot</i>}
               </p>
             )}
-            <Line label="What to shoot" v={codeFill(m, b.what_to_shoot)} />
+            <BriefBlocks brief={b} deliverables={b.deliverables_text} fill={(t) => codeFill(m, t)} />
             <Line label="Key messages" v={codeFill(m, b.key_messages)} />
             <Line label="Do's" v={codeFill(m, b.dos)} />
             <Line label="Don'ts" v={codeFill(m, b.donts)} />

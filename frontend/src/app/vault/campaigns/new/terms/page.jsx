@@ -8,7 +8,7 @@ export default function NewCampaignTerms() {
   return (
     <Wizard step={2} draft={{ d, set }}>
       <div className="nc-grid">
-        <Field full area label="Video brief — what to shoot" k="brief" d={d} set={set} placeholder="Format, angle, opening hook, product demonstration…" />
+        <Field full area label="Central brief — applies to every deliverable (each Reel / Story / Post can add its own in Deliverables)" k="brief" d={d} set={set} placeholder="Format, angle, opening hook, product demonstration…" />
         <Field area label="Do’s" k="dos" d={d} set={set} placeholder="Natural lighting, honest product experience…" />
         <Field area label="Don’ts" k="donts" d={d} set={set} placeholder="Avoid unsupported claims or competitor logos…" />
         <Field full area label="Key message, hashtags & mentions" k="message" d={d} set={set} placeholder="Brand messages, disclosure guidance, reference links…" />

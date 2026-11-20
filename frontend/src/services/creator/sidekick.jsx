@@ -420,3 +420,24 @@ export async function sidekickNext() {
   if (prog && !prog.complete) return { title: `Finish your profile · ${prog.pct}%`, sub: "Brands pick complete profiles first.", label: "Finish now", href: "/creator/profile/finish" };
   return { title: "Find your next campaign", sub: "New campaigns open every week.", label: "Discover", href: "/creator/discover" };
 }
+
+/* ---------- Chat history (account par save — phone + laptop dono par wahi chats) ---------- */
+/** Saari chats (naya pehle): [{ id, title, updated_at, n }] */
+export async function sidekickChats() {
+  const r = await api("sidekick_chats");
+  return Array.isArray(r.data) ? r.data : [];
+}
+/** Ek chat ke messages */
+export async function sidekickChatGet(id) {
+  const r = await api("sidekick_chat_get", { p_id: id });
+  return r.data || null;
+}
+/** Chat save — id na ho to nayi banti hai; chat id lautata hai */
+export async function sidekickChatSave(id, messages) {
+  const r = await api("sidekick_chat_save", { p_id: id || null, p_messages: messages });
+  return r.data || null;
+}
+export async function sidekickChatDelete(id) {
+  const r = await api("sidekick_chat_delete", { p_id: id });
+  return !r.error;
+}

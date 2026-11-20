@@ -95,8 +95,8 @@ export default function PostStep() {
           <button type="button" className="bx-btn bx-btn--dark ts-mt" disabled={busy} onClick={submit}>
             {busy ? "Recording…" : "Submit link →"}
           </button>
-          <Link href="/creator/media-kit" className="bx-btn bx-btn--ghost ts-mt">
-            Open Media Kit
+          <Link href={`/creator/instagram?p=${m.participation_id}`} className="bx-btn bx-btn--ghost ts-mt">
+            📲 Post from Bounty
           </Link>
         </div>
         <PostStats m={m} />

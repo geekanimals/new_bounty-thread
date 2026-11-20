@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/creator/Logo";
-import { useSession, signOut as creatorSignOut, useCreatorGate, gateRoute, fmtFollowers, needsMe, profileProgress, STAGE_SHORT, hrefOf, iconOf, when, useMyCampaigns, useOpenCampaigns, groupOf, noteOf, engagement, useMyCampaignRows, useNotifications, markAllRead, setAvailability, getConsent, saveConsent, askSidekick, sidekickApply, sidekickNext, isHi } from "@/services/creator";
+import { useSession, signOut as creatorSignOut, useCreatorGate, gateRoute, fmtFollowers, needsMe, profileProgress, STAGE_SHORT, hrefOf, iconOf, when, useMyCampaigns, useOpenCampaigns, groupOf, noteOf, engagement, useMyCampaignRows, useNotifications, markAllRead, setAvailability, getConsent, saveConsent, askSidekick, sidekickApply, sidekickNext, isHi, sidekickChats, sidekickChatGet, sidekickChatSave, sidekickChatDelete } from "@/services/creator";
 import { useRumiTip } from "@/components/creator/rumiBus";
 import { getSidekick } from "@/components/creator/data";
 import BootLoader from "@/components/creator/BootLoader";
@@ -27,6 +27,7 @@ const NAV = [
     group: "Create & grow",
     items: [
       { label: "Media kit", href: "/creator/media-kit", icon: "🗂" },
+      { label: "Post to Instagram", href: "/creator/instagram", icon: "📲" },
       { label: "Analytics", href: "/creator/analytics", icon: "📊" },
     ],
   },
@@ -51,6 +52,7 @@ const LayersIc = ({ size = 20 }) => (
 const COMMANDS = [
   { label: "Home", href: "/creator/home", icon: Home },
   { label: "Media kit", href: "/creator/media-kit", icon: LayersIc },
+  { label: "Post to Instagram", href: "/creator/instagram", icon: Instagram },
   { label: "Profile", href: "/creator/profile", icon: User },
   { label: "Instagram", href: "/creator/messages/instagram", icon: Instagram },
   { label: "Inbox", href: "/creator/messages", icon: Chat },
@@ -152,6 +154,34 @@ export default function BountyShell({ children, tone = "paper" }) {
   });
   const [ask, setAsk] = useState("");
   const [thinking, setThinking] = useState(false);
+  // chat history (account par): chatId = abhi wali chat; hist = "Chats" list khuli ho to
+  const chatId = useRef(null);
+  const saveQ = useRef(Promise.resolve());
+  const [hist, setHist] = useState(null);
+  const [histBusy, setHistBusy] = useState(false);
+  const [curId, setCurId] = useState(null);
+  const [recent, setRecent] = useState([]);
+  // Sprout har baar nayi chat se khulta hai; purani chats neeche "Recent chats" / Chats se tap karke
+  const openRumi = () => {
+    setChat([]);
+    chatId.current = null;
+    setCurId(null);
+    setHist(null);
+    try {
+      window.sessionStorage.removeItem("bounty_sidekick_chat");
+      window.sessionStorage.removeItem("bounty_sidekick_chat_id");
+    } catch {
+      /* ignore */
+    }
+    setPanel("rumi");
+    loadRecent();
+  };
+  // pending save khatam hone ke baad list lao (abhi wali chat bhi dikhe)
+  const loadRecent = () =>
+    saveQ.current
+      .then(() => sidekickChats())
+      .then((l) => setRecent(Array.isArray(l) ? l : []))
+      .catch(() => {});
   const [skNext, setSkNext] = useState(null);
   const [confirmApply, setConfirmApply] = useState(null); // card id
   const chatEnd = useRef(null);
@@ -213,7 +243,7 @@ export default function BountyShell({ children, tone = "paper" }) {
       if (e.key === "Escape") setPanel(null);
     };
     const onCookie = () => setCookieOpen(true);
-    const onRumi = () => setPanel("rumi");
+    const onRumi = () => openRumi();
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     window.addEventListener("bounty-cookie", onCookie);
@@ -333,8 +363,62 @@ export default function BountyShell({ children, tone = "paper" }) {
       } catch {
         /* ignore */
       }
+      saveChat(n);
       return n;
     });
+  // ek ke baad ek save (pehli save se id aati hai, agli usi chat mein jaati hai)
+  const saveChat = (msgs) => {
+    saveQ.current = saveQ.current.then(async () => {
+      if (!chatId.current) {
+        try {
+          chatId.current = window.sessionStorage.getItem("bounty_sidekick_chat_id") || null;
+        } catch {
+          /* ignore */
+        }
+      }
+      const id = await sidekickChatSave(chatId.current, msgs).catch(() => null);
+      if (id) {
+        chatId.current = id;
+        setCurId(id);
+        try {
+          window.sessionStorage.setItem("bounty_sidekick_chat_id", id);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  };
+  const openHistory = async () => {
+    setHist([]);
+    setHistBusy(true);
+    setHist(await sidekickChats());
+    setHistBusy(false);
+  };
+  const openChat = async (id) => {
+    setHistBusy(true);
+    const c = await sidekickChatGet(id);
+    setHistBusy(false);
+    if (!c) return;
+    const msgs = Array.isArray(c.messages) ? c.messages : [];
+    chatId.current = c.id;
+    setCurId(c.id);
+    setChat(msgs);
+    setHist(null);
+    try {
+      window.sessionStorage.setItem("bounty_sidekick_chat", JSON.stringify(msgs));
+      window.sessionStorage.setItem("bounty_sidekick_chat_id", c.id);
+    } catch {
+      /* ignore */
+    }
+    setTimeout(() => toEnd(false), 60);
+  };
+  const dropChat = async (id) => {
+    if (!window.confirm("Delete this chat? This can't be undone.")) return;
+    if (await sidekickChatDelete(id)) {
+      setHist((h) => (h || []).filter((x) => x.id !== id));
+      if (chatId.current === id) clearChat();
+    }
+  };
   const sendAsk = async (q) => {
     const text = (q ?? ask).trim();
     if (!text || thinking) return;
@@ -353,9 +437,15 @@ export default function BountyShell({ children, tone = "paper" }) {
     setThinking(false);
     pushChat([{ me: false, text: r.text, links: r.href ? [{ label: r.ok ? "My campaigns" : "Open campaign", href: r.href }] : [], applied: r.ok ? card.id : null }]);
   };
+  // "New chat" — purani chat account mein save rehti hai (Chats se khol sakte hain)
   const clearChat = () => {
     setChat([]);
+    chatId.current = null;
+    setCurId(null);
+    setHist(null);
+    loadRecent();
     try {
+      window.sessionStorage.removeItem("bounty_sidekick_chat_id");
       window.sessionStorage.removeItem("bounty_sidekick_chat");
     } catch {
       /* ignore */
@@ -369,9 +459,29 @@ export default function BountyShell({ children, tone = "paper" }) {
       alive = false;
     };
   }, [panel]);
+  // Sprout khulte hi seedha aakhri message par (bina animation) — sheet slide hone ke baad bhi dobara; naye message par smooth
+  const toEnd = (smooth) => {
+    const end = chatEnd.current;
+    const box = end && end.closest(".bs-sheet__body");
+    if (box) box.scrollTo({ top: box.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    else end?.scrollIntoView({ block: "end", behavior: smooth ? "smooth" : "auto" });
+  };
   useEffect(() => {
-    if (panel === "rumi") chatEnd.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [chat, thinking, panel]);
+    if (panel !== "rumi") return;
+    const r = requestAnimationFrame(() => toEnd(false));
+    const t1 = setTimeout(() => toEnd(false), 120);
+    const t2 = setTimeout(() => toEnd(false), 400);
+    return () => {
+      cancelAnimationFrame(r);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel]);
+  useEffect(() => {
+    if (panel === "rumi") toEnd(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat, thinking]);
   const appliedIds = new Set(chat.filter((m) => m.applied).map((m) => m.applied));
   const md = (t) =>
     String(t || "")
@@ -430,7 +540,7 @@ export default function BountyShell({ children, tone = "paper" }) {
           </nav>
         </div>
         <div className="bs-side__bottom">
-          <button type="button" className="bs-rumi bs-rumi--side" onClick={() => setPanel("rumi")} title={`Ask ${sk.name}`}>
+          <button type="button" className="bs-rumi bs-rumi--side" onClick={() => openRumi()} title={`Ask ${sk.name}`}>
             <img src={sk.img} alt="" />
             <span>
               <strong>Ask {sk.name}</strong>
@@ -651,7 +761,7 @@ export default function BountyShell({ children, tone = "paper" }) {
 
         {/* Desktop: sidekick screen ke right-bottom kone mein — wahi bolta hai, click par sheet */}
         {panel !== "rumi" && (
-          <button type="button" className="bs-float" onClick={() => setPanel("rumi")} aria-label={`Ask ${sk.name}`} title={`Ask ${sk.name}`}>
+          <button type="button" className="bs-float" onClick={() => openRumi()} aria-label={`Ask ${sk.name}`} title={`Ask ${sk.name}`}>
             <img src={sk.img} alt="" />
             <span>Ask {sk.name}</span>
           </button>
@@ -692,7 +802,7 @@ export default function BountyShell({ children, tone = "paper" }) {
             </span>
             Campaigns
           </Link>
-          <button type="button" className={`bs-bnav__rumi ${panel === "rumi" ? "is-active" : ""}`} onClick={() => setPanel(panel === "rumi" ? null : "rumi")}>
+          <button type="button" className={`bs-bnav__rumi ${panel === "rumi" ? "is-active" : ""}`} onClick={() => (panel === "rumi" ? setPanel(null) : openRumi())}>
             <img src={sk.img} alt="" />
             {sk.name}
           </button>
@@ -747,7 +857,7 @@ export default function BountyShell({ children, tone = "paper" }) {
               ))}
             </div>
           ))}
-          <button type="button" className="bs-rumi bs-rumi--drawer" onClick={() => setPanel("rumi")}>
+          <button type="button" className="bs-rumi bs-rumi--drawer" onClick={() => openRumi()}>
             <img src={sk.img} alt="" />
             <span>
               <strong>Ask {sk.name}</strong>
@@ -822,7 +932,44 @@ export default function BountyShell({ children, tone = "paper" }) {
                 <Close size={18} />
               </button>
             </div>
-            <div className="bs-sheet__body">
+            <div className="bs-sheet__bar">
+              <button type="button" className={`bs-sheet__pill ${hist ? "is-on" : ""}`} onClick={() => (hist ? setHist(null) : openHistory())}>
+                🕘 {hist ? "Back to chat" : "Chats"}
+              </button>
+              <button type="button" className="bs-sheet__pill" onClick={clearChat}>
+                ＋ New chat
+              </button>
+            </div>
+            {hist && (
+              <div className="bs-hist">
+                <div className="bs-hist__top">
+                  <strong>Your chats</strong>
+                  <small>Saved on your account</small>
+                </div>
+                {histBusy && !hist.length ? (
+                  <p className="bs-hist__none">Loading…</p>
+                ) : hist.length ? (
+                  <ul>
+                    {hist.map((c) => (
+                      <li key={c.id} className={curId === c.id ? "is-on" : ""}>
+                        <button type="button" className="bs-hist__open" onClick={() => openChat(c.id)}>
+                          <b>{c.title || "New chat"}</b>
+                          <small>
+                            {when(c.updated_at, now || Date.parse(c.updated_at))} · {c.n} message{c.n === 1 ? "" : "s"}
+                          </small>
+                        </button>
+                        <button type="button" className="bs-hist__del" onClick={() => dropChat(c.id)} aria-label="Delete chat">
+                          <Close size={14} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="bs-hist__none">No saved chats yet — ask {sk.name} something and it&apos;s saved here.</p>
+                )}
+              </div>
+            )}
+            <div className="bs-sheet__body" hidden={!!hist}>
               <p className="bs-sheet__hey">Hey {session.first || "there"}! What can we tackle today?</p>
               <div className="bs-sheet__quick">
                 {[
@@ -844,11 +991,26 @@ export default function BountyShell({ children, tone = "paper" }) {
                   <Link href={skNext.href}>{skNext.label} ›</Link>
                 </div>
               )}
+              {chat.length === 0 && recent.length > 0 && (
+                <div className="bs-recent">
+                  <p>
+                    <small>Recent chats</small>
+                    {recent.length > 3 && (
+                      <button type="button" onClick={openHistory}>
+                        See all {recent.length} ›
+                      </button>
+                    )}
+                  </p>
+                  {recent.slice(0, 3).map((c) => (
+                    <button key={c.id} type="button" className="bs-recent__c" onClick={() => openChat(c.id)}>
+                      <b>{c.title || "Chat"}</b>
+                      <small>{when(c.updated_at, now || Date.parse(c.updated_at))}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
               {chat.length > 0 && (
                 <div className="bs-chat">
-                  <button type="button" className="bs-chat__clear" onClick={clearChat}>
-                    Clear chat
-                  </button>
                   {chat.map((m, i) =>
                     m.me ? (
                       <p key={i} className="is-me">
@@ -1150,11 +1312,36 @@ export default function BountyShell({ children, tone = "paper" }) {
         .bs-sheet__head { display: flex; align-items: center; gap: 10px; padding: 12px 18px 0 24px; }
         .bs-sheet__head img { width: 62px; height: 52px; object-fit: contain; padding-right: 10px; border-right: 1px solid rgba(232,176,74,.45); box-sizing: content-box; }
         .bs-sheet__head span { flex: 1; min-width: 0; }
-        .bs-sheet__head strong { display: block; font-family: var(--bx-serif); font-size: 16px; line-height: 20px; font-weight: 600; }
+        .bs-sheet__head strong { display: block; font-family: var(--bx-serif); font-size: 16px; line-height: 20px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .bs-sheet__head small { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #d9cdb2; }
         .bs-sheet__head small i { width: 7px; height: 7px; border-radius: 50%; background: #3ddc84; }
         .bs-sheet__btn { width: 36px; height: 36px; border-radius: 50%; border: 0; background: none; display: grid; place-items: center; color: #fbf3e2; }
         .bs-sheet__btn:hover { background: rgba(255,255,255,.08); }
+        .bs-sheet__bar { display: flex; gap: 8px; padding: 10px 18px 2px 24px; }
+        .bs-hist__top small { font-size: 11.5px; color: #d9cdb2; }
+        .bs-sheet__pill { height: 30px; padding: 0 11px; border-radius: 999px; border: 1px solid rgba(232,176,74,.55); background: none; color: #fbf3e2; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+        .bs-sheet__pill:hover, .bs-sheet__pill.is-on { background: #e8b04a; border-color: #e8b04a; color: #143a29; }
+        .bs-recent { margin-top: 14px; display: grid; gap: 6px; }
+        .bs-recent p { display: flex; align-items: center; justify-content: space-between; margin: 0 0 2px; }
+        .bs-recent p small { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #e8b04a; }
+        .bs-recent p button { border: 0; background: none; color: #d9cdb2; font-size: 12px; text-decoration: underline; cursor: pointer; }
+        .bs-recent__c { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.06); color: #fbf3e2; text-align: left; cursor: pointer; }
+        .bs-recent__c:hover { border-color: #e8b04a; }
+        .bs-recent__c b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+        .bs-recent__c small { flex: 0 0 auto; font-size: 11.5px; color: #d9cdb2; }
+        .bs-hist { flex: 1; overflow-y: auto; padding: 16px 18px; }
+        .bs-hist__top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .bs-hist__top strong { font-family: var(--bx-serif); font-size: 16px; font-weight: 600; }
+        .bs-hist__top button { padding: 7px 12px; border-radius: 999px; border: 0; background: #e8b04a; color: #143a29; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        .bs-hist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+        .bs-hist li { display: flex; align-items: center; gap: 4px; border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
+        .bs-hist li.is-on { border-color: #e8b04a; }
+        .bs-hist__open { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 11px 12px; border: 0; background: none; color: #fbf3e2; text-align: left; cursor: pointer; }
+        .bs-hist__open b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+        .bs-hist__open small { font-size: 11.5px; color: #d9cdb2; }
+        .bs-hist__del { flex: 0 0 34px; height: 34px; margin-right: 6px; border-radius: 50%; border: 0; background: none; color: #d9cdb2; display: grid; place-items: center; cursor: pointer; }
+        .bs-hist__del:hover { background: rgba(224,83,61,.25); color: #fff; }
+        .bs-hist__none { margin: 18px 0; font-size: 13px; color: #d9cdb2; text-align: center; }
         .bs-sheet__body { flex: 1; overflow-y: auto; padding: 18px 15px 16px 25px; }
         .bs-sheet__hey { margin: 0 auto 13px; width: fit-content; padding: 9px 26px; border-radius: 999px; background: #f7e8c8; color: #2a1e14; font-family: var(--bx-serif); font-size: 14.5px; line-height: 18px; text-align: center; }
         .bs-sheet__quick { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
@@ -1325,11 +1512,16 @@ export default function BountyShell({ children, tone = "paper" }) {
           .bs-cmd { left: 0; right: 0; top: 100px; width: auto; border-radius: 16px; }
           .bs-cmd li a { padding: 0 20px; }
 
-          .bs-sheetwrap { bottom: 78px; }
+          .bs-sheetwrap { bottom: 0; z-index: 120; background: rgba(10,25,18,.45); }
           .bs-sheet {
-            left: 16px; right: 16px; top: auto; bottom: 0; width: auto; max-height: calc(100vh - 160px);
-            border-radius: 22px 22px 0 0; border: 1.5px solid rgba(232,176,74,.8); border-bottom: 0; animation: bsUp .22s ease;
+            left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 100dvh; max-height: 100dvh;
+            padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+            border-radius: 0; border: 0; animation: bsUp .22s ease;
           }
+          .bs-sheet__head { align-items: center !important; }
+          .bs-sheet__head strong { font-size: 15px; }
+          .bs-sheet__bar { padding: 8px 12px 0; }
+          .bs-hist { padding: 14px 12px; }
           @keyframes bsUp { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
           .bs-sheet__grab { display: block; width: 46px; height: 4px; margin: 8px auto 0; border-radius: 4px; background: rgba(251,243,226,.5); }
           .bs-sheet__head { padding: 6px 10px 0 14px; align-items: flex-start; }
