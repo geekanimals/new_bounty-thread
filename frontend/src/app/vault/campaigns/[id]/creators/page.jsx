@@ -11,7 +11,6 @@ import { CreatorRow, CreatorHead, buildRows, runAction, useAsk, sendWhatsApp, re
 import { downloadFile, loadScript, XLSX_SRC, sheetPhone } from "@/components/admin/campaign2/kit";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 import WaPanel from "@/components/admin/campaign/WaPanel";
-import VisitPanel from "@/components/admin/campaign/VisitPanel";
 
 /* Journey boxes — tap karo to list filter hoti hai (count asli rows se) */
 const BOXES = [
@@ -408,7 +407,11 @@ export default function WorkspaceCreators() {
         </div>
       </section>
 
-      {kind === "visit" && <VisitPanel campaignId={id} all={all} V={V} reload={() => visits.reload(true)} venues={camp?.contract_terms?.visit?.venues || []} />}
+      {kind === "visit" && (
+        <p className="wcr-visitlink">
+          📍 Dates, slots and Visited / Missed are on <Link href={`/vault/campaigns/${id}/fulfilment`}>Fulfilment › Visits</Link>
+        </p>
+      )}
 
       <section className="ga-card wcr-card wcr-list">
         <h2 className="ga-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${(BX[box] || BX[0]).l.toLowerCase()}`}</h2>
@@ -601,6 +604,8 @@ export default function WorkspaceCreators() {
         .wcr-link { font-size: 14px; font-weight: 800; color: #6657e9; }
         .wcr-find { height: 41px; padding: 0 16px; }
         .wcr-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; margin-top: 18px; }
+        .wcr-visitlink { margin: 14px 0 0; padding: 10px 14px; border-radius: 12px; background: #f5f3ff; border: 1px solid #e3dfff; font-size: 13.5px; color: #4b4380; }
+        .wcr-visitlink a { font-weight: 700; color: #5b45e0; }
         .wcr-box { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 11px 13px 10px; border-radius: 12px; border: 1px solid var(--ad-line); background: linear-gradient(180deg, #fff 0%, #fbfbff 100%); text-align: left; box-shadow: 0 1px 2px rgba(20, 22, 60, 0.04); transition: border-color .15s, box-shadow .15s, transform .15s; }
         .wcr-box:hover { border-color: #c9c4f7; box-shadow: 0 6px 16px -10px rgba(103, 87, 245, 0.45); transform: translateY(-1px); }
         .wcr-box__l { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 11.5px; font-weight: 700; color: var(--ad-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

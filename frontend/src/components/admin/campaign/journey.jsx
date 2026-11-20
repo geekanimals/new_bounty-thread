@@ -48,7 +48,8 @@ export function nextAction(x, kind = "barter", progress = {}) {
     case "shortlisted":
       return { turn: "creator", title: "Invited — waiting for them to accept", text: "They got the invite on WhatsApp + email.", acts: [chat] };
     case "applied":
-      return { turn: "you", title: "Screen this creator", text: "Do they fit the brief?", acts: [["bpscreen", "✓ Screened", 1], ["bpreject", "Not a fit"]] };
+      // ek hi kadam: fit hai → seedha brand ki list par (pehle "Screened" alag button tha jo kuch dikhata nahi tha)
+      return { turn: "you", title: "Screen this creator", text: "Fits the brief? Send them to the brand.", acts: [["bpscreen", "📋 Send to brand", 1], ["bpreject", "Not a fit"]] };
     case "eligible":
       return { turn: "you", title: "Send them to the brand", text: "They cleared screening.", acts: [["bpsend", "📋 Send to brand", 1]] };
     case "sent_to_brand":
@@ -571,8 +572,21 @@ export async function runAction(key, row, ctx) {
       if (!window.confirm(`Send ${who} a WhatsApp to finish joining the campaign?`)) return;
       return sendStepWa(campaignId, [row.iid], [], who, say, reload);
     }
-    case "bpscreen":
-      return call("api.screen_participation", { p_participation: P, p_eligible: true, p_reason: null }, `✓ ${who} meets the brief`);
+    case "bpscreen": {
+      // screened + brand ki list — ek click mein. Profile adhoora ho to brand ko nahi bhej sakte (server bhi rokta hai) — saaf bata do
+      const ms = matchState(ctx.match);
+      if (ms && ms.k === "missing") {
+        say(`Can't send ${who} yet — their profile is missing: ${ms.bad.map((b) => b.need).join(", ")}. They see "Add your…" buttons on the campaign; send them once it's filled.`);
+        return false;
+      }
+      if (ms && ms.k === "no" && !window.confirm(`${who} doesn't match: ${ms.bad.map((b) => b.need).join(", ")}. Send to the brand anyway?`)) return false;
+      const { error: e1 } = await rpc("admin", "api.screen_participation", { p_participation: P, p_eligible: true, p_reason: null });
+      if (e1) {
+        say(errText(e1));
+        return false;
+      }
+      return call("api.advance_participation", { p_participation: P, p_to: "sent_to_brand", p_reason: "screened and added to the brand's list" }, `📋 ${who} screened and sent to the brand`);
+    }
     case "bpreject": {
       const v = await rejectAsk(ask, { title: `Reject ${who} — why don't they fit the brief?`, match: ctx.match, campaign: ctx.campaignName });
       if (!v) return;
