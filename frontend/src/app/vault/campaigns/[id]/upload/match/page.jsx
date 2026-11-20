@@ -76,7 +76,7 @@ export default function BulkUploadMatch() {
             </p>
             {kind !== "barter" && (
               <Note tone="amber" icon="💰">
-                <b>{kind === "paid" ? "Paid campaign:" : "Barter + Paid campaign:"}</b>add Fee, Advance %, Pay days, Terms and UPI / Account no + IFSC + Account holder columns to set each creator’s payment as they are uploaded. Their contract carries their own fee — nobody else sees it.
+                <b>{kind === "paid" ? "Paid campaign:" : kind === "visit" ? "Physical visit campaign:" : "Barter + Paid campaign:"}</b>add Fee, Advance %, Pay days, Terms and UPI / Account no + IFSC + Account holder columns to set each creator’s payment as they are uploaded. Their contract carries their own fee — nobody else sees it.
               </Note>
             )}
             {!hasContact && (

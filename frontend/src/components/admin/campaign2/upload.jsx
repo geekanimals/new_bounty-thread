@@ -41,7 +41,9 @@ export const BK_FIELDS = [
 export const GRID_ORDER = ["name", "handle", "phone", "email", "city", "followers", "status", "address", "state", "pincode", "courier", "tracking", "video_link", "post_link", "coupon", "fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
 const PAY_KEYS = ["fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
 const SHIP_COLS = ["address", "state", "pincode", "courier", "tracking"];
-export const fieldsFor = (kind) => BK_FIELDS.filter(([f]) => !(kind === "barter" && PAY_KEYS.includes(f)) && !(kind === "paid" && SHIP_COLS.includes(f)));
+// Physical visit: koi product nahi — paid jaisa (fee / UPI columns, address / courier nahi)
+const noShip = (kind) => kind === "paid" || kind === "visit";
+export const fieldsFor = (kind) => BK_FIELDS.filter(([f]) => !(kind === "barter" && PAY_KEYS.includes(f)) && !(noShip(kind) && SHIP_COLS.includes(f)));
 
 // [key, label, what happens, message] — purane BK_STATUSES
 const BASE_ST = [
@@ -62,14 +64,14 @@ const BASE_ST = [
 const SHIP_ST = ["address_confirmed", "courier_sent", "courier_delivered"];
 export function statusesFor(kind) {
   const fee = "Fee (or set it later on 💰 Payments)";
-  if (kind === "paid")
+  if (noShip(kind))
     return BASE_ST.filter((s) => !SHIP_ST.includes(s[0])).map((s) =>
       s[0] === "approved"
         ? [s[0], s[1], "Brand said yes → the contract goes out as soon as their fee is set", s[3], fee]
         : s[0] === "contract_signed"
-          ? [s[0], s[1], "Signed → the video brief goes out at once · they add bank / UPI", "no message", ""]
+          ? [s[0], s[1], kind === "visit" ? "Signed → you book their visit · they add bank / UPI" : "Signed → the video brief goes out at once · they add bank / UPI", "no message", ""]
           : s[0] === "video_brief_sent"
-            ? [s[0], s[1], "The video deadline starts today", "no message", ""]
+            ? [s[0], s[1], kind === "visit" ? "Visited → the video deadline starts today" : "The video deadline starts today", "no message", ""]
             : s
     );
   if (kind === "barter_paid") return BASE_ST.map((s) => (s[0] === "approved" ? [s[0], s[1], "Brand said yes → the contract goes out as soon as their fee is set", s[3], fee] : s[0] === "contract_signed" ? [s[0], s[1], "Next: the creator confirms the address and adds bank / UPI", s[3], ""] : s));
@@ -81,11 +83,11 @@ export const stMsg = (k) => (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[3];
 export const KIND_LABEL = { barter: "🎁 Barter campaign", barter_paid: "🎁💰 Barter + Paid campaign", paid: "💰 Paid campaign", visit: "📍 Physical visit campaign" };
 export const bkKindOf = (c) => {
   const k = c ? campKind(c) : "barter";
-  return ["paid", "barter_paid"].includes(k) ? k : "barter";
+  return ["paid", "barter_paid", "visit"].includes(k) ? k : "barter";
 };
 // paid campaign mein address / courier steps nahi
-export const dispStatus = (kind, k) => (kind === "paid" ? (k === "address_confirmed" ? "contract_signed" : ["courier_sent", "courier_delivered", "courier_received"].includes(k) ? "video_brief_sent" : k) : k);
-export const serverStatus = (kind, k) => (kind === "paid" && k === "video_brief_sent" ? "contract_signed" : k);
+export const dispStatus = (kind, k) => (noShip(kind) ? (k === "address_confirmed" ? "contract_signed" : ["courier_sent", "courier_delivered", "courier_received"].includes(k) ? "video_brief_sent" : k) : k);
+export const serverStatus = (kind, k) => (noShip(kind) && k === "video_brief_sent" ? "contract_signed" : k);
 
 // database jaisa hi Status padhna (intel.ci_bulk_status); null = samajh nahi aaya
 export function parseStatus(v) {
@@ -293,7 +295,7 @@ export function rowNeeds(up, r, d, ex, kind) {
     sr = siteRank(ex),
     out = [];
   REQ.forEach(([from, label, cols, ship]) => {
-    if (ship && kind === "paid") return;
+    if (ship && noShip(kind)) return;
     const fr = stRank(from);
     if (rank < fr || sr >= fr) return;
     const miss = cols

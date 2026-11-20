@@ -198,6 +198,33 @@ export default function CampaignOverview() {
           </details>
         )}
 
+        {m._flow && m._flow.kind === "visit" && m._flow.visit && (
+          <details className="ov-fold" open={!["completed", "published"].includes(m.stage)}>
+            <summary>📍 Where you go</summary>
+            {(m._flow.visit.venues || []).map((v, i) => (
+              <div key={i} className="ov-place">
+                <p className="ov-v">
+                  <b>{v.name}</b>
+                  {v.city ? ` · ${v.city}` : ""}
+                </p>
+                <p className="ov-v">{v.address}</p>
+                {v.map_url && (
+                  <p className="ov-v">
+                    <a href={safeLink(v.map_url)} target="_blank" rel="noopener noreferrer">
+                      Open in Google Maps ↗
+                    </a>
+                  </p>
+                )}
+              </div>
+            ))}
+            <Line label="What you get" v={m._flow.visit.mode === "experience" ? "Free experience — no payment" : "Visit + payment"} />
+            <Line label="Covered for you" v={[...(m._flow.visit.covers || []).map((k) => ({ food: "Food / meal", stay: "Stay", entry: "Entry / experience", travel: "Travel", service: "Service / treatment" }[k] || k)), m._flow.visit.plus_one ? "Plus one allowed" : ""].filter(Boolean).join(", ")} />
+            <Line label="Visit between" v={m._flow.visit.window_start || m._flow.visit.window_end ? `${m._flow.visit.window_start ? fdate(m._flow.visit.window_start) : "—"} – ${m._flow.visit.window_end ? fdate(m._flow.visit.window_end) : "—"}` : ""} />
+            <Line label="Slots" v={m._flow.visit.slots} />
+            <Line label="Notes" v={m._flow.visit.notes} />
+          </details>
+        )}
+
         <details className="ov-fold" id="brief" open={m.stage === "invited"}>
           <summary>📄 Campaign details &amp; brief</summary>
           <Line label="Brand" v={[m.brand, m.org_name].filter(Boolean).join(" · ")} />
@@ -237,6 +264,7 @@ export default function CampaignOverview() {
         .ov-v { margin: 0; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: #14231a; }
         .ov-v a { font-weight: 700; color: #2e9c94; }
         .ov-code { margin: 4px 0 6px; padding: 8px 10px; border-radius: 10px; background: #fbe7b5; font-size: 13px; }
+        .ov-place { margin: 8px 0 10px; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--bx-line); }
         .ov-small { margin: 10px 0 0; font-size: 12px; color: var(--bx-muted); }
       `}</style>
     </BountyShell>

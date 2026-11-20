@@ -73,7 +73,7 @@ function diffsOf(d, ex, kind) {
   const v = (ex && ex.vals) || {};
   const out = [];
   DIFF.forEach(([g, ks]) => {
-    if (kind === "paid" && g !== "video") return;
+    if ((kind === "paid" || kind === "visit") && g !== "video") return;
     const site = (k) => (k === "video_link" ? v.video : v[k]);
     if (ks.some((k) => String(d[k] || "").trim() && site(k) && norm(d[k]) !== norm(site(k)) && !(k === "pincode" && norm(site(k)) && norm(d.address).includes(norm(site(k))))))
       out.push({ g, site: ks.map(site).filter(Boolean).join(" · "), sheet: ks.map((k) => d[k]).filter(Boolean).join(" · ") });
@@ -85,7 +85,7 @@ function keepSite(d, ex, kind, pick = {}) {
   const v = (ex && ex.vals) || {};
   let n = 0;
   DIFF.forEach(([g, ks]) => {
-    if (kind === "paid" && g !== "video") return;
+    if ((kind === "paid" || kind === "visit") && g !== "video") return;
     if (pick[g] === "sheet") return;
     const site = (k) => (k === "video_link" ? v.video : v[k]);
     if (ks.some((k) => String(d[k] || "").trim() && site(k) && norm(d[k]) !== norm(site(k)) && !(k === "pincode" && norm(site(k)) && norm(d.address).includes(norm(site(k)))))) {
@@ -495,7 +495,7 @@ export default function BulkUploadCheck() {
           <span>— or change each row below</span>
         </div>
         <p className="uc-info">
-          ℹ️ Each row only needs the columns of its own Status —{kind !== "paid" ? " Address confirmed: Address, City, State, PIN · Courier sent / delivered: Courier + Tracking ·" : ""} Video submitted / Client approved: Video link · Posted / Done: Post link.
+          ℹ️ Each row only needs the columns of its own Status —{kind !== "paid" && kind !== "visit" ? " Address confirmed: Address, City, State, PIN · Courier sent / delivered: Courier + Tracking ·" : ""} Video submitted / Client approved: Video link · Posted / Done: Post link.
         </p>
 
         <div className="c2-tw">

@@ -165,7 +165,7 @@ export default function NewCampaignBasics() {
           <div className="nc-grid">
             <Field label="Visit window — first day" k="vFrom" d={d} set={set} type="date" />
             <Field label="Visit window — last day" k="vTo" d={d} set={set} type="date" />
-            <Field label="Slots / timings" k="vSlots" d={d} set={set} placeholder="e.g. Lunch 12:30 PM, Dinner 7:30 PM · 4 creators per slot" full />
+            <Field label="Slots / timings (and how many creators per slot — any number)" k="vSlots" d={d} set={set} placeholder="e.g. Lunch 12:30 PM (6 creators), Dinner 7:30 PM (10 creators) — any number" full />
             <Field label="Notes for the creator (who to meet, parking, dress code…)" k="vNotes" d={d} set={set} area full />
           </div>
 
