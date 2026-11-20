@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import CampaignFrame from "@/components/brands/CampaignFrame";
 import { useToast } from "@/components/brands/BrandStates";
-import { useApprovals, approveCreator, creatorHref, bWho, bSum, bShort, bEr, B_STAGE_TONE } from "@/services/brand";
+import { useApprovals, approveCreator, creatorHref, getCampaignFit, bWho, bSum, bShort, bEr, B_STAGE_TONE } from "@/services/brand";
 import { Search, Play, Instagram, ChevronDown, Sparkle, ArrowRight } from "@/components/ui/Icons";
 
 // brand ke stage keys (intel.ci_brand_stage) se filters
@@ -29,6 +29,23 @@ export default function CampaignCreators() {
         }
         .cc-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font-size: 13px; }
         .cc-table tr.is-hot td { background: #fafafd; }
+        .cc-av { position: relative; overflow: hidden; flex-shrink: 0; }
+        .cc-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+        .cc-table td:last-child { white-space: nowrap; text-align: right; }
+        .cc-acts { display: inline-flex !important; flex-wrap: nowrap !important; gap: 6px; align-items: center; }
+        .cc-fit { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; border: 0; font-size: 12px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+        .cc-fit.is-ok { background: #e3f6ec; color: #15803d; }
+        .cc-fit.is-no { background: #fdecdc; color: #b45309; }
+        .cc-stat { display: inline-flex; flex-direction: column; line-height: 1.25; }
+        .cc-stat small { font-size: 11.5px; color: var(--br-muted); white-space: nowrap; }
+        .cc-fitrow td { background: #fbfcff !important; padding: 10px 16px 14px !important; }
+        .cc-fitrow ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+        .cc-fitrow li { display: flex; gap: 8px; align-items: flex-start; padding: 9px 10px; border-radius: 10px; background: #fff; border: 1px solid #edf0f5; }
+        .cc-fitrow li i { flex-shrink: 0; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 11px; font-weight: 800; color: #fff; }
+        .cc-fitrow li.ok i { background: #22a06b; }
+        .cc-fitrow li.no i { background: #e5484d; }
+        .cc-fitrow li b { display: block; font-size: 12.5px; }
+        .cc-fitrow li small { display: block; margin-top: 2px; font-size: 12px; color: #6b7280; }
         .cc-ok, .cc-rev, .cc-open { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 12.5px; }
         .cc-ok { color: var(--br-green); }
         .cc-rev { color: var(--br-orange); }
@@ -59,6 +76,19 @@ function CreatorsTab({ d, c, reload }) {
   // jo creators brand ka wait kar rahe hain — kholte hi wahi dikhein
   const [filter, setFilter] = useState(() => ((d.creators || []).some((r) => ["to_approve", "video_review"].includes((r.status || {}).key)) ? "you" : "all"));
   const [sel, setSel] = useState([]);
+  const [fit, setFit] = useState({});
+  const [open, setOpen] = useState(null);
+  // har creator brief ke criteria se match karta hai ya nahi (✓ / ✗)
+  useEffect(() => {
+    let on = true;
+    if (c && c.id)
+      getCampaignFit(c.id).then((r) => {
+        if (on && !r.error && r.data) setFit(r.data);
+      });
+    return () => {
+      on = false;
+    };
+  }, [c]);
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(8);
   const [busy, setBusy] = useState("");
@@ -187,12 +217,13 @@ function CreatorsTab({ d, c, reload }) {
             <tr>
               <th>Creator</th>
               <th>Stage</th>
+              <th title="Does the creator match the campaign brief? Tap to see each criterion">Brief fit</th>
+              <th>Followers</th>
+              <th title="Average reach of their recent posts">Avg reach</th>
+              <th title="Average engagement rate of their recent posts">Eng.</th>
               <th>Video</th>
               <th>Post</th>
-              <th>Followers</th>
-              <th>Views</th>
-              <th>Likes</th>
-              <th>Eng.</th>
+              <th title="Views and likes on the posts made for this campaign">Campaign views</th>
               <th>City</th>
               <th />
             </tr>
@@ -209,13 +240,20 @@ function CreatorsTab({ d, c, reload }) {
               // views tabhi jab kisi post ke stats aaye hon — warna "0" galat lagta hai (Instagram juda nahi)
               const hasStats = posts.some((p) => p.stats && (p.stats.views != null || p.stats.likes != null));
               const href = creatorHref(r.participation_id, r.invite_id);
+              const rc = r.creator || {};
+              const fx = (r.participation_id && fit[r.participation_id]) || null;
+              const crit = (fx && fx.criteria) || [];
+              const okN = crit.filter((x) => x.ok).length;
+              const rid = r.participation_id || r.invite_id;
               return (
-                <tr key={r.participation_id || r.invite_id} className={hot ? "is-hot" : ""}>
+                <Fragment key={rid}>
+                <tr className={hot ? "is-hot" : ""}>
                   <td>
                     {k === "to_approve" && r.participation_id && a.can && <input type="checkbox" className="cc-pick" checked={sel.includes(r.participation_id)} onChange={() => toggle(r.participation_id)} aria-label={`Select ${cr.name}`} />}
                     <span className="br-who">
-                      <span className="br-av br-av--sm" style={{ background: cr.av }}>
+                      <span className="br-av br-av--sm cc-av" style={{ background: cr.av }}>
                         {cr.initials}
+                        {cr.pic && <img src={cr.pic} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} />}
                       </span>
                       <span>
                         <strong>{cr.name}</strong>
@@ -226,6 +264,20 @@ function CreatorsTab({ d, c, reload }) {
                   <td>
                     <span className={`br-badge br-badge--${B_STAGE_TONE[k] || "grey"}`}>{(r.status || {}).label || "—"}</span>
                   </td>
+                  <td>
+                    {crit.length ? (
+                      <button type="button" className={`cc-fit ${fx.eligible === false ? "is-no" : "is-ok"}`} onClick={() => setOpen(open === rid ? null : rid)} aria-expanded={open === rid}>
+                        {fx.eligible === false ? "✗" : "✓"} {okN}/{crit.length} match
+                      </button>
+                    ) : (
+                      <span className="cc-dash" title={r.on_sheet ? "Not on Geek OS yet — fit shows once they join" : ""}>
+                        —
+                      </span>
+                    )}
+                  </td>
+                  <td className="cc-muted">{cr.followers !== "—" ? cr.followers : "—"}</td>
+                  <td>{rc.avg_reach ? <strong>{bShort(rc.avg_reach)}</strong> : <span className="cc-dash">—</span>}</td>
+                  <td>{rc.engagement != null && rc.engagement !== "" ? <strong>{Number(rc.engagement).toFixed(1)}%</strong> : <span className="cc-dash">—</span>}</td>
                   <td>
                     {v.url && (k === "posting" || k === "posted") ? (
                       <a href={v.url} target="_blank" rel="noopener noreferrer" className="cc-ok">
@@ -254,18 +306,20 @@ function CreatorsTab({ d, c, reload }) {
                       <span className="cc-dash">—</span>
                     )}
                   </td>
-                  <td className="cc-muted">{cr.followers !== "—" ? cr.followers : "—"}</td>
                   <td>
                     {hasStats ? (
-                      <strong>{bShort(tot.views)}</strong>
+                      <span className="cc-stat">
+                        <strong>{bShort(tot.views)}</strong>
+                        <small>
+                          {bShort(tot.likes)} likes · {bEr(tot)}
+                        </small>
+                      </span>
                     ) : (
-                      <span className="cc-dash" title={posts.length ? "Views not available yet — this creator's Instagram isn't connected to Geek OS" : ""}>
+                      <span className="cc-dash" title={posts.length ? "Views not available yet — this creator's Instagram isn't connected to Geek OS" : "Shows once the creator posts"}>
                         —
                       </span>
                     )}
                   </td>
-                  <td>{hasStats ? <strong>{bShort(tot.likes)}</strong> : <span className="cc-dash">—</span>}</td>
-                  <td className="cc-muted">{hasStats ? bEr(tot) : "—"}</td>
                   <td className="cc-muted">{cr.city || "—"}</td>
                   <td>
                     {k === "video_review" && r.participation_id ? (
@@ -293,11 +347,29 @@ function CreatorsTab({ d, c, reload }) {
                     ) : null}
                   </td>
                 </tr>
+                {open === rid && crit.length > 0 && (
+                  <tr className="cc-fitrow">
+                    <td colSpan={11}>
+                      <ul>
+                        {crit.map((x) => (
+                          <li key={x.need} className={x.ok ? "ok" : "no"}>
+                            <i>{x.ok ? "✓" : "✗"}</i>
+                            <span>
+                              <b>{x.need}</b>
+                              <small>{x.have || "Not in their profile yet"}</small>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
             {list.length === 0 && (
               <tr>
-                <td colSpan={8} className="cc-empty">
+                <td colSpan={11} className="cc-empty">
                   {rows.length ? "No creators here." : "No creators on this campaign yet — Geek adds them as they’re picked."}
                 </td>
               </tr>

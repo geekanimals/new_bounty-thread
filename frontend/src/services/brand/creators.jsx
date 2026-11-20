@@ -26,6 +26,8 @@ export const parseCreatorId = (id) => {
 export const getCreatorCard = (pid, inv) => api("brand_creator_card", { p_participation: pid || null, p_invite: inv || null });
 /** Is creator ka campaign brief se match (followers, gender, age, city …) — sirf ✓/✗ + value, koi contact nahi */
 export const getCreatorEligibility = (pid) => api("brand_creator_eligibility", { p_participation: pid });
+/** Campaign ke har creator ka brief se match (criteria ✓ / ✗) — ek call: { [participation_id]: { eligible, criteria } } */
+export const getCampaignFit = (cid) => api("brand_campaign_fit", { p_campaign: cid });
 
 /** React: creator card → { data, loading, error, reload, setSaved } */
 export function useCreatorCard(pid, inv) {
