@@ -90,6 +90,13 @@ export default function CampaignPayments() {
   const allOuts = rows.flatMap((r) => (r.payment || {}).payouts || []);
   const sum = (st) => allOuts.filter((o) => st.includes(o.status)).reduce((a, o) => a + (+o.amount || 0), 0);
   const agreed = rows.reduce((a, r) => a + (+(r.payment || {}).amount || 0), 0);
+  // Poore campaign ka hisaab: joined creators ki fees + sheet ki fees (jo abhi join nahi hue)
+  const stagedLeft = stagedRows.filter((r) => !r.joined && Number(r.amount) > 0);
+  const stagedTotal = stagedLeft.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const grandTotal = agreed + stagedTotal;
+  const paidTotal = sum(["paid"]);
+  const leftTotal = Math.max(0, grandTotal - paidTotal);
+  const paidPct = grandTotal > 0 ? Math.min(100, Math.round((paidTotal / grandTotal) * 100)) : 0;
   const withFee = rows.filter((r) => (r.payment || {}).amount != null).length;
   const nofee = rows.filter((r) => (r.payment || {}).amount == null).length;
   const nodet = rows.filter((r) => !(r.payment || {}).method).length;
@@ -424,6 +431,31 @@ export default function CampaignPayments() {
             </Note>
           </div>
         )}
+        {!noPay && (
+          <div className="py-tot">
+            <div className="py-tot__c">
+              <small>Total to pay</small>
+              <b>{inr(grandTotal)}</b>
+              <span>
+                {withFee + stagedLeft.length} creator{withFee + stagedLeft.length === 1 ? "" : "s"}
+                {stagedLeft.length ? ` · incl. ${inr(stagedTotal)} for ${stagedLeft.length} not joined yet` : ""}
+              </span>
+            </div>
+            <div className="py-tot__c is-paid">
+              <small>Paid so far</small>
+              <b>{inr(paidTotal)}</b>
+              <span>{paidPct}% of the total</span>
+            </div>
+            <div className="py-tot__c is-left">
+              <small>Left to pay</small>
+              <b>{inr(leftTotal)}</b>
+              <span>{sum(["queued", "processing"]) ? `${inr(sum(["queued", "processing"]))} being paid now` : "after every payout so far"}</span>
+            </div>
+            <div className="py-tot__bar" aria-label={`${paidPct}% paid`}>
+              <i style={{ width: `${paidPct}%` }} />
+            </div>
+          </div>
+        )}
         <MiniStats
           items={[
             { value: inr(agreed), label: "Agreed", note: `${withFee} creator${withFee === 1 ? "" : "s"}` },
@@ -601,6 +633,7 @@ export default function CampaignPayments() {
             </table>
           </div>
           <style>{`
+
             .py-staged { margin-top: 18px; }
             .pys-wrap { overflow-x: auto; }
             .pys-t { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -679,6 +712,18 @@ export default function CampaignPayments() {
       {toast}
 
       <style>{`
+        .py-tot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+        .py-tot__c { display: grid; gap: 3px; padding: 14px 16px; border-radius: 14px; background: #f5f3ff; border: 1px solid #e3dfff; min-width: 0; }
+        .py-tot__c small { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #6257a1; }
+        .py-tot__c b { font-size: 24px; line-height: 1.15; color: #1d2340; }
+        .py-tot__c span { font-size: 12px; color: var(--ad-muted); }
+        .py-tot__c.is-paid { background: #eaf7ef; border-color: #c9ebd5; }
+        .py-tot__c.is-paid small { color: #1f7a45; }
+        .py-tot__c.is-left { background: #fff4e6; border-color: #fbdcb3; }
+        .py-tot__c.is-left small { color: #b45309; }
+        .py-tot__bar { grid-column: 1 / -1; height: 8px; border-radius: 6px; background: #eceaf7; overflow: hidden; }
+        .py-tot__bar i { display: block; height: 100%; background: #2fbf6b; border-radius: 6px; }
+        @media (max-width: 700px) { .py-tot { grid-template-columns: 1fr; } .py-tot__c b { font-size: 20px; } }
         .py-note { margin-top: 23px; }
         .py-check { padding: 0; border: 0; background: none; font-size: 12px; color: inherit; }
         .py-check:hover { text-decoration: underline; }
