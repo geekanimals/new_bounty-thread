@@ -38,13 +38,16 @@ export default function CampaignCreators() {
         .cc-fit.is-no { background: #fdecdc; color: #b45309; }
         .cc-stat { display: inline-flex; flex-direction: column; line-height: 1.25; }
         .cc-stat small { font-size: 11.5px; color: var(--br-muted); white-space: nowrap; }
-        .cc-fitrow td { background: #fbfcff !important; padding: 10px 16px 14px !important; }
-        .cc-fitrow ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+        .cc-fitrow td { background: #fbfcff !important; padding: 10px 16px 14px !important; white-space: normal !important; text-align: left !important; position: static !important; box-shadow: none !important; }
+        .cc-name { display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cc-table td, .cc-table th { padding-left: 10px; padding-right: 10px; }
+        .cc-fitrow ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; max-width: 1100px; }
         .cc-fitrow li { display: flex; gap: 8px; align-items: flex-start; padding: 9px 10px; border-radius: 10px; background: #fff; border: 1px solid #edf0f5; }
         .cc-fitrow li i { flex-shrink: 0; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 11px; font-weight: 800; color: #fff; }
         .cc-fitrow li.ok i { background: #22a06b; }
         .cc-fitrow li.no i { background: #e5484d; }
-        .cc-fitrow li b { display: block; font-size: 12.5px; }
+        .cc-fitrow li span { min-width: 0; }
+        .cc-fitrow li b { display: block; font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
         .cc-fitrow li small { display: block; margin-top: 2px; font-size: 12px; color: #6b7280; }
         .cc-ok, .cc-rev, .cc-open { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 12.5px; }
         .cc-ok { color: var(--br-green); }
@@ -106,6 +109,9 @@ function CreatorsTab({ d, c, reload }) {
       return !s || String(cr.name || "").toLowerCase().includes(s) || String(cr.username || "").toLowerCase().includes(s);
     })
     .sort((x, y) => hotK(x) - hotK(y));
+  // Video / Post / Campaign views tabhi jab kisi creator ka video ya post aa gaya ho — warna table bekaar chauda hota hai
+  const showContent = rows.some((r) => (r.video && r.video.url) || (r.posts || []).length || ["posting", "posted", "video_review"].includes(key(r)));
+  const cols = showContent ? 11 : 8;
   const pickable = list.filter((r) => key(r) === "to_approve" && r.participation_id && a.can).map((r) => r.participation_id);
   const toggle = (pid) => setSel((v) => (v.includes(pid) ? v.filter((x) => x !== pid) : [...v, pid]));
   const count = (f) => rows.filter((r) => f.test(key(r))).length;
@@ -221,9 +227,9 @@ function CreatorsTab({ d, c, reload }) {
               <th>Followers</th>
               <th title="Average reach of their recent posts">Avg reach</th>
               <th title="Average engagement rate of their recent posts">Eng.</th>
-              <th>Video</th>
-              <th>Post</th>
-              <th title="Views and likes on the posts made for this campaign">Campaign views</th>
+              {showContent && <th>Video</th>}
+              {showContent && <th>Post</th>}
+              {showContent && <th title="Views and likes on the posts made for this campaign">Campaign views</th>}
               <th>City</th>
               <th />
             </tr>
@@ -256,13 +262,15 @@ function CreatorsTab({ d, c, reload }) {
                         {cr.pic && <img src={cr.pic} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} />}
                       </span>
                       <span>
-                        <strong>{cr.name}</strong>
+                        <strong className="cc-name" title={cr.name}>
+                          {cr.name}
+                        </strong>
                         <small>{[cr.handle, cr.followers !== "—" ? cr.followers : ""].filter(Boolean).join(" · ")}</small>
                       </span>
                     </span>
                   </td>
                   <td>
-                    <span className={`br-badge br-badge--${B_STAGE_TONE[k] || "grey"}`}>{(r.status || {}).label || "—"}</span>
+                    <span className={`br-badge br-badge--${B_STAGE_TONE[k] || "grey"}`}>{k === "to_approve" ? "Needs your approval" : (r.status || {}).label || "—"}</span>
                   </td>
                   <td>
                     {crit.length ? (
@@ -278,6 +286,8 @@ function CreatorsTab({ d, c, reload }) {
                   <td className="cc-muted">{cr.followers !== "—" ? cr.followers : "—"}</td>
                   <td>{rc.avg_reach ? <strong>{bShort(rc.avg_reach)}</strong> : <span className="cc-dash">—</span>}</td>
                   <td>{rc.engagement != null && rc.engagement !== "" ? <strong>{Number(rc.engagement).toFixed(1)}%</strong> : <span className="cc-dash">—</span>}</td>
+                  {showContent && (
+                  <>
                   <td>
                     {v.url && (k === "posting" || k === "posted") ? (
                       <a href={v.url} target="_blank" rel="noopener noreferrer" className="cc-ok">
@@ -320,6 +330,8 @@ function CreatorsTab({ d, c, reload }) {
                       </span>
                     )}
                   </td>
+                  </>
+                  )}
                   <td className="cc-muted">{cr.city || "—"}</td>
                   <td>
                     {k === "video_review" && r.participation_id ? (
@@ -349,7 +361,7 @@ function CreatorsTab({ d, c, reload }) {
                 </tr>
                 {open === rid && crit.length > 0 && (
                   <tr className="cc-fitrow">
-                    <td colSpan={11}>
+                    <td colSpan={cols}>
                       <ul>
                         {crit.map((x) => (
                           <li key={x.need} className={x.ok ? "ok" : "no"}>
@@ -369,7 +381,7 @@ function CreatorsTab({ d, c, reload }) {
             })}
             {list.length === 0 && (
               <tr>
-                <td colSpan={11} className="cc-empty">
+                <td colSpan={cols} className="cc-empty">
                   {rows.length ? "No creators here." : "No creators on this campaign yet — Geek adds them as they’re picked."}
                 </td>
               </tr>
