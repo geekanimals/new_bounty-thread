@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Wizard, { Field, useDraft, DELIV_KINDS } from "@/components/admin/campaign/Wizard";
+import { useState } from "react";
+import Wizard, { Field, useDraft, DELIV_KINDS, uploadCampaignFile } from "@/components/admin/campaign/Wizard";
 
 /* Figma: New campaign — 2 Deliverables */
 const LABELS = { reel: "Reels", story: "Stories", post: "Feed posts", carousel: "Carousels", google_review: "Google reviews", district_review: "District reviews" };
@@ -12,6 +13,24 @@ export default function NewCampaignDeliverables() {
   const briefs = d.dBriefs && typeof d.dBriefs === "object" ? d.dBriefs : {};
   const setBrief = (key, patch) => set("dBriefs", { ...briefs, [key]: { central: true, text: "", ...(briefs[key] || {}), ...patch } });
   const central = String(d.brief || "").trim();
+  // har deliverable ki reference images (review ka screenshot review mein, reel ka reel mein)
+  const [up, setUp] = useState({});
+  const [upErr, setUpErr] = useState("");
+  const addImgs = async (key, list) => {
+    setUpErr("");
+    let acc = Array.isArray((briefs[key] || {}).images) ? briefs[key].images.slice() : [];
+    for (const f of list) {
+      setUp((u) => ({ ...u, [key]: `Uploading ${f.name}…` }));
+      try {
+        const r = await uploadCampaignFile(f, "file");
+        acc = [...acc, { url: r.url, note: "" }];
+        setBrief(key, { images: acc });
+      } catch (e) {
+        setUpErr(e.message || String(e));
+      }
+    }
+    setUp((u) => ({ ...u, [key]: "" }));
+  };
   return (
     <Wizard step={1} draft={{ d, set }}>
       <p className="nc-sec">What each creator delivers</p>
@@ -47,6 +66,21 @@ export default function NewCampaignDeliverables() {
                     placeholder={useC ? `Anything extra just for the ${x.label.toLowerCase()} (optional) — hook, length, what to show` : `Brief for the ${x.label.toLowerCase()} — what to shoot / write, length, hook, must-show items…`}
                   />
                   <small className="db-muted">{useC ? `Creators see the central brief${b.text ? " + these extra notes" : ""}.` : "Creators see only this brief for it."}</small>
+                  <div className="db-refs">
+                    {(Array.isArray(b.images) ? b.images : []).map((im, j) => (
+                      <div key={im.url + j} className="db-ref">
+                        <img src={im.url} alt="" />
+                        <input className="ga-input" value={im.note || ""} placeholder="Note, e.g. copy this style" onChange={(e) => setBrief(x.key, { images: b.images.map((y, k) => (k === j ? { ...y, note: e.target.value } : y)) })} />
+                        <button type="button" aria-label="Remove image" onClick={() => setBrief(x.key, { images: b.images.filter((_, k) => k !== j) })}>
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    <label className="db-refadd">
+                      <input type="file" accept="image/*" multiple hidden onChange={(e) => { const l = [...(e.target.files || [])]; e.target.value = ""; addImgs(x.key, l); }} />
+                      {up[x.key] || `＋ Reference image for the ${x.label.toLowerCase()}`}
+                    </label>
+                  </div>
                 </>
               ) : (
                 <small className="db-muted">Set a number to add it and write its brief.</small>
@@ -55,6 +89,7 @@ export default function NewCampaignDeliverables() {
           );
         })}
       </div>
+      {upErr && <p className="db-err">{upErr}</p>}
       <div className="nc-grid">
         <Field full label="Anything else each creator does (optional)" k="other" d={d} set={set} placeholder="e.g. tag the store location" />
       </div>
@@ -93,6 +128,13 @@ export default function NewCampaignDeliverables() {
         .db-card__h small { font-weight: 500; color: var(--ad-muted, #8793a9); }
         .db-tick { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #4b4470; cursor: pointer; }
         .db-tick input { width: 16px; height: 16px; accent-color: #6257a1; }
+        .db-refs { display: flex; flex-wrap: wrap; gap: 8px; }
+        .db-ref { position: relative; display: grid; gap: 4px; width: 120px; }
+        .db-ref img { width: 120px; height: 140px; object-fit: cover; border-radius: 8px; background: #f2f3f7; border: 1px solid var(--ad-line, #e6e8f0); }
+        .db-ref input { font-size: 11.5px; padding: 6px 8px; }
+        .db-ref button { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; cursor: pointer; }
+        .db-refadd { display: grid; place-items: center; min-height: 44px; padding: 8px 12px; border-radius: 10px; border: 1.5px dashed #c9c2f5; background: #f8f7ff; color: #4b3fc0; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        .db-err { margin: 0 0 10px; font-size: 13px; color: #c0392b; }
         .db-area { min-height: 84px; resize: vertical; font-size: 13px; }
         .db-muted { margin: 0; font-size: 12px; color: var(--ad-muted, #8793a9); }
         .nd-sum { margin-top: 4px; padding: 17px 16px 34px; border-radius: 14px; background: #f5f3ff; border: 1px solid #e3dfff; }

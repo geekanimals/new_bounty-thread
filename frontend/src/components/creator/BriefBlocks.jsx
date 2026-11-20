@@ -14,6 +14,22 @@ const KINDS = [
   { key: "district_review", label: "District review", icon: "🎟️", re: /(\d+)\s*district\s*reviews?/i },
 ];
 
+/** text mein links clickable */
+function Txt({ t }) {
+  return String(t || "")
+    .split(/(https?:\/\/[^\s]+)/g)
+    .map((p, i) =>
+      /^https?:\/\//.test(p) ? (
+        <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="bb-lnk">
+          {p.replace(/^https?:\/\/(www\.)?/, "").slice(0, 48)}
+          {p.replace(/^https?:\/\/(www\.)?/, "").length > 48 ? "…" : ""} ↗
+        </a>
+      ) : (
+        p
+      )
+    );
+}
+
 export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t }) {
   const b = brief && typeof brief === "object" ? brief : {};
   const central = String(fill(b.what_to_shoot) || "").trim();
@@ -30,7 +46,7 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
       {central && (
         <section className="bb-central">
           <p className="bb-k">📋 Central brief{items.length ? <small> · applies to every piece unless its card says otherwise</small> : null}</p>
-          <p className="bb-v">{central}</p>
+          <p className="bb-v"><Txt t={central} /></p>
         </section>
       )}
       {items.length > 0 && (
@@ -52,19 +68,30 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
                     <span className="bb-chip">{own ? "Own brief" : "Central brief"}</span>
                   </header>
                   {own ? (
-                    t ? <p className="bb-v">{t}</p> : <p className="bb-muted">The brief for this shows here soon.</p>
+                    t ? <p className="bb-v"><Txt t={t} /></p> : <p className="bb-muted">The brief for this shows here soon.</p>
                   ) : (
                     <>
                       {central && <p className="bb-muted">Follow the central brief above.</p>}
                       {t ? (
                         <p className="bb-v">
                           {central ? <b>Extra for this {k.label.toLowerCase()}: </b> : null}
-                          {t}
+                          <Txt t={t} />
                         </p>
                       ) : !central ? (
                         <p className="bb-muted">Follow the campaign brief.</p>
                       ) : null}
                     </>
+                  )}
+                  {Array.isArray(x.images) && x.images.some((im) => im && /^https?:\/\//.test(String(im.url || ""))) && (
+                    <div className="bb-imgs">
+                      <small>Reference — copy this style</small>
+                      {x.images.filter((im) => im && /^https?:\/\//.test(String(im.url || ""))).map((im, j) => (
+                        <a key={j} href={im.url} target="_blank" rel="noopener noreferrer" className="bb-ref">
+                          <img src={im.url} alt={im.note || "Reference"} loading="lazy" />
+                          {im.note && <span>{im.note}</span>}
+                        </a>
+                      ))}
+                    </div>
                   )}
                 </article>
               );
@@ -86,6 +113,10 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
         </>
       )}
       <style>{`
+        .bb-imgs { display: grid; gap: 6px; }
+        .bb-imgs small { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: #8a6b32; }
+        .bb-lnk { color: #0b7a62; font-weight: 700; word-break: break-all; }
+        .bb-central .bb-lnk { color: #e8b04a; }
         .bb-refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 10px; }
         .bb-ref { display: grid; gap: 6px; padding: 8px; border-radius: 14px; background: #fffaf0; border: 1px solid #e8dcc0; color: inherit; text-decoration: none; }
         .bb-ref img { width: 100%; max-height: 360px; object-fit: contain; border-radius: 10px; background: #fff; }

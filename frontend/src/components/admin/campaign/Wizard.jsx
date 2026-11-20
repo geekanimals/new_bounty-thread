@@ -305,7 +305,8 @@ export function deliverableBriefs(d) {
     if (!(Number(d[k]) > 0)) return;
     const x = src[key] || {};
     const text = String(x.text || "").trim();
-    out[key] = { central: x.central !== false, text: text || null };
+    const images = (Array.isArray(x.images) ? x.images : []).filter((im) => im && im.url).map((im) => ({ url: im.url, note: String(im.note || "").trim().slice(0, 300) || null }));
+    out[key] = { central: x.central !== false, text: text || null, ...(images.length ? { images } : {}) };
   });
   return Object.keys(out).length ? out : null;
 }
