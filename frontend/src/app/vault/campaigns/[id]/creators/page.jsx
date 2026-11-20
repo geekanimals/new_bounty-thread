@@ -83,6 +83,27 @@ export default function WorkspaceCreators() {
     return m;
   }, [visits.data]);
   const BX = useMemo(() => boxesFor(kind, V), [kind, V]);
+  // Payment wale campaign (Paid / Barter + Paid / paid visit) — har creator ka UPI (ya bank) contact mein, copy ke saath
+  const payCamp = kind === "paid" || kind === "barter_paid" || (kind === "visit" && ((camp?.contract_terms || {}).visit || {}).mode !== "experience");
+  const pays = useRpc("admin", "api.campaign_payments", { p_campaign: id }, { skip: !on || !payCamp, refreshMs: 300000 });
+  const staged = useRpc("admin", "api.payment_stage_list", { p_campaign: id }, { skip: !on || !payCamp, refreshMs: 300000 });
+  const PAY = useMemo(() => {
+    const m = { p: {}, h: {}, ph: {} };
+    const pick = (upi, last4, ifsc) => (upi ? { upi } : last4 ? { bank: `A/c ••${last4}${ifsc ? " · " + ifsc : ""}` } : null);
+    (Array.isArray(staged.data) ? staged.data : []).forEach((r) => {
+      const v = pick(r.upi, r.account_last4, r.ifsc);
+      if (!v) return;
+      if (r.handle) m.h[String(r.handle).replace(/^@/, "").toLowerCase()] = v;
+      const d = String(r.phone || "").replace(/\D/g, "").slice(-10);
+      if (d.length === 10) m.ph[d] = v;
+    });
+    (Array.isArray(pays.data) ? pays.data : []).forEach((r) => {
+      const p = r.payment || {};
+      const v = p.method === "upi" ? pick(p.upi_id) : p.method === "bank" ? pick(null, p.account_last4, p.ifsc) : null;
+      if (v && r.participation_id) m.p[r.participation_id] = v;
+    });
+    return m;
+  }, [pays.data, staged.data]);
   const [box, setBox] = useState(0);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Sort: furthest step");
@@ -117,8 +138,13 @@ export default function WorkspaceCreators() {
         followers: r.followersN ? r.followers : e.followers != null ? Number(e.followers).toLocaleString("en-IN") + (e.followers_from === "sheet" ? " (sheet)" : "") : r.followers,
         handle: r.handle || (e.handle ? "@" + String(e.handle).replace(/^@/, "") : ""),
       };
+    }).map((r) => {
+      if (!payCamp) return r;
+      const h = String(r.handle || "").replace(/^@/, "").toLowerCase();
+      const d = String(r.phone || r.x?.phone || r.i?.phone || "").replace(/\D/g, "").slice(-10);
+      return { ...r, payTo: (r.pid && PAY.p[r.pid]) || (h && PAY.h[h]) || (d.length === 10 && PAY.ph[d]) || null };
     });
-  }, [bt.data, people.data, prog.data, camp, extras.data]);
+  }, [bt.data, people.data, prog.data, camp, extras.data, payCamp, PAY]);
   const U = useMemo(() => unread.data || {}, [unread.data]);
   const counts = BX.map((b) => all.filter((c) => b.f(c, U)).length);
 

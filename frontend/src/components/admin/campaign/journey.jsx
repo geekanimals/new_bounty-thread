@@ -913,6 +913,17 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
         ) : (
           <span className="jr-dim">No Instagram</span>
         )}
+        {c.payTo !== undefined &&
+          (c.payTo && c.payTo.upi ? (
+            <span className="jr-cpy" title="Creator's UPI — for paying them">
+              <span className="jr-ell">💳 {c.payTo.upi}</span>
+              <CopyBtn text={c.payTo.upi} what="UPI ID" />
+            </span>
+          ) : c.payTo && c.payTo.bank ? (
+            <span className="jr-ell" title="Creator's bank account (full details on Payments)">🏦 {c.payTo.bank}</span>
+          ) : (
+            <span className="jr-dim">No UPI yet</span>
+          ))}
       </div>
 
       {/* 3 · Step (13 steps, same names everywhere) */}
