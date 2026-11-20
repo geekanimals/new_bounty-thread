@@ -127,6 +127,9 @@ const firstAct = (nx) => nx.acts.filter((a) => a[0] !== "bpchat")[0];
  * row.id = "p-<participation>" ya "i-<invite>" (URL mein yahi jata hai)
  */
 export function buildRows({ tracker, people, progress, kind }) {
+  // har creator ki taarikhen: kab invite gaya, kab join / apply kiya, aakhri step kab badla
+  const invById = {};
+  (people?.invites || []).forEach((i) => i.invite_id && (invById[i.invite_id] = i));
   const pp = {};
   (people?.participants || []).forEach((p) => (pp[p.participation_id] = p));
   const parts = (tracker?.creators?.length ? tracker.creators : people?.participants || []).map((t) => {
@@ -169,6 +172,12 @@ export function buildRows({ tracker, people, progress, kind }) {
       applied: ["applied", "eligible", "sent_to_brand"].includes(x.stage),
       failed: BP_FAIL.includes(x.stage),
       sortStep: effIndex(x),
+      dates: {
+        invited: (invById[x.invite_id] || {}).created_at || null,
+        reinvited: (invById[x.invite_id] || {}).invites_sent > 1 ? (invById[x.invite_id] || {}).last_invited_at || null : null,
+        joined: x.applied_at || null,
+        moved: x.last_move || x.updated_at || null,
+      },
     };
   });
   // jo invite wala creator join kar chuka (participant ban gaya) use dobara "Invited" mein mat gino —
@@ -220,6 +229,7 @@ export function buildRows({ tracker, people, progress, kind }) {
       applied: inviteStepRank(st) < 3,
       failed: false,
       sortStep: INV_STEP[st] ?? 0,
+      dates: { invited: i.created_at || null, reinvited: i.invites_sent > 1 ? i.last_invited_at || null : null, joined: null, moved: null },
     };
   });
   return [...parts, ...invs];
@@ -878,6 +888,14 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
             </button>
           )}
         </span>
+        {c.dates && (c.dates.invited || c.dates.joined) && (
+          <span className="jr-dates">
+            {c.dates.invited && <span title={`Invited ${new Date(c.dates.invited).toLocaleString("en-IN")}`}>📩 Invited {fmtDate(c.dates.invited)}</span>}
+            {c.dates.reinvited && <span title="Invite sent again">↻ Re-sent {fmtDate(c.dates.reinvited)}</span>}
+            {c.dates.joined && <span title={`Joined / applied ${new Date(c.dates.joined).toLocaleString("en-IN")}`}>✅ Joined {fmtDate(c.dates.joined)}</span>}
+            {c.dates.moved && c.kind === "p" && <span title="Last step change">🔄 Step {fmtDate(c.dates.moved)}</span>}
+          </span>
+        )}
       </div>
 
       {/* 2 · Contact */}
@@ -1024,6 +1042,8 @@ const JR_CSS = `
   a.jr-name:hover { color: var(--ad-primary); }
   .jr-sub { color: #8791a7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jr-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .jr-dates { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; font-size: 11.5px; color: var(--ad-muted); }
+  .jr-dates span { white-space: nowrap; }
   .jr-tags .ga-badge { height: 20px; padding: 0 8px; font-size: 10.5px; }
   .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 700; }
   .jr-lnk { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

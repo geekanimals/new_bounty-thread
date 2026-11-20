@@ -111,6 +111,11 @@ export default function WorkspaceCreators() {
   const [size, setSize] = useState("Any size");
   const [posted, setPosted] = useState("Posted or not");
   const [fit, setFit] = useState("Brief match: all");
+  // taarikh se filter: kis taarikh par (invite / join / step) + kab
+  const [dBy, setDBy] = useState("Date: invited");
+  const [dWhen, setDWhen] = useState("Any time");
+  const [dFrom, setDFrom] = useState("");
+  const [dTo, setDTo] = useState("");
   const [sel, setSel] = useState([]);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useToast(3200);
@@ -168,7 +173,27 @@ export default function WorkspaceCreators() {
         return fit === "Not checked (not on Geek OS / past screening)" ? !ms : ms && ms.k === k;
       });
     }
+    if (dWhen !== "Any time") {
+      const key = { "Date: invited": "invited", "Date: joined": "joined", "Date: last step": "moved" }[dBy] || "invited";
+      const day = 864e5;
+      const today0 = new Date(new Date().toDateString()).getTime();
+      const [lo, hi] =
+        dWhen === "Today" ? [today0, today0 + day]
+        : dWhen === "Yesterday" ? [today0 - day, today0]
+        : dWhen === "Last 7 days" ? [today0 - 6 * day, today0 + day]
+        : dWhen === "Last 30 days" ? [today0 - 29 * day, today0 + day]
+        : [dFrom ? new Date(dFrom + "T00:00:00").getTime() : -Infinity, dTo ? new Date(dTo + "T00:00:00").getTime() + day : Infinity];
+      r = r.filter((x) => {
+        const v = x.dates && x.dates[key] ? new Date(x.dates[key]).getTime() : NaN;
+        return !isNaN(v) && v >= lo && v < hi;
+      });
+    }
     r = [...r];
+    const tOf = (x, k) => (x.dates && x.dates[k] ? new Date(x.dates[k]).getTime() : 0);
+    if (sort === "Newest invited") r.sort((a, b) => tOf(b, "invited") - tOf(a, "invited"));
+    if (sort === "Oldest invited") r.sort((a, b) => (tOf(a, "invited") || Infinity) - (tOf(b, "invited") || Infinity));
+    if (sort === "Newest joined") r.sort((a, b) => tOf(b, "joined") - tOf(a, "joined"));
+    if (sort === "Latest step change") r.sort((a, b) => tOf(b, "moved") - tOf(a, "moved"));
     const views = (x) => (x.x?.posts || []).reduce((t, p) => t + (+(p.stats?.views || p.stats?.plays || p.stats?.reach) || 0), 0);
     if (sort === "Sort: furthest step") r.sort((a, b) => b.step - a.step || b.sortStep - a.sortStep);
     if (sort === "Sort: earliest step") r.sort((a, b) => a.step - b.step || a.sortStep - b.sortStep);
@@ -177,11 +202,11 @@ export default function WorkspaceCreators() {
     if (sort === "Followers: low → high") r.sort((a, b) => a.followersN - b.followersN);
     if (sort === "Most views") r.sort((a, b) => views(b) - views(a));
     return r;
-  }, [all, box, q, sort, who, size, posted, fit, bmatch.data, U, BX]);
+  }, [all, box, q, sort, who, size, posted, fit, bmatch.data, U, BX, dBy, dWhen, dFrom, dTo]);
 
   // ek jagah filters: kya koi filter laga hai + sab saaf karo
   const sentIdx = BX.findIndex((b) => b.l === "Sent to brand");
-  const fActive = !!q.trim() || box !== 0 || who !== "Everyone" || size !== "Any size" || posted !== "Posted or not" || fit !== "Brief match: all";
+  const fActive = !!q.trim() || box !== 0 || who !== "Everyone" || size !== "Any size" || posted !== "Posted or not" || fit !== "Brief match: all" || dWhen !== "Any time";
   const clearFilters = () => {
     setQ("");
     setBox(0);
@@ -189,6 +214,9 @@ export default function WorkspaceCreators() {
     setSize("Any size");
     setPosted("Posted or not");
     setFit("Brief match: all");
+    setDWhen("Any time");
+    setDFrom("");
+    setDTo("");
   };
   // screening chips: kitne match / nahi / info missing (Applied wale)
   const fitN = useMemo(() => {
@@ -448,11 +476,13 @@ export default function WorkspaceCreators() {
           <div className="wcr-filters">
             <input className="ga-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
             {[
-              [sort, setSort, ["Sort: furthest step", "Sort: earliest step", "Followers: high → low", "Followers: low → high", "Name A → Z", "Most views"], "Sort"],
+              [sort, setSort, ["Sort: furthest step", "Sort: earliest step", "Newest invited", "Oldest invited", "Newest joined", "Latest step change", "Followers: high → low", "Followers: low → high", "Name A → Z", "Most views"], "Sort"],
               [who, setWho, ["Everyone", "Our turn", "Creator’s turn", "On Geek OS", "Not yet on Geek"], "Who"],
               [size, setSize, ["Any size", "Nano · under 10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K+"], "Follower size"],
               [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
               [fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "? Info missing in profile", "Not checked (not on Geek OS / past screening)"], "Brief match"],
+              [dBy, setDBy, ["Date: invited", "Date: joined", "Date: last step"], "Which date"],
+              [dWhen, setDWhen, ["Any time", "Today", "Yesterday", "Last 7 days", "Last 30 days", "Pick dates…"], "When"],
             ].map(([v, set, opts, label]) => (
               <select key={label} className="ga-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
                 {opts.map((o) => (
@@ -460,6 +490,13 @@ export default function WorkspaceCreators() {
                 ))}
               </select>
             ))}
+            {dWhen === "Pick dates…" && (
+              <span className="wcr-dates">
+                <input type="date" className="ga-input" value={dFrom} onChange={(e) => setDFrom(e.target.value)} aria-label="From date" />
+                <span>to</span>
+                <input type="date" className="ga-input" value={dTo} onChange={(e) => setDTo(e.target.value)} aria-label="To date" />
+              </span>
+            )}
             {fActive && (
               <button type="button" className="wcr-txt wcr-clear" onClick={clearFilters}>
                 ✕ Clear filters
@@ -607,6 +644,9 @@ export default function WorkspaceCreators() {
       {toast && <div className="ga-toast">{toast}</div>}
 
       <style>{`
+        .wcr-dates { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .wcr-dates input { width: auto; min-width: 140px; }
+        .wcr-dates span { font-size: 12.5px; color: var(--ad-muted); }
         /* Figma: select par arrow nahi */
         select.ga-input { appearance: none; -webkit-appearance: none; }
         .wcr-card { padding: 22px 22px 22px; }
