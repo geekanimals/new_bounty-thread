@@ -611,7 +611,7 @@ export default function MediaKit() {
         .mk-play:hover .mk-play__b { transform: translate(-50%, -50%) scale(1.08); background: rgba(0,0,0,.7); }
         .mk-story .mk-play { width: 100%; aspect-ratio: 9 / 16; background: #111; }
         .mk-story .mk-play__b { width: 44px; height: 44px; font-size: 17px; }
-        .mk-vid figcaption { pointer-events: none; top: 8px; bottom: auto !important; }
+        .mk-vid figcaption { pointer-events: none; }
         .mk-vid .mk-igl { display: grid !important; }
         .mk-igl { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff !important; font-size: 13px; text-decoration: none; }
         .mk-stories { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
@@ -653,7 +653,7 @@ export default function MediaKit() {
         .mk-posts::-webkit-scrollbar, .mk-show::-webkit-scrollbar { display: none; }
         .mk-posts figure, .mk-show figure { position: relative; min-width: 0; margin: 0; border-radius: 12px; overflow: hidden; }
         .mk-posts img, .mk-show img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
-        .mk-posts figcaption, .mk-show figcaption { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; font-size: 11px; font-weight: 600; }
+        .mk-posts figcaption, .mk-show figcaption { position: absolute; left: 8px; top: 8px; bottom: auto; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.45); color: #fff; font-size: 11px; font-weight: 600; }
         .mk-wkwrap { margin-bottom: 12px; }
         .mk-workc { display: grid; gap: 3px; color: inherit; text-decoration: none; min-width: 0; }
         .mk-workc__m { position: relative; display: grid; place-items: center; aspect-ratio: 4 / 5; border-radius: 12px; overflow: hidden; background: #eadcb8; }
@@ -669,7 +669,7 @@ export default function MediaKit() {
         .mk-ment { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
         .mk-posts figure { background: #eadcb8; min-height: 120px; }
         .mk-noimg { display: grid; place-items: center; aspect-ratio: 4 / 5; font-size: 12px; font-weight: 600; color: #6b5a3a; }
-        .mk-by { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 8px; border-radius: 999px; background: rgba(251,241,220,.92); color: #14231a; font-size: 11px; font-weight: 700; }
+        .mk-by { position: absolute; bottom: 8px; left: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 8px; border-radius: 999px; background: rgba(251,241,220,.92); color: #14231a; font-size: 11px; font-weight: 700; }
         .mk-work { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 18px; }
         .mk-work span { flex: 1; min-width: 220px; }
         .mk-work strong { display: block; font-family: var(--bx-serif); font-size: 15px; line-height: 18px; font-weight: 600; color: #14231a; }
