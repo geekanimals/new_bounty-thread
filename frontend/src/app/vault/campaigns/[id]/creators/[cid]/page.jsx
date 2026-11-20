@@ -72,6 +72,24 @@ export default function WorkspaceCreator() {
   const x = rows.find((r) => r.id === cid);
   const h = hub.data || {};
   const phone = h.phone || (x && (x.x?.phone || x.i?.phone)) || "";
+  // Snapto se poori chat (dono taraf + template ka pura text) — edge function snapto-chat (sirf Super Admin)
+  const [snap, setSnap] = useState({ list: null, err: "" });
+  useEffect(() => {
+    if (!on || !phone) return;
+    let alive = true;
+    const load = () =>
+      invoke("admin", "snapto-chat", { phone }).then(({ data, error }) => {
+        if (!alive) return;
+        if (error || !data || !Array.isArray(data.messages)) setSnap((s) => ({ list: s.list, err: errText(error) || (data && data.error) || "Couldn't load the Snapto chat" }));
+        else setSnap({ list: data.messages, err: "" });
+      });
+    load();
+    const t = setInterval(load, 30000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [on, phone]);
   // Ek timeline: Snapto WhatsApp drips + team / creator WhatsApp + email. Jo kabhi gaya hi nahi (skipped / held —
   // purana WhatsApp template band hai, ya channel OFF) woh nahi dikhta.
   const msgs = useMemo(() => {
@@ -108,8 +126,26 @@ export default function WorkspaceCreator() {
           auto: true,
         };
       });
+    // Snapto chat mil gayi → WhatsApp wahi se (poori, dono taraf); drip "stopped" notes rehte hain
+    if (Array.isArray(snap.list)) {
+      const wa = snap.list.map((m) => ({
+        at: m.at,
+        dir: m.dir,
+        channel: "whatsapp",
+        text: m.text,
+        header: m.header,
+        footer: m.footer,
+        buttons: m.buttons,
+        tpl: m.template,
+        status: m.status,
+        error: m.error,
+        auto: m.dir === "out" && (m.kind === "template" || m.bot),
+        snap: true,
+      }));
+      return [...wa, ...dr.filter((d) => d.sys)].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    }
     return [...own, ...dr].sort((a, b) => String(a.at).localeCompare(String(b.at)));
-  }, [h.messages, drips.data, x, camp]);
+  }, [h.messages, drips.data, x, camp, snap.list]);
   // WhatsApp ka 24 ghante wala window — sirf tab type karke bhej sakte hain jab creator ne pichhle 24 h mein msg kiya ho
   const lastIn = msgs.filter((m) => m.dir === "in" && m.at).reduce((a, m) => (String(m.at) > String(a || "") ? m.at : a), null);
   const winMs = lastIn ? new Date(lastIn).getTime() + 24 * 3600 * 1000 - now : -1;
@@ -370,6 +406,7 @@ export default function WorkspaceCreator() {
               {(hub.loading || drips.loading) && !msgs.length && <p className="wcc-note">Loading messages…</p>}
               {hub.error && <p className="wcc-note">Messages: {errText(hub.error)}</p>}
               {drips.error && <p className="wcc-note">WhatsApp drips: {errText(drips.error)}</p>}
+              {snap.err && !snap.list && <p className="wcc-note">Showing saved messages only — Snapto chat: {snap.err}</p>}
               {!hub.loading && !drips.loading && !hub.error && !msgs.length && <p className="wcc-note">No messages yet.</p>}
               {msgs.map((m, i) => (
                 <Fragment key={i}>
@@ -381,7 +418,7 @@ export default function WorkspaceCreator() {
                   ) : (
                     <div className={`wcc-msg ${m.dir === "out" ? "is-me" : ""} ${m.channel === "email" ? "is-mail" : ""} ${m.status === "failed" ? "is-bad" : ""}`}>
                       <b className="wcc-msg__k">
-                        {m.channel === "email" ? "✉️ Email" : m.dir === "in" ? "💬 Creator replied" : m.drip ? `🟢 WhatsApp · ${m.title}` : m.key ? `🟢 WhatsApp · ${m.key.replace(/_/g, " ")}` : "🟢 WhatsApp"}
+                        {m.channel === "email" ? "✉️ Email" : m.dir === "in" ? "💬 Creator replied" : m.drip ? `🟢 WhatsApp · ${m.title}` : m.tpl ? `🟢 WhatsApp · ${m.tpl.replace(/_/g, " ")}` : m.key ? `🟢 WhatsApp · ${m.key.replace(/_/g, " ")}` : "🟢 WhatsApp"}
                         {m.dir === "out" ? (m.auto ? " · automatic" : " · by the team") : ""}
                       </b>
                       {m.parts ? (
@@ -389,7 +426,18 @@ export default function WorkspaceCreator() {
                           {m.parts.map((pt, j) => (pt.v ? <mark key={j}>{pt.t}</mark> : <Fragment key={j}>{pt.t}</Fragment>))}
                         </p>
                       ) : (
-                        m.text && <p>{m.text}</p>
+                        <>
+                          {m.header && <p className="wcc-hd">{m.header}</p>}
+                          {m.text && <p>{m.text}</p>}
+                          {m.footer && <p className="wcc-ft">{m.footer}</p>}
+                        </>
+                      )}
+                      {Array.isArray(m.buttons) && m.buttons.length > 0 && (
+                        <span className="wcc-btns">
+                          {m.buttons.map((bt, j) => (
+                            <span key={j}>{bt}</span>
+                          ))}
+                        </span>
                       )}
                       {m.follow && <p className="wcc-follow">↻ {m.follow}</p>}
                       <small>
@@ -399,8 +447,8 @@ export default function WorkspaceCreator() {
                             ? ` · ✗ not sent${m.error ? " — " + String(m.error).slice(0, 90) : ""}`
                             : m.status === "queued"
                               ? " · ⏳ waiting to send"
-                              : m.drip
-                                ? " · ✓ sent to Snapto"
+                              : m.drip || m.snap
+                                ? " · ✓ sent"
                                 : m.status === "read"
                                   ? " · ✓✓ read"
                                   : m.status === "delivered"
@@ -660,6 +708,10 @@ export default function WorkspaceCreator() {
         .wcc-msg.is-bad { background: #fde8e8; }
         .wcc-msg__k { display: block; margin-bottom: 4px; font-size: 11.5px; font-weight: 800; color: #3b4a43; }
         .wcc-msg p { white-space: pre-wrap; word-break: break-word; }
+        .wcc-hd { font-weight: 700; margin-bottom: 4px; }
+        .wcc-ft { margin-top: 6px; font-size: 11.5px !important; color: var(--ad-muted) !important; }
+        .wcc-btns { display: grid; gap: 4px; margin-top: 8px; }
+        .wcc-btns span { display: block; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.75); border: 1px solid rgba(0,0,0,.06); text-align: center; font-size: 12.5px; font-weight: 700; color: #0b7a62; }
         .wcc-msg mark { background: rgba(13, 92, 74, 0.12); color: inherit; border-radius: 3px; padding: 0 2px; }
         .wcc-follow { margin-top: 5px; font-size: 12px; color: #5b6b63; }
         .wcc-sys { align-self: center; max-width: 92%; padding: 4px 11px; border-radius: 999px; background: rgba(102, 87, 233, 0.1); font-size: 11.5px; font-weight: 700; color: #4b3fc4; text-align: center; }
