@@ -179,13 +179,20 @@ export default function GuestBrief() {
                 📄 Read full creative brief <ChevronDown size={14} />
               </summary>
               <div className="gb-brief__body">
-                {line("Brief", x.brief)}
-                <BriefBlocks brief={b} deliverables={x.deliverables_text || c.deliver} />
-                {line("Key messages", b.key_messages)}
-                {line("Do's", b.dos)}
-                {line("Don'ts", b.donts)}
-                {line("Caption to use", b.caption)}
-                {tags.length > 0 && line("Hashtags & mentions", tags.join(" "))}
+                {!b.what_to_shoot && line("Brief", x.brief)}
+                <BriefBlocks
+                  brief={b}
+                  deliverables={x.deliverables_text || c.deliver}
+                  more={[
+                    { key: "km", icon: "💬", label: "Key messages", text: b.key_messages },
+                    { key: "dos", icon: "✅", label: "Do's", text: b.dos },
+                    { key: "donts", icon: "🚫", label: "Don'ts", text: b.donts },
+                    { key: "cap", icon: "✍️", label: "Caption to use", text: b.caption },
+                    { key: "tags", icon: "#️⃣", label: "Must include in caption", text: tags.join(" ") },
+                    { key: "refs", icon: "🔗", label: "References", text: b.reference_links },
+                    { key: "post", icon: "🗓️", label: "Posting note", text: b.posting_note },
+                  ]}
+                />
                 <h3>Deliverables</h3>
                 <p style={{ whiteSpace: "pre-wrap" }}>{x.deliverables_text || c.deliver}</p>
                 {x.product_link && (
@@ -197,7 +204,6 @@ export default function GuestBrief() {
                 )}
                 {c.city && line("Cities", c.city)}
                 {(x.languages || []).length > 0 && line("Languages", x.languages.join(", "))}
-                {line("Posting note", b.posting_note)}
                 <h4>ⓘ Terms &amp; disclosure</h4>
                 <ul>
                   {t.content_days && (

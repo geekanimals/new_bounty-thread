@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * Creator ko brief organised dikhao: upar Central brief, phir har deliverable (Reel / Story / Post …) ka apna card.
  * Data: video_brief.what_to_shoot (central) + video_brief.deliverable_briefs { reel: { central, text }, … }
@@ -30,13 +32,18 @@ function Txt({ t }) {
     );
 }
 
-export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t }) {
+export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t, more = [] }) {
+  // dropdowns: ek khulta hai to baaki band (pehle Central brief khula)
+  const [open, setOpen] = useState(null);
   const b = brief && typeof brief === "object" ? brief : {};
   const central = String(fill(b.what_to_shoot) || "").trim();
   const db = b.deliverable_briefs && typeof b.deliverable_briefs === "object" ? b.deliverable_briefs : null;
   const items = db ? KINDS.filter((k) => db[k.key]) : [];
   const refs = Array.isArray(b.reference_images) ? b.reference_images.filter((x) => x && /^https?:\/\//.test(String(x.url || ""))) : [];
-  if (!central && !items.length && !refs.length) return null;
+  const extra = (Array.isArray(more) ? more : []).map((m) => ({ ...m, text: String(fill(m.text) || "").trim() })).filter((m) => m.text);
+  if (!central && !items.length && !refs.length && !extra.length) return null;
+  const cur = open ?? (central ? "central" : items[0] ? items[0].key : "");
+  const toggle = (key) => setOpen(cur === key ? "" : key);
   const count = (k) => {
     const m = String(deliverables || "").match(k.re);
     return m ? Number(m[1]) : 0;
@@ -44,9 +51,17 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
   return (
     <div className="bb">
       {central && (
-        <section className="bb-central">
-          <p className="bb-k">📋 Central brief{items.length ? <small> · applies to every piece unless its card says otherwise</small> : null}</p>
-          <p className="bb-v"><Txt t={central} /></p>
+        <section className={`bb-central ${cur === "central" ? "is-open" : ""}`}>
+          <button type="button" className="bb-head" onClick={() => toggle("central")} aria-expanded={cur === "central"}>
+            <span className="bb-k">📋 Central brief</span>
+            {items.length ? <small className="bb-hint">applies to every piece unless its card says otherwise</small> : null}
+            <i className="bb-chev" aria-hidden="true">⌄</i>
+          </button>
+          {cur === "central" && (
+            <p className="bb-v bb-body">
+              <Txt t={central} />
+            </p>
+          )}
         </section>
       )}
       {items.length > 0 && (
@@ -59,14 +74,17 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
               const t = String(fill(x.text) || "").trim();
               const n = count(k);
               return (
-                <article key={k.key} className={`bb-card ${own ? "is-own" : ""}`}>
-                  <header>
+                <article key={k.key} className={`bb-card ${own ? "is-own" : ""} ${cur === k.key ? "is-open" : ""}`}>
+                  <button type="button" className="bb-head" onClick={() => toggle(k.key)} aria-expanded={cur === k.key}>
                     <b>
                       {k.icon} {k.label}
                       {n > 1 ? <small> × {n}</small> : null}
                     </b>
                     <span className="bb-chip">{own ? "Own brief" : "Central brief"}</span>
-                  </header>
+                    <i className="bb-chev" aria-hidden="true">⌄</i>
+                  </button>
+                  {cur === k.key && (
+                  <div className="bb-body">
                   {own ? (
                     t ? <p className="bb-v"><Txt t={t} /></p> : <p className="bb-muted">The brief for this shows here soon.</p>
                   ) : (
@@ -93,9 +111,33 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
                       ))}
                     </div>
                   )}
+                  </div>
+                  )}
                 </article>
               );
             })}
+          </div>
+        </>
+      )}
+      {extra.length > 0 && (
+        <>
+          <p className="bb-k bb-k--sec">Rules &amp; details</p>
+          <div className="bb-grid">
+            {extra.map((m) => (
+              <article key={m.key} className={`bb-card bb-card--x ${cur === m.key ? "is-open" : ""}`}>
+                <button type="button" className="bb-head" onClick={() => toggle(m.key)} aria-expanded={cur === m.key}>
+                  <b>
+                    {m.icon} {m.label}
+                  </b>
+                  <i className="bb-chev" aria-hidden="true">⌄</i>
+                </button>
+                {cur === m.key && (
+                  <p className="bb-v bb-body">
+                    <Txt t={m.text} />
+                  </p>
+                )}
+              </article>
+            ))}
           </div>
         </>
       )}
@@ -130,8 +172,17 @@ export default function BriefBlocks({ brief, deliverables = "", fill = (t) => t 
         .bb-central .bb-k small { color: #cfc3a6; }
         .bb-central .bb-v { color: #fbf3e2; }
         .bb-v { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; color: #2a1e14; }
-        .bb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 10px; }
-        .bb-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 13px 14px; border-radius: 14px; background: #fffaf0; border: 1px solid #e8dcc0; }
+        .bb-grid { display: grid; gap: 8px; }
+        .bb-card--x { background: #fff; }
+        .bb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+        .bb-head b { font-size: 14.5px; color: #14231a; }
+        .bb-head b small { font-weight: 600; color: #8f8169; }
+        .bb-hint { flex: 1 1 160px; font-size: 12px; color: #cfc3a6; }
+        .bb-chev { margin-left: auto; font-style: normal; font-size: 18px; line-height: 1; transition: transform .2s; opacity: .7; }
+        .is-open > .bb-head .bb-chev { transform: rotate(180deg); }
+        .bb-body { display: grid; gap: 8px; margin-top: 10px; animation: bbIn .18s ease; }
+        @keyframes bbIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .bb-card { display: block; min-width: 0; padding: 13px 14px; border-radius: 14px; background: #fffaf0; border: 1px solid #e8dcc0; }
         .bb-card.is-own { border-color: #e8b04a; box-shadow: 0 0 0 3px rgba(232,176,74,.18); }
         .bb-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
         .bb-card header b { font-size: 14px; color: #14231a; }

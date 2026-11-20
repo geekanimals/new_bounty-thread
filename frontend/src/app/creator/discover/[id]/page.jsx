@@ -354,18 +354,20 @@ export default function CampaignBrief() {
             </button>
             {briefOpen && (
               <div className="cb-brief__body">
-                {line("Brief", x.brief)}
-                <BriefBlocks brief={b} deliverables={x.deliverables_text} />
-                {line("Key messages", b.key_messages)}
-                {line("Do's", b.dos)}
-                {line("Don'ts", b.donts)}
-                {line("Caption to use", b.caption)}
-                {tags.length > 0 && (
-                  <>
-                    <p className="cb-k">Must include in caption</p>
-                    <p className="cb-v">{tags.join(" ")}</p>
-                  </>
-                )}
+                {!b.what_to_shoot && line("Brief", x.brief)}
+                <BriefBlocks
+                  brief={b}
+                  deliverables={x.deliverables_text}
+                  more={[
+                    { key: "km", icon: "💬", label: "Key messages", text: b.key_messages },
+                    { key: "dos", icon: "✅", label: "Do's", text: b.dos },
+                    { key: "donts", icon: "🚫", label: "Don'ts", text: b.donts },
+                    { key: "cap", icon: "✍️", label: "Caption to use", text: b.caption },
+                    { key: "tags", icon: "#️⃣", label: "Must include in caption", text: tags.join(" ") },
+                    { key: "refs", icon: "🔗", label: "References", text: b.reference_links },
+                    { key: "post", icon: "🗓️", label: "Posting note", text: b.posting_note },
+                  ]}
+                />
                 {vz && (
                   <div className="cb-visit">
                     <p className="cb-k">📍 Where you go</p>

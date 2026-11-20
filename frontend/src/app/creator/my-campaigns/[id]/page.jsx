@@ -186,15 +186,21 @@ export default function CampaignOverview() {
                 🎟️ Say this code in your video: {m._trk.code ? <b>{m._trk.code}</b> : <i>being set up — it shows here before you shoot</i>}
               </p>
             )}
-            <BriefBlocks brief={b} deliverables={b.deliverables_text} fill={(t) => codeFill(m, t)} />
-            <Line label="Key messages" v={codeFill(m, b.key_messages)} />
-            <Line label="Do's" v={codeFill(m, b.dos)} />
-            <Line label="Don'ts" v={codeFill(m, b.donts)} />
             <Line label="Make" v={b.deliverables_text} />
-            <Line label="Caption" v={codeFill(m, b.caption)} />
-            <Line label="Hashtags & tags" v={[b.hashtags, b.mentions].filter(Boolean).join(" ")} />
-            <Line label="References" v={b.reference_links} />
-            <Line label="Posting note" v={b.posting_note} />
+            <BriefBlocks
+              brief={b}
+              deliverables={b.deliverables_text}
+              fill={(t) => codeFill(m, t)}
+              more={[
+                    { key: "km", icon: "💬", label: "Key messages", text: b.key_messages },
+                    { key: "dos", icon: "✅", label: "Do's", text: b.dos },
+                    { key: "donts", icon: "🚫", label: "Don'ts", text: b.donts },
+                    { key: "cap", icon: "✍️", label: "Caption to use", text: b.caption },
+                    { key: "tags", icon: "#️⃣", label: "Must include in caption", text: [b.hashtags, b.mentions].filter(Boolean).join(" ") },
+                    { key: "refs", icon: "🔗", label: "References", text: b.reference_links },
+                    { key: "post", icon: "🗓️", label: "Posting note", text: b.posting_note },
+                  ]}
+            />
             <p className="ov-small">Always disclose the collaboration (Paid partnership label / #ad) as per ASCI.</p>
           </details>
         )}
