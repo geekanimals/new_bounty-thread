@@ -56,7 +56,9 @@ export default function CampaignCreators() {
 
 function CreatorsTab({ d, c, reload }) {
   const a = useApprovals();
-  const [filter, setFilter] = useState("all");
+  // jo creators brand ka wait kar rahe hain — kholte hi wahi dikhein
+  const [filter, setFilter] = useState(() => ((d.creators || []).some((r) => ["to_approve", "video_review"].includes((r.status || {}).key)) ? "you" : "all"));
+  const [sel, setSel] = useState([]);
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(8);
   const [busy, setBusy] = useState("");
@@ -66,10 +68,16 @@ function CreatorsTab({ d, c, reload }) {
   const key = (r) => (r.status || {}).key;
   const test = FILTERS.find((f) => f.key === filter).test;
   const s = q.trim().toLowerCase();
-  const list = rows.filter((r) => test(key(r))).filter((r) => {
-    const cr = r.creator || {};
-    return !s || String(cr.name || "").toLowerCase().includes(s) || String(cr.username || "").toLowerCase().includes(s);
-  });
+  const hotK = (r) => (["to_approve", "video_review"].includes(key(r)) ? 0 : 1);
+  const list = rows
+    .filter((r) => test(key(r)))
+    .filter((r) => {
+      const cr = r.creator || {};
+      return !s || String(cr.name || "").toLowerCase().includes(s) || String(cr.username || "").toLowerCase().includes(s);
+    })
+    .sort((x, y) => hotK(x) - hotK(y));
+  const pickable = list.filter((r) => key(r) === "to_approve" && r.participation_id && a.can).map((r) => r.participation_id);
+  const toggle = (pid) => setSel((v) => (v.includes(pid) ? v.filter((x) => x !== pid) : [...v, pid]));
   const count = (f) => rows.filter((r) => f.test(key(r))).length;
   const appliedN = Number(d.applied_count) || 0,
     screeningN = Number(d.screening_count) || 0;
@@ -81,6 +89,26 @@ function CreatorsTab({ d, c, reload }) {
     setBusy("");
     if (x.error) return say(x.error.message);
     say("✓ Creator approved — the Geek team takes it from here");
+    setSel((v) => v.filter((x) => x !== r.participation_id));
+    reload();
+    a.reload();
+  };
+  // ek saath approve (tick kiye hue)
+  const approveMany = async () => {
+    const ids = sel.filter((x) => pickable.includes(x));
+    if (!ids.length) return;
+    if (!window.confirm(`Approve ${ids.length} creator${ids.length > 1 ? "s" : ""} for this campaign?`)) return;
+    setBusy("many");
+    let ok = 0;
+    const bad = [];
+    for (const pid of ids) {
+      const x = await approveCreator(pid);
+      if (x.error) bad.push(x.error.message);
+      else ok += 1;
+    }
+    setBusy("");
+    setSel([]);
+    say(bad.length ? `✓ ${ok} approved · ${bad.length} not approved: ${bad[0]}` : `✓ ${ok} creator${ok > 1 ? "s" : ""} approved — the Geek team takes it from here`);
     reload();
     a.reload();
   };
@@ -134,6 +162,25 @@ function CreatorsTab({ d, c, reload }) {
         </label>
       </div>
 
+      {pickable.length > 0 && (
+        <div className="cc-bulk">
+          <label>
+            <input type="checkbox" checked={pickable.every((x) => sel.includes(x))} onChange={(e) => setSel(e.target.checked ? pickable : [])} /> Select all waiting for you ({pickable.length})
+          </label>
+          <button type="button" className="br-btn br-btn--primary br-btn--sm" disabled={!sel.length || !!busy} onClick={approveMany}>
+            {busy === "many" ? "Approving…" : `Approve selected (${sel.filter((x) => pickable.includes(x)).length})`}
+          </button>
+          <span className="cc-bulk__hint">Tap Profile to see each creator’s numbers, posts and fit before you approve.</span>
+          <style>{`
+            .cc-bulk { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; background: #fff8ec; border: 1px solid #f3dfb5; font-size: 13px; }
+            .cc-bulk label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+            .cc-bulk__hint { color: #8a6b32; font-size: 12.5px; }
+            .cc-table .br-who { display: inline-flex; vertical-align: middle; }
+            .cc-pick { width: 16px; height: 16px; margin-right: 10px; vertical-align: middle; cursor: pointer; }
+            .cc-acts { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+          `}</style>
+        </div>
+      )}
       <div className="br-table-wrap">
         <table className="br-table cc-table">
           <thead>
@@ -165,6 +212,7 @@ function CreatorsTab({ d, c, reload }) {
               return (
                 <tr key={r.participation_id || r.invite_id} className={hot ? "is-hot" : ""}>
                   <td>
+                    {k === "to_approve" && r.participation_id && a.can && <input type="checkbox" className="cc-pick" checked={sel.includes(r.participation_id)} onChange={() => toggle(r.participation_id)} aria-label={`Select ${cr.name}`} />}
                     <span className="br-who">
                       <span className="br-av br-av--sm" style={{ background: cr.av }}>
                         {cr.initials}
@@ -225,9 +273,19 @@ function CreatorsTab({ d, c, reload }) {
                         Watch
                       </Link>
                     ) : k === "to_approve" && r.participation_id && a.can ? (
-                      <button type="button" className="br-btn br-btn--primary br-btn--sm" disabled={!!busy} onClick={() => approve(r)}>
-                        {busy === r.participation_id ? "…" : "Approve"}
-                      </button>
+                      <span className="cc-acts">
+                        {href && (
+                          <Link href={href} className="br-btn br-btn--ghost br-btn--sm">
+                            Profile
+                          </Link>
+                        )}
+                        <button type="button" className="br-btn br-btn--primary br-btn--sm" disabled={!!busy} onClick={() => approve(r)}>
+                          {busy === r.participation_id ? "…" : "Approve"}
+                        </button>
+                        <Link href={`/brands/approvals/decline/${r.participation_id}`} className="br-btn br-btn--ghost br-btn--sm">
+                          Not for us
+                        </Link>
+                      </span>
                     ) : href ? (
                       <Link href={href} className="br-btn br-btn--ghost br-btn--sm">
                         Profile
