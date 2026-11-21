@@ -86,7 +86,7 @@ export default function FinishProfile() {
       </section>
 
       {/* Mobile: Rumi tip (Figma) */}
-      {tip && <RumiTip className="fp-rumi" name={sk.name} img={sk.img} text="Add your city — nearby campaigns show up first." onClose={() => setTip(false)} />}
+      {tip && <RumiTip className="fp-rumi" name={sk.name} img={sk.img} text={left.length ? `Next up: ${left[0].label} — brands pick complete profiles first.` : "Your profile is complete — nice!"} onClose={() => setTip(false)} />}
 
       <style>{`
         /* Figma: sab DM Sans — card ke andar plain list */

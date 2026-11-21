@@ -56,7 +56,7 @@ export default function CreatorHome() {
 
   // "Next step" card — purane buildHome jaisa ek hi kaam jo abhi zaroori hai
   // Apply kiya par on hold (profile mein kuch missing) → sabse pehle wahi poora karwao
-  const held = openList.find((x) => x.my_stage === "applied" && x.eligibility && x.eligibility.eligible === false && !holdSteps(x.eligibility).mismatch.length);
+  const held = openList.find((x) => x.my_stage === "applied" && x.eligibility && x.eligibility.eligible === false && holdSteps(x.eligibility).steps > 0);
   const heldN = held ? holdSteps(held.eligibility).steps : 0;
   let act;
   if (held) act = { tag: "Action needed", red: true, t: `Your application for ${held.name || "a campaign"} is on hold`, s: `${heldN || 1} quick step${heldN === 1 ? "" : "s"} left to send it to the brand.`, b: "Finish now", href: `/creator/discover/${held.campaign_id}` };

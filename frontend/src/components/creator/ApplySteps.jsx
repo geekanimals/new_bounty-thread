@@ -36,7 +36,10 @@ export function holdSteps(el) {
   const igNeed = missing.some((c) => ["followers", "instagram"].includes(String(c.key)) && /not connected|not yet/i.test(c.have || ""));
   const engWait = missing.some((c) => c.key === "engagement") && !igNeed;
   const steps = prof.length + (igNeed ? 1 : 0) + (engWait ? 1 : 0);
-  return { total: cr.length, done: cr.filter((c) => c.ok).length, prof, igNeed, engWait, mismatch, steps };
+  // Game: jab tak kuch bhi bacha hai, mismatch chhupa rahe (bhara hua = "done" ginti mein) —
+  // "not eligible" sirf tab jab sab bhar diya / Instagram connect ho gaya (final = true)
+  const final = steps === 0 && mismatch.length > 0;
+  return { total: cr.length, done: cr.length - missing.length, prof, igNeed, engWait, mismatch, steps, final };
 }
 
 /** 🔒 Instagram safe hai — sirf sach likha hai (password Instagram ke page par, post sirf creator ke tap se) */
@@ -115,11 +118,12 @@ export default function ApplySteps({ el, cid, onChange }) {
     router.push(`/creator/onboarding/meta?next=apply&c=${encodeURIComponent(cid)}`);
   };
 
-  // poora match nahi (data hai par brief se bahar) → seedha sach batao
-  if (h.mismatch.length)
+  // sab bhar diya, phir bhi brief se match nahi → ab sach batao (pehle nahi)
+  if (h.final)
     return (
       <div className="as as--no">
-        <p className="as-h">This campaign isn&apos;t a match for your profile right now</p>
+        <p className="as-h">😕 Oops! You&apos;re not eligible for this one</p>
+        <p className="as-sub">Thanks for completing everything — this brand needs:</p>
         <ul className="as-list">
           {h.mismatch.map((c) => (
             <li key={c.key || c.need} className="as-row as-row--no">
@@ -275,6 +279,7 @@ const CSS = `
   .as-row { border-radius: 14px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); overflow: hidden; animation: as-in .35s ease both; }
   .as-row.is-open { background: rgba(255,255,255,.11); border-color: rgba(34,184,230,.55); }
   .as-row--no { padding: 10px 12px; background: rgba(255,211,196,.12); }
+  .as--no .as-sub { margin: 4px 0 10px !important; }
   .as-row--no b { display: block; font-size: 13px; color: #fbf3e2; }
   .as-row--no small { display: block; margin-top: 2px; font-size: 12px; color: #e9cdbd; }
   .as-row__head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; text-decoration: none !important; font: inherit; }

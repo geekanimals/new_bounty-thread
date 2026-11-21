@@ -53,9 +53,10 @@ export default function Address() {
   useEffect(() => {
     if (filled.current || !c.ready || !c.profile) return;
     filled.current = true;
-    setF((x) => ({ ...x, name: x.name || s.name || "", phone: x.phone || phone10(s.phone) }));
+    // signup wali city bhi pehle se (PIN daalte hi India Post wali city/state aa jaati hai)
+    setF((x) => ({ ...x, name: x.name || s.name || "", phone: x.phone || phone10(s.phone), city: x.city || s.city || "" }));
     if ((c.profile.addresses || []).length) setMakeDefault(false);
-  }, [c, s.name, s.phone]);
+  }, [c, s.name, s.phone, s.city]);
 
   const flash = (t) => {
     setToast(t);
@@ -137,7 +138,7 @@ export default function Address() {
       if (payload.is_default === undefined) delete payload.is_default;
       await saveAddress(payload);
       flash(editId ? "Address updated" : "Address saved");
-      setF({ ...EMPTY, name: s.name || "", phone: phone10(s.phone) });
+      setF({ ...EMPTY, name: s.name || "", phone: phone10(s.phone), city: s.city || "" });
       setEditId(null);
       setTried(false);
       setSearch("");

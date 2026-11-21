@@ -25,7 +25,8 @@ export default function ProfileHub() {
     { icon: "👤", title: "About you", sub: s.first ? s.first : "Name, gender, birthday, married, pets", href: "/creator/profile/about" },
     { icon: "📞", title: "Contact", sub: "WhatsApp, backup email", href: "/creator/profile/contact" },
     { icon: "📍", title: "Delivery address", sub: "Where brands send your kit", href: "/creator/profile/address" },
-    { icon: "🎬", title: "What you create", sub: what, href: "/creator/profile/content" },
+    // signup par jo city daali thi wahi yahan dikhe (professional.city_coarse)
+    { icon: "🎬", title: "What you create", sub: [s.city ? `📍 ${s.city}` : "", what].filter(Boolean).join(" · "), href: "/creator/profile/content" },
   ];
   const right = [
     { icon: "🛠️", title: "Skills & resources", sub: "What you're good at and the gear you have", href: "/creator/profile/skills" },
@@ -89,7 +90,7 @@ export default function ProfileHub() {
 
         <div className="ph-col">
           {right.map(row)}
-          {tip && <RumiTip className="ph-rumi" name={sk.name} img={sk.img} text="Add your city — nearby campaigns show up first." onClose={() => setTip(false)} />}
+          {tip && <RumiTip className="ph-rumi" name={sk.name} img={sk.img} text={s.city ? "A complete profile gets picked first — finish the sections below." : "Add your city — nearby campaigns show up first."} onClose={() => setTip(false)} />}
         </div>
       </div>
 

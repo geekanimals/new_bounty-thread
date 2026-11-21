@@ -307,7 +307,7 @@ export default function CampaignBrief() {
             ) : why ? (
               <div className="cb-why">
                 <p>
-                  <b>This campaign isn&apos;t a match for your profile right now.</b>
+                  <b>😕 Oops! You&apos;re not eligible for this campaign.</b>
                 </p>
                 <ul>
                   {notOk
