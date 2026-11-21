@@ -75,10 +75,12 @@ export default function FindMatching() {
   }, [mode, qq, id, on]);
 
   const L = (Array.isArray(m.data) ? m.data : []).map(toRow);
-  const invitedN = L.filter((r) => r.state === "invited" || mine[r.member]).length;
   const disN = (Array.isArray(disc.data) ? disc.data : []).filter((c) => !c.invited).length;
   const extN = Array.isArray(ext.data) ? ext.data.length : 0;
   const isInv = (r) => r.state !== "none" || mine[r.member];
+  // jo abhi tak invite nahi hue / campaign mein nahi — wahi ginti (invite karte hi ghat jaati hai)
+  const leftN = L.filter((r) => !isInv(r)).length;
+  const doneN = L.length - leftN;
 
   let rows = mode === "match" ? L : search.rows.map(toRow);
   if (show === "Not invited yet") rows = rows.filter((r) => !isInv(r));
@@ -87,15 +89,24 @@ export default function FindMatching() {
   /* invite_creator (on platform) — purane data-inv / csInvite jaisa */
   const invite = async (r, quiet) => {
     if (!r.member) return false;
+    // turant list se hatao (invite bhejte hi) — fail ho to wapas
+    setMine((v) => ({ ...v, [r.member]: true }));
     setBusy(r.id);
     const { error } = await rpc("admin", "api.invite_creator", { p_campaign: id, p_member: r.member, p_note: null });
     setBusy("");
     if (error) {
+      setMine((v) => {
+        const n = { ...v };
+        delete n[r.member];
+        return n;
+      });
       if (!quiet) setToast(errText(error));
       return false;
     }
-    setMine((v) => ({ ...v, [r.member]: true }));
-    if (!quiet) setToast(`🎯 Invite sent to ${r.name} — in-app, WhatsApp & email`);
+    if (!quiet) {
+      setToast(`🎯 Invite sent to ${r.name} — in-app, WhatsApp & email`);
+      m.reload(true);
+    }
     return true;
   };
   const inviteAll = async () => {
@@ -126,8 +137,8 @@ export default function FindMatching() {
 
           <div className="fm-stats">
             {[
-              [m.loading ? "…" : String(L.length), "Match your brief"],
-              [m.loading ? "…" : String(invitedN), "Invited"],
+              [m.loading ? "…" : String(leftN), "Left to invite"],
+              [m.loading ? "…" : String(doneN), "Invited / on campaign"],
               [disc.loading ? "…" : String(disN), "New on Instagram"],
               [ext.loading ? "…" : String(extN), "Off-platform invites"],
             ].map(([n, l]) => (
@@ -140,7 +151,7 @@ export default function FindMatching() {
 
           <div className="fm-bar">
             <button type="button" className={`ga-tab ${mode === "match" ? "is-on" : ""}`} onClick={() => setMode("match")}>
-              ✨ Matching ({L.length})
+              ✨ Matching ({leftN})
             </button>
             <button type="button" className={`ga-tab ${mode === "all" ? "is-on" : ""}`} onClick={() => setMode("all")}>
               🔎 Search all creators

@@ -36,6 +36,21 @@ const BOXES = [
   { t: "content", l: "Client approved", f: (c) => !c.failed && ((c.sheet ?? c.step) >= 11 && (c.kind === "i" ? ["client_approved", "posted"].includes(c.i?.status) : ["content_approved", "published", "completed"].includes(c.x?.stage))) },
   { t: "good", l: "Posted", s: "every post up", f: (c) => !c.failed && (c.posted) },
 ];
+/* Box ke andar chhoti line: is step se kitne aage badhe / kitne yahin atke (is box − agla box).
+ * [box, agla box, aage wale ke shabd, atke wale ke shabd, kiski baari] */
+const FLOW = [
+  ["Approved", "Contract signed", "signed", "stuck at contract", "creator"],
+  ["Contract signed", "Address confirmed", "address done", "stuck at address", "creator"],
+  ["Address confirmed", "Courier sent", "shipped", "not shipped yet", "us"],
+  ["Courier sent", "Courier delivered", "delivered", "in transit", "courier"],
+  ["Courier delivered", "Video submitted", "sent a video", "no video yet", "creator"],
+  ["Visit booked", "Visited", "visited", "not visited yet", "creator"],
+  ["Visited", "Video submitted", "sent a video", "no video yet", "creator"],
+  ["Video submitted", "Client approved", "client approved", "waiting for client", "client"],
+  ["Client approved", "Posted", "posted", "not posted yet", "creator"],
+];
+const WHO_TXT = { us: "our side", creator: "creator's turn", courier: "with the courier", client: "client's turn" };
+
 /* Har campaign type ke apne boxes: Paid mein courier nahi · Physical visit mein Visit booked → Visited */
 const SHIP_L = ["Address confirmed", "Courier sent", "Courier delivered"];
 function boxesFor(kind, V) {
@@ -472,6 +487,17 @@ export default function WorkspaceCreators() {
                 {b.l}
               </span>
               <strong>{n(i)}</strong>
+              {(() => {
+                const f = FLOW.find((x) => x[0] === b.l && BX.some((y) => y.l === x[1]));
+                if (!f || loading || !counts[i]) return null;
+                const moved = Math.min(counts[i], counts[BX.findIndex((y) => y.l === f[1])] || 0);
+                const stuck = counts[i] - moved;
+                return (
+                  <small className={`wcr-box__f wcr-box__f--${stuck ? f[4] : "ok"}`} title={stuck ? `${stuck} ${f[3]} — ${WHO_TXT[f[4]]}` : "Everyone moved ahead"}>
+                    ✓ {moved} {f[2]} ({Math.round((100 * moved) / counts[i])}%){stuck ? <> · <b>{stuck} {f[3]}</b></> : null}
+                  </small>
+                );
+              })()}
             </button>
           ))}
         </div>
@@ -691,6 +717,13 @@ export default function WorkspaceCreators() {
         .wcr-box { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 11px 13px 10px; border-radius: 12px; border: 1px solid var(--ad-line); background: linear-gradient(180deg, #fff 0%, #fbfbff 100%); text-align: left; box-shadow: 0 1px 2px rgba(20, 22, 60, 0.04); transition: border-color .15s, box-shadow .15s, transform .15s; }
         .wcr-box:hover { border-color: #c9c4f7; box-shadow: 0 6px 16px -10px rgba(103, 87, 245, 0.45); transform: translateY(-1px); }
         .wcr-box__l { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 11.5px; font-weight: 700; color: var(--ad-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wcr-box__f { display: block; max-width: 100%; margin-top: -2px; font-size: 10.5px; font-weight: 600; line-height: 1.35; color: #6b7390; white-space: normal; }
+        .wcr-box__f b { font-weight: 800; }
+        .wcr-box__f--us b { color: #c0392b; }
+        .wcr-box__f--creator b { color: #b26a00; }
+        .wcr-box__f--courier b { color: #2f6fd6; }
+        .wcr-box__f--client b { color: #7c3aed; }
+        .wcr-box.is-on .wcr-box__f, .wcr-box.is-on .wcr-box__f b { color: rgba(255,255,255,.92); }
         .wcr-box__l i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #a3a8c3; }
         .wcr-box--reach .wcr-box__l i { background: #5b8def; }
         .wcr-box--screen .wcr-box__l i { background: #7c6cf2; }

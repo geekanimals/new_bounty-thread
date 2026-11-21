@@ -1054,6 +1054,8 @@ const JR_CSS = `
   .jr-dates span { white-space: nowrap; }
   .jr-tags .ga-badge { height: 20px; padding: 0 8px; font-size: 10.5px; }
   .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 700; }
+  /* lamba "On hold · needs …" badge apne column mein hi wrap ho — email column par na chadhe */
+  .jr-tags .jr-match { height: auto; min-height: 20px; max-width: 100%; padding: 3px 8px; line-height: 1.35; white-space: normal; text-align: left; overflow-wrap: anywhere; }
   .jr-lnk { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jr-lnk:hover { color: var(--ad-primary); text-decoration: underline; }
   .jr-dim { color: #9aa3b8; }
