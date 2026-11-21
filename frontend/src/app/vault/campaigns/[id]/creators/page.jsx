@@ -19,7 +19,11 @@ const BOXES = [
   { t: "reach", l: "Registered", s: "on Geek OS", f: (c) => !c.failed && (c.registered) },
   { t: "reach", l: "No Instagram", s: "signed up, not linked", f: (c) => !c.failed && (c.registered && !c.ig) },
   { t: "reach", l: "Instagram", s: "media kit connected", f: (c) => !c.failed && (c.ig) },
-  { t: "screen", l: "Applied", s: "screening", f: (c) => !c.failed && (c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand") },
+  // Apply game: Applied = sirf jo sab bhar chuke + brief se match (ya match abhi load nahi hua).
+  // Steps bhar rahe creators "On hold" mein, sab bhar ke bhi match nahi → "Not a match" (Applied mein nahi ginte)
+  { t: "screen", l: "Applied", s: "ready to screen", f: (c) => !c.failed && (c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand") && c.mk !== "missing" && c.mk !== "no" },
+  { t: "screen", l: "On hold", s: "applied, still filling profile", f: (c) => !c.failed && c.applied && c.x?.stage !== "sent_to_brand" && c.mk === "missing" },
+  { t: "bad", l: "Not a match", s: "filled everything, doesn't fit", f: (c) => !c.failed && c.applied && c.x?.stage !== "sent_to_brand" && c.mk === "no" },
   { t: "screen", l: "Sent to brand", s: "waiting for the brand", f: (c) => !c.failed && (c.x?.stage === "sent_to_brand") },
   { t: "bad", l: "Rejected", s: "not a fit / brand passed", f: (c) => c.failed },
   { t: "screen", l: "Approved", s: "brand said yes", f: (c) => !c.failed && (c.approved) },
@@ -148,8 +152,12 @@ export default function WorkspaceCreators() {
       const h = String(r.handle || "").replace(/^@/, "").toLowerCase();
       const d = String(r.phone || r.x?.phone || r.i?.phone || "").replace(/\D/g, "").slice(-10);
       return { ...r, payTo: (r.pid && PAY.p[r.pid]) || (h && PAY.h[h]) || (d.length === 10 && PAY.ph[d]) || null };
+    }).map((r) => {
+      // brief match (live) → mk: ok | missing (on hold) | no (not a match) — Applied / On hold / Not a match boxes
+      const ms = r.pid && r.applied ? matchState((bmatch.data || {})[r.pid]) : null;
+      return ms ? { ...r, mk: ms.k } : r;
     });
-  }, [bt.data, people.data, prog.data, camp, extras.data, payCamp, PAY]);
+  }, [bt.data, people.data, prog.data, camp, extras.data, payCamp, PAY, bmatch.data]);
   const U = useMemo(() => unread.data || {}, [unread.data]);
   const counts = BX.map((b) => all.filter((c) => b.f(c, U)).length);
 
@@ -516,7 +524,7 @@ export default function WorkspaceCreators() {
                 className={`wcr-fit wcr-fit--${k} ${fit === l ? "is-on" : ""}`}
                 onClick={() => {
                   setFit(fit === l ? "Brief match: all" : l);
-                  if (fit !== l) setBox(BX.findIndex((b) => b.l === "Applied"));
+                  if (fit !== l) setBox(Math.max(0, BX.findIndex((b) => b.l === ({ ok: "Applied", missing: "On hold", no: "Not a match" }[k] || "Applied"))));
                 }}
               >
                 {l} · {c}
