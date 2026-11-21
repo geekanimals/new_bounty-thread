@@ -28,8 +28,9 @@ export default function FindMatching() {
   const on = !!id && id !== "sample";
   const m = useRpc("admin", "api.campaign_matches", { p_campaign: id, p_limit: 60 }, { skip: !on });
   const ext = useRpc("admin", "api.list_external_invites", { p_campaign: id }, { skip: !on });
-  const disc = useRpc("admin", "api.discover_external", { p_filters: {}, p_campaign: id, p_limit: 24 }, { skip: !on });
+  const disc = useRpc("admin", "api.discover_external", { p_filters: {}, p_campaign: id, p_limit: 60 }, { skip: !on });
   const [mode, setMode] = useState("match");
+  const [igDone, setIgDone] = useState({}); // Instagram tab: jinko abhi invite kiya (turant list se hatao)
   const [extShow, setExtShow] = useState("all"); // off-platform: all | waiting | joined
   const [show, setShow] = useState("Not invited yet");
   const [q, setQ] = useState("");
@@ -76,16 +77,33 @@ export default function FindMatching() {
   }, [mode, qq, id, on]);
 
   const L = (Array.isArray(m.data) ? m.data : []).map(toRow);
-  const disN = (Array.isArray(disc.data) ? disc.data : []).filter((c) => !c.invited).length;
+  const disN = (Array.isArray(disc.data) ? disc.data : []).filter((c) => !c.invited && !igDone[String(c.handle || "").toLowerCase()]).length;
   const extN = Array.isArray(ext.data) ? ext.data.length : 0;
   // off-platform handles ki public Instagram profile (DP, naam, bio, followers…) — api.external_profiles
   const extHandles = useMemo(() => (Array.isArray(ext.data) ? ext.data : []).map((i) => String(i.handle || "").replace(/^@/, "").toLowerCase()).filter(Boolean), [ext.data]);
-  const prof = useRpc("admin", "api.external_profiles", { p_handles: extHandles }, { skip: mode !== "ext" || !extHandles.length });
-  const profOf = useMemo(() => {
-    const m = {};
-    (Array.isArray(prof.data) ? prof.data : []).forEach((x) => x && x.handle && (m[String(x.handle).toLowerCase()] = x));
-    return m;
-  }, [prof.data]);
+  // ek saath 200 handles = 7–30s (timeout → "Loading…" atka) → 20-20 ke tukde parallel, jo aata jaaye dikhta jaaye
+  const [profOf, setProfOf] = useState({});
+  useEffect(() => {
+    if (mode !== "ext" || !extHandles.length) return;
+    let live = true;
+    const need = extHandles.filter((h) => !(h in profOf));
+    if (!need.length) return;
+    const parts = [];
+    for (let i = 0; i < need.length; i += 20) parts.push(need.slice(i, i + 20));
+    parts.forEach(async (part) => {
+      let r = await rpc("admin", "api.external_profiles", { p_handles: part });
+      if (r.error) r = await rpc("admin", "api.external_profiles", { p_handles: part });
+      if (!live) return;
+      const got = {};
+      part.forEach((h) => (got[h] = null)); // null = fetch ho gaya, Instagram data nahi mila
+      (Array.isArray(r.data) ? r.data : []).forEach((x) => x && x.handle && (got[String(x.handle).toLowerCase()] = x));
+      if (!r.error) setProfOf((o) => ({ ...o, ...got }));
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, extHandles]);
   const isInv = (r) => r.state !== "none" || mine[r.member];
   // jo abhi tak invite nahi hue / campaign mein nahi — wahi ginti (invite karte hi ghat jaati hai)
   const leftN = L.filter((r) => !isInv(r)).length;
@@ -165,6 +183,9 @@ export default function FindMatching() {
             <button type="button" className={`ga-tab ${mode === "all" ? "is-on" : ""}`} onClick={() => setMode("all")}>
               🔎 Search all creators
             </button>
+            <button type="button" className={`ga-tab ${mode === "ig" ? "is-on" : ""}`} onClick={() => setMode("ig")}>
+              📸 Instagram matches ({disc.loading ? "…" : disN})
+            </button>
             {extN > 0 && (
               <button type="button" className={`ga-tab ${mode === "ext" ? "is-on" : ""}`} onClick={() => setMode("ext")}>
                 ✉️ Off-platform invites ({extN})
@@ -181,7 +202,7 @@ export default function FindMatching() {
           </div>
           {mode === "all" && <input className="ga-input fm-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, @handle or city…" aria-label="Search all creators" autoFocus />}
 
-          <div className="fm-table" hidden={mode === "ext"}>
+          <div className="fm-table" hidden={mode === "ext" || mode === "ig"}>
             <table className="ga-table">
               <thead>
                 <tr>
@@ -235,6 +256,92 @@ export default function FindMatching() {
               </p>
             )}
           </div>
+          {mode === "ig" && (
+            <div className="fm-ext">
+              <p className="fm-exth">Instagram creators from Discovery who fit this campaign and aren&apos;t on Geek OS yet. Invite saves them to Off-platform invites — then DM them the message.</p>
+              {disc.loading && !Array.isArray(disc.data) ? <p className="fm-exth">Loading Instagram matches…</p> : null}
+              {disc.error ? <p className="fm-exth">{errText(disc.error)}</p> : null}
+              {Array.isArray(disc.data) && !disc.data.filter((c2) => !c2.invited && !igDone[String(c2.handle || "").toLowerCase()]).length && <p className="fm-exth">No new Instagram matches right now.</p>}
+              {(Array.isArray(disc.data) ? disc.data : [])
+                .filter((c2) => !c2.invited && !igDone[String(c2.handle || "").toLowerCase()])
+                .map((P) => {
+                  const h = String(P.handle || "").replace(/^@/, "").toLowerCase();
+                  return (
+                    <div key={h} className="fm-excard">
+                      <span className="fm-exav">
+                        {P.profile_picture_url ? <img src={P.profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} /> : null}
+                        <i aria-hidden="true">{h.charAt(0).toUpperCase()}</i>
+                      </span>
+                      <span className="fm-exinfo">
+                        <span className="fm-exname">
+                          {P.name ? <b>{P.name}</b> : null}
+                          <a href={`https://www.instagram.com/${encodeURIComponent(h)}/`} target="_blank" rel="noopener noreferrer">
+                            @{h} ↗
+                          </a>
+                          {P.score != null && <span className="ga-badge">🎯 {P.score}% match</span>}
+                        </span>
+                        <span className="fm-exstats">
+                          {P.followers != null && (
+                            <span>
+                              <b>{fmtNum(P.followers)}</b> followers
+                            </span>
+                          )}
+                          {P.media_count != null && (
+                            <span>
+                              <b>{fmtNum(P.media_count)}</b> posts
+                            </span>
+                          )}
+                          {P.city && <span>📍 {P.city}</span>}
+                          {P.followers == null && !P.city && <span className="fm-exstats--none">No public Instagram data yet</span>}
+                        </span>
+                        {Array.isArray(P.why) && P.why.length > 0 && (
+                          <span className="fm-excats fm-why">
+                            {P.why.slice(0, 3).map((w) => (
+                              <span key={w}>✓ {w}</span>
+                            ))}
+                          </span>
+                        )}
+                        {Array.isArray(P.categories) && P.categories.length > 0 && (
+                          <span className="fm-excats">
+                            {P.categories.slice(0, 4).map((c2) => (
+                              <span key={c2}>{c2}</span>
+                            ))}
+                          </span>
+                        )}
+                        {P.bio && <span className="fm-exbio">{P.bio}</span>}
+                      </span>
+                      <span className="fm-exact">
+                        {P.permalink && /^https?:\/\//.test(P.permalink) && (
+                          <a className="ga-btn ga-btn--ghost fm-exb" href={P.permalink} target="_blank" rel="noopener noreferrer">
+                            See post
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          className="ga-btn ga-btn--primary fm-exb"
+                          disabled={busy === "ig:" + h}
+                          onClick={async () => {
+                            setBusy("ig:" + h);
+                            setIgDone((o) => ({ ...o, [h]: true }));
+                            const { error } = await rpc("admin", "api.invite_external", { p_campaign: id, p_handle: h, p_note: null });
+                            setBusy("");
+                            if (error) {
+                              setIgDone((o) => ({ ...o, [h]: false }));
+                              return setToast(errText(error));
+                            }
+                            setToast(`@${h} invited ✓ — now in Off-platform invites, DM them`);
+                            ext.reload(true);
+                            disc.reload(true);
+                          }}
+                        >
+                          {busy === "ig:" + h ? "Inviting…" : "Invite"}
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
           {mode === "ext" && (
             <div className="fm-ext">
               <p className="fm-exth">Creators you invited by Instagram handle — not on Geek OS yet. DM them the message; the campaign waits in their account once they sign up.</p>
@@ -299,7 +406,7 @@ export default function FindMatching() {
                           {P.city && <span>📍 {P.city}</span>}
                         </span>
                       ) : (
-                        <span className="fm-exstats fm-exstats--none">{prof.loading ? "Loading profile…" : "Public profile not fetched yet"}</span>
+                        <span className="fm-exstats fm-exstats--none">{!(h in profOf) ? "Loading profile…" : "No public Instagram data yet"}</span>
                       )}
                       {P && Array.isArray(P.categories) && P.categories.length > 0 && (
                         <span className="fm-excats">
@@ -355,6 +462,7 @@ export default function FindMatching() {
       {toast && <div className="ga-toast fm-toast">{toast}</div>}
 
       <style>{`
+        .fm-why span { background: #ecfdf3 !important; color: #067647 !important; border-color: #c6efd8 !important; }
         .fm-exseg { display: inline-flex; gap: 4px; margin: 4px 0 14px; padding: 4px; border-radius: 12px; background: #f1f2f8; }
         .fm-exseg button { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 8px 0 13px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 12.5px; font-weight: 700; color: #4b5470; cursor: pointer; }
         .fm-exseg button span { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; background: #e2e4f0; font-size: 11px; font-weight: 800; }

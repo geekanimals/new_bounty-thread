@@ -87,125 +87,243 @@ export default function PartPanel({ row, busy, onAct, ship: hasShip = true }) {
       </div>
 
       <h3 className="ga-h2 pp-h">Campaign file</h3>
-      <div className="pp-facts">
-        {con.issued_at && (
-          <div>
-            📜 Contract {con.signed_at ? <><b>signed</b> by {con.signature_name || "the creator"} on {fmtDate(con.signed_at)}</> : <>sent {fmtDate(con.issued_at)} — <b>not signed yet</b></>}
-            {" · "}
-            {con.product || "product"} · {dels || "—"} · {con.content_days || 7} days to post · ad rights {con.ad_rights_months ?? 1} mo · collab {con.collab_rights ? "✓" : "✕"}
-            {(con.clauses || []).some((c) => c.key === "non_delivery") ? " · ⛔ blacklist clause" : ""}
-            {(con.clauses || []).some((c) => c.key === "reship") ? " · ↪ re-ship clause" : ""}
-            {(con.clauses || []).length > 0 && (
-              <details className="pp-cl">
-                <summary>Read the contract</summary>
-                <ol>
-                  {con.clauses.map((c, i) => (
-                    <li key={i}>{c.text || c.title || c.label || c.key}</li>
-                  ))}
-                </ol>
-              </details>
+
+      {/* zaroori alerts sabse upar */}
+      {(x.blocked_at || BP_FAIL.includes(x.stage)) && (
+        <div className="pp-alerts">
+          {x.blocked_at && (
+            <div className="pp-bad">
+              ⛔ <b>Blocked {fdt(x.blocked_at)}</b> — {x.block_reason || "no video 7 days after delivery"}. Call {x.phone ? <a href={`tel:${x.phone}`}><b>{x.phone}</b></a> : "— no number"}, ask why, note it and unblock with a new due date.
+            </div>
+          )}
+          {BP_FAIL.includes(x.stage) && (
+            <div className="pp-bad">
+              Out of the campaign: <b>{String(x.stage).replace(/_/g, " ")}</b>
+              {x.reason ? ` — ${x.reason}` : ""}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="pp-tiles">
+        {/* 🎬 Content — video + reel / post links (sabse zaroori) */}
+        <section className="pp-tile pp-tile--wide">
+          <header>
+            <span>🎬 Content</span>
+            <em className={`pp-pill ${posts.length ? "is-ok" : rev?.decision === "approved" ? "is-ok" : sub ? "is-info" : overdue ? "is-bad" : ""}`}>
+              {posts.length ? `${posts.length} posted` : rev?.decision === "approved" ? "Client approved" : sub ? "Video submitted" : overdue ? "Video overdue" : x.due_on ? "Waiting for video" : "Not started"}
+            </em>
+          </header>
+          {posts.length > 0 && (
+            <ul className="pp-posts">
+              {posts.map((p, i) => (
+                <li key={p.post_id || i}>
+                  <span className="pp-posts__t">
+                    📲 <b>{p.media_type ? String(p.media_type).replace(/_/g, " ").toLowerCase().replace(/^\w/, (m) => m.toUpperCase()) : "Post"}</b> · {fmtDate(p.posted_at)}
+                    {p.stats && (p.stats.views || p.stats.reach) ? <span className="pp-views">👁 {Number(p.stats.views || p.stats.reach).toLocaleString("en-IN")} views</span> : null}
+                  </span>
+                  <span className="pp-posts__a">
+                    {safe(p.permalink) && (
+                      <a href={p.permalink} target="_blank" rel="noopener noreferrer" className="pp-link">
+                        Open reel ↗
+                      </a>
+                    )}
+                    {safe(p.screenshot_url) && (
+                      <a href={p.screenshot_url} target="_blank" rel="noopener noreferrer" className="pp-link">
+                        📷 Screenshot
+                      </a>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <dl className="pp-kv">
+            <div>
+              <dt>Video</dt>
+              <dd>
+                {sub ? (
+                  <>
+                    {safe(sub.url) ? (
+                      <a href={sub.url} target="_blank" rel="noopener noreferrer" className="pp-link">
+                        Open the cut ↗
+                      </a>
+                    ) : (
+                      "Submitted"
+                    )}
+                    <small>
+                      {sub.rounds > 1 ? `round ${sub.rounds} · ` : ""}
+                      {fdt(sub.submitted_at)}
+                    </small>
+                    {sub.note ? <small>“{sub.note}”</small> : null}
+                  </>
+                ) : (
+                  <span className="pp-muted">Not submitted yet</span>
+                )}
+              </dd>
+            </div>
+            {x.due_on && !["published", "completed"].includes(x.stage) && (
+              <div>
+                <dt>Due</dt>
+                <dd className={overdue ? "pp-red" : ""}>
+                  {fmtDate(x.due_on)}
+                  {overdue && <small className="pp-red">Overdue — blacklist + re-ship at their cost</small>}
+                </dd>
+              </div>
             )}
-          </div>
+            {rev && (
+              <div>
+                <dt>Client</dt>
+                <dd>
+                  {rev.decision === "approved" ? "✅ Approved" : "✏️ Changes asked"}
+                  <small>
+                    {fdt(rev.at)}
+                    {rev.reason ? ` — “${rev.reason}”` : ""}
+                  </small>
+                </dd>
+              </div>
+            )}
+            {["content_created", "changes_requested"].includes(x.stage) && !x.blocked_at && (
+              <div>
+                <dt>Reminders</dt>
+                <dd>
+                  {x.reminders_sent || 0} sent
+                  {x.next_reminder ? <small>next {fdt(x.next_reminder)}</small> : null}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </section>
+
+        {/* 🚚 Courier */}
+        {hasShip && (
+          <section className="pp-tile">
+            <header>
+              <span>🚚 Courier</span>
+              <em className={`pp-pill ${ship.status === "delivered" ? "is-ok" : ship.status === "shipped" ? "is-info" : ship.status === "failed" ? "is-bad" : "is-warn"}`}>
+                {{ pending: "Waiting for courier", shipped: "In transit", delivered: "Delivered", failed: "Delivery failed" }[ship.status] || (to ? "Not shipped yet" : "No address yet")}
+              </em>
+            </header>
+            <dl className="pp-kv">
+              {ship.courier && (
+                <div>
+                  <dt>Courier</dt>
+                  <dd>{ship.courier}</dd>
+                </div>
+              )}
+              {ship.tracking_ref && (
+                <div>
+                  <dt>Tracking</dt>
+                  <dd>
+                    <b>{ship.tracking_ref}</b>
+                    {safe(ship.tracking_url) && (
+                      <a href={ship.tracking_url} target="_blank" rel="noopener noreferrer" className="pp-link">
+                        Track ↗
+                      </a>
+                    )}
+                  </dd>
+                </div>
+              )}
+              {(ship.shipped_at || ship.delivered_at) && (
+                <div>
+                  <dt>Dates</dt>
+                  <dd>
+                    {ship.shipped_at ? `Sent ${fmtDate(ship.shipped_at)}` : ""}
+                    {ship.delivered_at ? <small>Delivered {fmtDate(ship.delivered_at)}</small> : null}
+                  </dd>
+                </div>
+              )}
+              {!ship.courier && !ship.tracking_ref && !ship.shipped_at && <div className="pp-muted">Nothing shipped yet.</div>}
+            </dl>
+          </section>
         )}
+
+        {/* 📜 Contract */}
+        <section className="pp-tile">
+          <header>
+            <span>📜 Contract</span>
+            <em className={`pp-pill ${con.signed_at ? "is-ok" : con.issued_at ? "is-warn" : ""}`}>{con.signed_at ? `Signed ${fmtDate(con.signed_at)}` : con.issued_at ? "Not signed yet" : "Not sent"}</em>
+          </header>
+          {con.issued_at ? (
+            <>
+              <dl className="pp-kv">
+                <div>
+                  <dt>Deliver</dt>
+                  <dd>
+                    {dels || "—"}
+                    <small>{con.content_days || 7} days to post · ad rights {con.ad_rights_months ?? 1} mo · collab {con.collab_rights ? "✓" : "✕"}</small>
+                  </dd>
+                </div>
+                {con.signed_at && (
+                  <div>
+                    <dt>Signed by</dt>
+                    <dd>{con.signature_name || "the creator"}</dd>
+                  </div>
+                )}
+              </dl>
+              {((con.clauses || []).some((c) => c.key === "non_delivery") || (con.clauses || []).some((c) => c.key === "reship")) && (
+                <p className="pp-chips">
+                  {(con.clauses || []).some((c) => c.key === "non_delivery") && <span>⛔ Blacklist clause</span>}
+                  {(con.clauses || []).some((c) => c.key === "reship") && <span>↪ Re-ship clause</span>}
+                </p>
+              )}
+              {(con.clauses || []).length > 0 && (
+                <details className="pp-cl">
+                  <summary>Read the contract</summary>
+                  <ol>
+                    {con.clauses.map((c, i) => (
+                      <li key={i}>{c.text || c.title || c.label || c.key}</li>
+                    ))}
+                  </ol>
+                </details>
+              )}
+            </>
+          ) : (
+            <p className="pp-muted">No contract sent yet.</p>
+          )}
+        </section>
+
+        {/* 📍 Address */}
         {to && (
-          <div>
-            📍 Ship to: <b>{to.name || ""}</b>, {[to.line1, to.line2, to.landmark, to.city, to.state, to.postal_code].filter(Boolean).join(", ")}
-            {to.phone ? ` · 📞 ${to.phone}` : ""}
-          </div>
+          <section className="pp-tile">
+            <header>
+              <span>📍 Ship to</span>
+              <em className="pp-pill is-ok">{to.city || "Address"}</em>
+            </header>
+            <p className="pp-addr">
+              <b>{to.name || ""}</b>
+              <br />
+              {[to.line1, to.line2, to.landmark].filter(Boolean).join(", ")}
+              <br />
+              {[to.city, to.state, to.postal_code].filter(Boolean).join(", ")}
+              {to.phone ? (
+                <>
+                  <br />📞 {to.phone}
+                </>
+              ) : null}
+            </p>
+          </section>
         )}
-        {ship.status && (
-          <div>
-            🚚 {{ pending: "Waiting for courier", shipped: "In transit", delivered: "Delivered", failed: "Delivery failed" }[ship.status] || ship.status}
-            {ship.courier ? ` · ${ship.courier}` : ""}
-            {ship.tracking_ref ? <> · <b>{ship.tracking_ref}</b></> : ""}
-            {safe(ship.tracking_url) && (
-              <>
-                {" · "}
-                <a href={ship.tracking_url} target="_blank" rel="noopener noreferrer">
-                  track ↗
-                </a>
-              </>
+
+        {/* 📞 / ⭐ notes */}
+        {(x.call_note || x.feedback) && (
+          <section className="pp-tile">
+            <header>
+              <span>📝 Notes</span>
+            </header>
+            {x.call_note && (
+              <p className="pp-note">
+                📞 Last call {fdt(x.call_at)}: “{x.call_note}”
+              </p>
             )}
-            {ship.delivered_at ? ` · delivered ${fmtDate(ship.delivered_at)}` : ship.shipped_at ? ` · sent ${fmtDate(ship.shipped_at)}` : ""}
-          </div>
-        )}
-        {x.blocked_at && (
-          <div className="pp-bad">
-            ⛔ <b>Blocked {fdt(x.blocked_at)}</b> — {x.block_reason || "no video 7 days after delivery"}. Call {x.phone ? <a href={`tel:${x.phone}`}><b>{x.phone}</b></a> : "— no number"}, ask why, note it and unblock with a new due date.
-          </div>
-        )}
-        {x.call_note && (
-          <div>
-            📞 Last call {fdt(x.call_at)}: “{x.call_note}”
-          </div>
-        )}
-        {["content_created", "changes_requested"].includes(x.stage) && !x.blocked_at && (
-          <div>
-            🔔 Reminders sent: <b>{x.reminders_sent || 0}</b>
-            {x.next_reminder ? ` · next ${fdt(x.next_reminder)}` : ""}
-          </div>
-        )}
-        {x.feedback && (
-          <div>
-            ⭐ Creator feedback: <b>{"★".repeat(+x.feedback.rating || 0)}</b>
-            {x.feedback.comment ? ` — “${x.feedback.comment}”` : ""}
-          </div>
-        )}
-        {x.due_on && !["published", "completed"].includes(x.stage) && (
-          <div>
-            ⏳ Video due <b>{fmtDate(x.due_on)}</b>
-            {overdue && <b className="pp-red"> — overdue (contract: blacklist + re-ship at their cost)</b>}
-          </div>
-        )}
-        {sub && (
-          <div>
-            🎬 Video{sub.rounds > 1 ? ` (round ${sub.rounds})` : ""}:{" "}
-            {safe(sub.url) ? (
-              <a href={sub.url} target="_blank" rel="noopener noreferrer">
-                open the cut ↗
-              </a>
-            ) : (
-              "—"
-            )}{" "}
-            · {fdt(sub.submitted_at)}
-            {sub.note ? ` · “${sub.note}”` : ""}
-          </div>
-        )}
-        {rev && (
-          <div>
-            {rev.decision === "approved" ? "✅ Approved" : "✏️ Changes asked"} {fdt(rev.at)}
-            {rev.reason ? ` — “${rev.reason}”` : ""}
-          </div>
-        )}
-        {posts.map((p, i) => (
-          <div key={p.post_id || i}>
-            📲 {p.media_type || "post"} posted {fmtDate(p.posted_at)}
-            {safe(p.permalink) && (
-              <>
-                {" · "}
-                <a href={p.permalink} target="_blank" rel="noopener noreferrer">
-                  open ↗
-                </a>
-              </>
+            {x.feedback && (
+              <p className="pp-note">
+                ⭐ Feedback: <b>{"★".repeat(+x.feedback.rating || 0)}</b>
+                {x.feedback.comment ? ` — “${x.feedback.comment}”` : ""}
+              </p>
             )}
-            {safe(p.screenshot_url) && (
-              <>
-                {" · "}
-                <a href={p.screenshot_url} target="_blank" rel="noopener noreferrer">
-                  📷 screenshot
-                </a>
-              </>
-            )}
-            {p.stats && (p.stats.views || p.stats.reach) ? ` · ${p.stats.views || p.stats.reach} views` : ""}
-          </div>
-        ))}
-        {BP_FAIL.includes(x.stage) && (
-          <div className="pp-bad">
-            Out of the campaign: <b>{String(x.stage).replace(/_/g, " ")}</b>
-            {x.reason ? ` — ${x.reason}` : ""}
-          </div>
+          </section>
         )}
-        {!con.issued_at && !to && !ship.status && !sub && !posts.length && !x.blocked_at && <div className="pp-muted">Nothing on file yet for this creator.</div>}
       </div>
 
       <details className="pp-tl">
@@ -230,6 +348,31 @@ export default function PartPanel({ row, busy, onAct, ship: hasShip = true }) {
       </details>
 
       <style>{`
+        .pp-alerts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; font-size: 13px; line-height: 1.5; }
+        .pp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+        .pp-tile { display: flex; flex-direction: column; gap: 10px; padding: 14px 15px; border-radius: 14px; border: 1px solid var(--ad-line); background: linear-gradient(180deg, #fff 0%, #fbfbff 100%); font-size: 13px; color: var(--ad-ink); min-width: 0; }
+        .pp-tile--wide { grid-column: 1 / -1; }
+        .pp-tile header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .pp-tile header span { font-size: 13.5px; font-weight: 800; }
+        .pp-pill { flex-shrink: 0; height: 22px; padding: 0 9px; border-radius: 999px; display: inline-flex; align-items: center; background: #eef0f6; color: #5d6683; font-style: normal; font-size: 11px; font-weight: 800; }
+        .pp-pill.is-ok { background: #def7ec; color: #0b7a52; } .pp-pill.is-info { background: #e3eefe; color: #1f5fc9; } .pp-pill.is-warn { background: #fff1db; color: #a35a00; } .pp-pill.is-bad { background: #fde8e6; color: #b42318; }
+        .pp-kv { display: grid; gap: 8px; margin: 0; }
+        .pp-kv > div { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+        .pp-kv dt { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #9aa1bb; }
+        .pp-kv dd { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-weight: 600; }
+        .pp-kv dd small { flex-basis: 100%; font-size: 12px; font-weight: 500; color: var(--ad-muted); }
+        .pp-link { color: var(--ad-primary) !important; font-weight: 800; text-decoration: none; }
+        .pp-link:hover { text-decoration: underline; }
+        .pp-posts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+        .pp-posts li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 12px; border-radius: 11px; background: #f2fbf6; border: 1px solid #cfeadc; }
+        .pp-posts__t { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+        .pp-posts__a { display: inline-flex; gap: 12px; }
+        .pp-views { font-size: 12px; font-weight: 700; color: #0b7a52; }
+        .pp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+        .pp-chips span { height: 22px; padding: 0 9px; border-radius: 999px; display: inline-flex; align-items: center; background: #fff5f5; border: 1px solid #f5c8c8; color: #b42318; font-size: 11px; font-weight: 700; }
+        .pp-addr { margin: 0; line-height: 1.55; color: #3b4462; }
+        .pp-note { margin: 0; line-height: 1.5; }
+        @media (max-width: 760px) { .pp-tiles { grid-template-columns: 1fr; } }
         .pp-sub { margin-top: 6px; font-size: 12px; color: var(--ad-muted); }
         .pp-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
         .pp-btn { display: inline-flex; align-items: center; min-height: 38px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 13px; font-weight: 800; color: #6657e9; text-decoration: none; cursor: pointer; }

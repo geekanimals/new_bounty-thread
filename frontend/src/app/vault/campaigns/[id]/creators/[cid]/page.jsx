@@ -346,6 +346,23 @@ export default function WorkspaceCreator() {
       </AdminShell>
     );
 
+  // campaign file (content, courier, contract, address) — chat band ho to sabse aage (left), khula ho to neeche
+  const ppEl =
+    x.kind === "p" ? (
+          <div className="wcc-box wcc-pp">
+            <PartPanel
+              row={x}
+              busy={busy.startsWith("pp:") ? busy.slice(3) : ""}
+              ship={camp?.campaign_type !== "paid"}
+              onAct={async (k) => {
+                setBusy("pp:" + k);
+                await runAction(k, x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
+                setBusy("");
+              }}
+            />
+          </div>
+    ) : null;
+
   return (
     <AdminShell>
       <WorkspaceHead id={id} campaign={camp} />
@@ -396,7 +413,8 @@ export default function WorkspaceCreator() {
           }
         />
 
-        <div className={`wcc-grid ${chatOpen ? "" : "wcc-grid--closed"}`}>
+        <div className={`wcc-grid ${chatOpen ? "" : "wcc-grid--closed"} ${!chatOpen && ppEl ? "has-pp" : ""}`}>
+          {!chatOpen && ppEl}
           {/* WhatsApp chat — band ho to chhota card, khula ho to poori chat */}
           {!chatOpen && (() => {
             const last = [...msgs].reverse().find((m) => !m.sys);
@@ -615,20 +633,7 @@ export default function WorkspaceCreator() {
             </div>
           </div>
         </div>
-        {x.kind === "p" && (
-          <div className="wcc-box wcc-pp">
-            <PartPanel
-              row={x}
-              busy={busy.startsWith("pp:") ? busy.slice(3) : ""}
-              ship={camp?.campaign_type !== "paid"}
-              onAct={async (k) => {
-                setBusy("pp:" + k);
-                await runAction(k, x, { campaignId: id, ask: askFn, say: setToast, reload, router, match: (bmatch.data || {})[rid], campaignName: camp?.name });
-                setBusy("");
-              }}
-            />
-          </div>
-        )}
+        {chatOpen && ppEl}
       </section>
 
       {pub && (
@@ -737,6 +742,9 @@ export default function WorkspaceCreator() {
         .wcc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
         .wcc-grid--closed { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
         .wcc-grid--closed .wcc-side { order: -1; }
+        .wcc-grid--closed.has-pp { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+        .wcc-grid--closed.has-pp > .wcc-pp { grid-column: 1; grid-row: 1 / span 3; margin-top: 0; }
+        .wcc-grid--closed.has-pp > .wcc-chatcard, .wcc-grid--closed.has-pp > .wcc-side { grid-column: 2; order: 0; }
         .wcc-chatcard { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 16px; border: 1px solid #dbe9e3; background: linear-gradient(180deg, #f3fbf7 0%, #ffffff 70%); }
         .wcc-chatcard__top { display: flex; align-items: center; gap: 12px; }
         .wcc-chatcard__ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: #0d5c4a; font-size: 19px; }
