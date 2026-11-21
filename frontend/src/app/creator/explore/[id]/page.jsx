@@ -9,7 +9,7 @@ import GuestNav from "@/components/creator/GuestNav";
 import { RumiTip } from "@/components/creator/OnboardShell";
 import { TYPE_LABEL, journeyFor, deadlineFrom } from "@/components/creator/data";
 import { useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, rememberApply, safeLink } from "@/services/creator";
-import { Gift, Film, Users, Calendar, ShieldCheck, Sparkle, Lock, ChevronDown } from "@/components/ui/Icons";
+import { Gift, Film, Calendar, ShieldCheck, Sparkle, Lock, ChevronDown } from "@/components/ui/Icons";
 
 
 /**
@@ -119,12 +119,6 @@ export default function GuestBrief() {
                   <small>Submit draft for approval</small>
                 </span>
               </div>
-              <div className="gb-box gb-box--wide">
-                <Users size={15} />
-                <span>
-                  <b>Who can apply:</b> {c.who}
-                </span>
-              </div>
               <div className="gb-box">
                 <Calendar size={15} />
                 <span>
@@ -169,9 +163,9 @@ export default function GuestBrief() {
           <section className="gb-right">
             <div className="gb-apply">
               <a href="/creator/login" className="gb-apply__btn" onClick={apply}>
-                Verify WhatsApp to apply →
+                Apply now →
               </a>
-              <p>You review and accept terms if selected.</p>
+              <p>Quick WhatsApp check, then you&apos;re in. You review and accept terms if selected.</p>
             </div>
 
             <details className="gb-brief" open>

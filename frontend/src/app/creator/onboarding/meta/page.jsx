@@ -19,7 +19,10 @@ export default function MetaConnect() {
   const go = async () => {
     setErr("");
     try {
-      const next = /next(=|%3D)apply/.test(window.location.search) ? "discover" : "";
+      // ?next=apply&c=<campaign> → connect ke baad seedha usi campaign par (apply poora / on hold steps)
+      const sp = new URLSearchParams(window.location.search);
+      const cm = sp.get("c") || "";
+      const next = /next(=|%3D)apply/.test(window.location.search) ? (/^[0-9a-f-]{36}$/i.test(cm) ? "c:" + cm : "discover") : "";
       await startInstagramConnect({ after: next });
     } catch (e) {
       setErr("Couldn't open Instagram: " + (e.message || e));

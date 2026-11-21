@@ -90,8 +90,9 @@ export function ConnectInstagramSheet({ open, onClose }) {
           <img src={sk.img} alt="" className="cis-img" />
           <p className="cis-txt">Brands check your real reach before selecting. Connect once — we build your media kit while you wait.</p>
           <ul className="cis-list">
-            <li>✓ Official Meta connection — no password shared</li>
-            <li>✓ Only your public numbers are shown to brands</li>
+            <li>🔒 You log in on Instagram&apos;s own page — we never see your password</li>
+            <li>✓ We never post anything unless you tap Publish yourself</li>
+            <li>✓ We only read followers, reach and posts — to show brands your real numbers</li>
             <li>✓ Disconnect anytime from Settings</li>
           </ul>
           <button type="button" className="bx-btn bx-btn--dark bx-btn--lg bx-btn--block" onClick={() => router.push("/creator/onboarding/meta?next=apply")}>

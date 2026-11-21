@@ -15,8 +15,8 @@ export default function CampaignCard({ c, href, guest = false, locked = false, a
   // Locked card: city chhod ke sirf followers + category (Figma)
   const whoLocked = c.who.replace(/ • Based in [^•]+/, "").replace("Category: ", "");
   // Supabase data: c.checked === false = eligibility pata nahi (purane "⇄ Check fit"), c.closed = applications band
-  const unknown = !locked && !applied && c.checked === false;
-  const status = applied ? "Applied" : c.closed ? "Applications closed" : unknown ? "Check fit" : ok ? "You match" : "Not eligible";
+  // "Not eligible" kabhi nahi — sab apply kar sakte hain; kami apply ke baad steps mein
+  const status = applied ? "Applied" : c.closed ? "Applications closed" : ok ? "You match" : "Open to apply";
   return (
     <div className={`cc-wrap ${guest || mobile === "dark" ? "cc-wrap--row" : ""} ${guest ? "cc-wrap--guest" : mobile === "dark" ? "cc-wrap--dark" : ""}`}>
       {/* ---------- Visual card ---------- */}
@@ -46,12 +46,12 @@ export default function CampaignCard({ c, href, guest = false, locked = false, a
               </Link>
             ) : (
               <>
-                {locked || unknown ? (
-                  <span className="cc-fit">⇄ Check fit</span>
-                ) : c.closed && !applied ? (
+                {c.closed && !applied ? (
                   <span className="cc-no">🔒 Applications closed</span>
+                ) : ok || applied ? (
+                  <span className="cc-ok">✓ {status}</span>
                 ) : (
-                  <span className={ok || applied ? "cc-ok" : "cc-no"}>{ok || applied ? `✓ ${status}` : "✗ Not eligible"}</span>
+                  <span className="cc-fit">✨ Open to apply</span>
                 )}
                 <Link href={href} className="cc-btn">
                   View brief →

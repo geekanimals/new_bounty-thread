@@ -1,6 +1,7 @@
 "use client";
 
 import BriefBlocks from "@/components/creator/BriefBlocks";
+import ApplySteps from "@/components/creator/ApplySteps";
 import { STEP_NAME } from "@/lib/steps";
 
 import { useEffect, useMemo, useState } from "react";
@@ -8,9 +9,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import BountyShell, { ConnectInstagramSheet } from "@/components/creator/BountyShell";
 import { RumiTip } from "@/components/creator/OnboardShell";
-import { useSession, useJoinGate, useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, checkEligibility, applyTo, myApplyProfiles, codeFill, safeLink, errText } from "@/services/creator";
+import { useSession, useJoinGate, useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, applyTo, myApplyProfiles, codeFill, safeLink, errText } from "@/services/creator";
 import { TYPE_LABEL, journeyFor, deadlineFrom, getSidekick } from "@/components/creator/data";
-import { ArrowLeft, Gift, Film, Users, Calendar, ShieldCheck, Megaphone, Lock, FileText, ChevronDown } from "@/components/ui/Icons";
+import { ArrowLeft, Gift, Film, Calendar, ShieldCheck, Megaphone, Lock, FileText, ChevronDown } from "@/components/ui/Icons";
 
 // participation stage → chhota label (purane STAGE_SHORT / spill)
 const STAGE = { ...STEP_NAME, invited: "Invited" };
@@ -27,7 +28,8 @@ export default function CampaignBrief() {
   const gate = useJoinGate();
   const locked = gate.locked;
   const covers = useCovers();
-  const { loading, list, error, reload } = useOpenCampaigns({ publicList: locked, skip: gate.loading });
+  // login wala har creator (Instagram connect na bhi ho) — apni list (my_stage + eligibility) taaki apply ke baad "on hold" steps dikhe
+  const { loading, list, error, reload } = useOpenCampaigns({ publicList: false, skip: gate.loading });
   const x = useMemo(() => list.find((r) => String(r.campaign_id) === String(id)), [list, id]);
 
   const [why, setWhy] = useState(null); // eligibility jab not eligible
@@ -37,9 +39,24 @@ export default function CampaignBrief() {
   const [err, setErr] = useState("");
   const [pick, setPick] = useState(null); // { profiles, value }
   const [appliedAs, setAppliedAs] = useState(null);
+  const [sending, setSending] = useState(0); // 0 = nahi, 1..3 = "Submitting" ke steps
+  const [party, setParty] = useState(false); // 🎉 verify hote hi
 
   const sk = getSidekick(s.sidekick);
   useEffect(() => setWhy(null), [id]);
+  // on hold tha → ab sab poora (Instagram connect / profile bhara) → ek baar 🎉
+  const elOk = !!(x && (x.my_stage || appliedAs !== null) && x.eligibility && x.eligibility.eligible === true);
+  useEffect(() => {
+    if (!elOk) return;
+    try {
+      if (!window.sessionStorage.getItem(`bx_hold_${id}`)) return;
+      window.sessionStorage.removeItem(`bx_hold_${id}`);
+    } catch {
+      return;
+    }
+    const t = setTimeout(() => setParty(true), 0);
+    return () => clearTimeout(t);
+  }, [elOk, id]);
 
   if (gate.loading || loading)
     return (
@@ -85,27 +102,35 @@ export default function CampaignBrief() {
   const usage = t.ad_rights_months ? `${t.ad_rights_months} month${t.ad_rights_months > 1 ? "s" : ""}` : "None";
 
   // ---------- Apply ----------
+  // Apply first, complete later: sabko apply karne do. Profile mein kuch MISSING ho to application "on hold" +
+  // steps (ApplySteps). Sirf asli mismatch (data hai par brief se bahar) par backend mana karta hai → sach batao.
   const doApply = async (profile) => {
     setBusy(true);
     setErr("");
+    setSending(1);
+    const t0 = Date.now();
+    const tick = setInterval(() => setSending((n) => Math.min(n + 1, 3)), 650);
     const r = await applyTo(x.campaign_id, profile);
+    // "Submitting…" ek pal dikhe (bahut tez ho to bhi)
+    const wait = 1900 - (Date.now() - t0);
+    if (wait > 0) await new Promise((ok) => setTimeout(ok, wait));
+    clearInterval(tick);
+    setSending(0);
     setBusy(false);
     if (r.notEligible) return setWhy(r.notEligible);
     if (r.error) return setErr(r.error);
+    try {
+      window.sessionStorage.setItem(`bx_hold_${x.campaign_id}`, "1");
+    } catch {
+      /* ignore */
+    }
     setPick(null);
     setAppliedAs(profile || "");
     reload();
   };
   const startApply = async () => {
-    if (locked) return setSheet(true);
     setBusy(true);
     setErr("");
-    // har criteria pehle check (purane jaisa)
-    const e = await checkEligibility(x.campaign_id, el);
-    if (e && e.eligible === false) {
-      setBusy(false);
-      return setWhy(e);
-    }
     const profs = await myApplyProfiles();
     setBusy(false);
     // ek se zyada profile → chuno; ek hi ho to wahi
@@ -170,12 +195,6 @@ export default function CampaignBrief() {
                 <small>Submit draft for approval</small>
               </span>
             </div>
-            <div className="cb-box cb-box--wide">
-              <Users size={15} />
-              <span>
-                <b>Who can apply:</b> {who.length ? who.join(" • ") : "Open to every creator"}
-              </span>
-            </div>
             <div className="cb-box">
               <Calendar size={15} />
               <span>
@@ -219,43 +238,32 @@ export default function CampaignBrief() {
         {/* ---------- Right: apply + brief ---------- */}
         <section className="cb-right">
           <div className="cb-cta">
-            {locked ? (
-              <>
-                <button type="button" className="bx-btn bx-btn--sky bx-btn--lg bx-btn--block" onClick={() => setSheet(true)}>
-                  Apply to campaign →
-                </button>
-                <p>We’ll ask for Instagram only when you apply.</p>
-              </>
+            {sending ? (
+              <div className="cb-send" role="status" aria-live="polite">
+                <span className="cb-send__spin" aria-hidden="true" />
+                <p className="cb-send__h">Submitting your application…</p>
+                <ul>
+                  <li className={sending >= 1 ? "is-on" : ""}>{sending > 1 ? "✓" : "•"} Saving your application</li>
+                  <li className={sending >= 2 ? "is-on" : ""}>{sending > 2 ? "✓" : "•"} Checking your profile</li>
+                  <li className={sending >= 3 ? "is-on" : ""}>• Getting it ready for the brand</li>
+                </ul>
+              </div>
             ) : applied ? (
               <>
-                <div className="cb-done">✓ {stage ? STAGE[stage] || "Applied" : `Applied${appliedAs ? " as @" + appliedAs : ""}`}</div>
-                {/* invite se jude par profile brief se match nahi karti → brand ko tabhi jaayenge jab yeh bhar dein */}
-                {["applied", "eligible", undefined, null, ""].includes(stage) && el && el.eligible === false && (
-                  <div className="cb-why cb-why--hold">
-                    <p>
-                      <b>One step left:</b> the brand needs these details before we can send you to them.
-                    </p>
-                    <ul>
-                      {(el.criteria || [])
-                        .filter((c) => !c.ok)
-                        .map((c) => {
-                          const fx = fixOf(c, x.campaign_id || id);
-                          return (
-                            <li key={c.key || c.need}>
-                              <span className="cb-why__t">
-                                ✗ <b>{c.need}</b>
-                                <small>{c.have}</small>
-                              </span>
-                              {fx && (
-                                <Link href={fx.href} className="cb-fix">
-                                  {fx.label} →
-                                </Link>
-                              )}
-                            </li>
-                          );
-                        })}
-                    </ul>
+                {party && (
+                  <div className="cb-party" role="status">
+                    <div className="cb-party__dots" aria-hidden="true">
+                      {Array.from({ length: 14 }).map((_, i) => (
+                        <i key={i} style={{ "--i": i }} />
+                      ))}
+                    </div>
+                    🎉 <b>You&apos;re all set!</b> Your application is now with our team for review.
                   </div>
+                )}
+                {["applied", "eligible", undefined, null, ""].includes(stage) && el && el.eligible === false ? (
+                  <ApplySteps el={el} cid={x.campaign_id || id} onChange={reload} />
+                ) : (
+                  <div className="cb-done">✓ {stage && stage !== "applied" ? STAGE[stage] || "Applied" : `Applied — under review${appliedAs ? " · @" + appliedAs : ""}`}</div>
                 )}
                 <p>
                   {x.my_participation_id ? (
@@ -296,52 +304,33 @@ export default function CampaignBrief() {
                   </button>
                 </p>
               </>
-            ) : why || (el && el.eligible === false) ? (
-              <>
-                <button type="button" className="bx-btn bx-btn--cream bx-btn--lg bx-btn--block" onClick={() => setWhy(why ? null : el)} aria-expanded={!!why}>
-                  Not eligible — see why
-                </button>
-                {why ? (
-                  <div className="cb-why">
-                    <p>The brand requires the criteria below. Your profile doesn&apos;t match {notOk.length === 1 ? "this one" : "these"}:</p>
-                    <ul>
-                      {notOk.map((c) => {
-                        const fx = fixOf(c, x.campaign_id || id);
-                        return (
-                          <li key={c.key || c.need}>
-                            <span className="cb-why__t">
-                              ✗ <b>{c.need}</b>
-                              <small>{c.have}</small>
-                            </span>
-                            {fx && (
-                              <Link href={fx.href} className="cb-fix">
-                                {fx.label} →
-                              </Link>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {fixable ? (
-                      <p>
-                        Some details are just missing from your profile — <Link href="/creator/profile">update your profile</Link> and check again.
-                      </p>
-                    ) : (
-                      <p>
-                        <Link href="/creator/discover">Find campaigns that fit you →</Link>
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p>You review and accept terms if selected.</p>
-                )}
-              </>
+            ) : why ? (
+              <div className="cb-why">
+                <p>
+                  <b>This campaign isn&apos;t a match for your profile right now.</b>
+                </p>
+                <ul>
+                  {notOk
+                    .filter((c) => !fixOf(c, x.campaign_id || id))
+                    .map((c) => (
+                      <li key={c.key || c.need}>
+                        <span className="cb-why__t">
+                          ✗ <b>{c.need}</b>
+                          <small>{c.have}</small>
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+                <p>
+                  <Link href="/creator/discover">Find campaigns that fit you →</Link>
+                </p>
+              </div>
             ) : (
               <>
                 <button type="button" className="bx-btn bx-btn--sky bx-btn--lg bx-btn--block" disabled={busy} onClick={startApply}>
-                  {busy ? "Checking…" : "Apply to campaign →"}
+                  {busy ? "One moment…" : "Apply now →"}
                 </button>
-                <p>You review and accept terms if selected.</p>
+                <p>Takes 30 seconds. You review and accept terms if selected.</p>
               </>
             )}
             {err && <p className="cb-err">{err}</p>}
@@ -507,6 +496,18 @@ export default function CampaignBrief() {
         .cb-done--off { background: #f8dcd2 !important; color: #b8401f !important; }
         .cb-linkbtn { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--bx-gold-2); text-decoration: underline; cursor: pointer; }
         .cb-why { margin-top: 12px; text-align: left; }
+        .cb-send { padding: 10px 4px 4px; text-align: center; }
+        .cb-send__spin { display: block; width: 38px; height: 38px; margin: 0 auto 10px; border-radius: 50%; border: 4px solid rgba(255,255,255,.18); border-top-color: var(--bx-sky); animation: cb-spin .8s linear infinite; }
+        .cb-send__h { margin: 0 0 8px !important; font-size: 16px !important; font-weight: 800 !important; color: #fff !important; }
+        .cb-send ul { margin: 0 auto; padding: 0; list-style: none; display: inline-grid; gap: 4px; text-align: left; }
+        .cb-send li { font-size: 12.5px; color: rgba(251,243,226,.45); transition: color .3s; }
+        .cb-send li.is-on { color: #fbf3e2; }
+        @keyframes cb-spin { to { transform: rotate(360deg); } }
+        .cb-party { position: relative; margin-bottom: 10px; padding: 12px; border-radius: 14px; background: rgba(46,160,90,.2); border: 1px solid rgba(110,210,140,.45); font-size: 13.5px; color: #e3f5e8; text-align: left; overflow: hidden; }
+        .cb-party b { color: #fff; }
+        .cb-party__dots i { position: absolute; top: -8px; left: calc(var(--i) * 7%); width: 7px; height: 11px; border-radius: 2px; background: hsl(calc(var(--i) * 47), 85%, 62%); animation: cb-fall 1.6s ease-in calc(var(--i) * 60ms) 2 both; }
+        @keyframes cb-fall { from { transform: translateY(0) rotate(0); opacity: 1; } to { transform: translateY(90px) rotate(400deg); opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .cb-send__spin, .cb-party__dots i { animation: none; } }
         .cb-why p { margin: 0 0 8px !important; }
         .cb-why ul { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 6px; }
         .cb-why li { padding: 8px 10px; border-radius: 10px; background: rgba(255,211,196,.12); font-size: 12.5px; color: #ffd3c4; line-height: 1.4; }

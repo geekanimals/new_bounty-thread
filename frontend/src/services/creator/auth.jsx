@@ -403,7 +403,8 @@ export function afterLoginRoute(c = state) {
   const apply = ls.get(K.apply);
   if (apply) {
     ls.del(K.apply);
-    return c.locked ? "/creator/media-kit" : `/creator/discover/${apply}`;
+    // Instagram connect na ho to bhi seedha campaign par — apply ho jaata hai, baaki steps wahin (ApplySteps)
+    return `/creator/discover/${apply}`;
   }
   return "/creator/home";
 }

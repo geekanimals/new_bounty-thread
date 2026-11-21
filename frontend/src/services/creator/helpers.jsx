@@ -241,9 +241,8 @@ export function whoList(c) {
   return cr.map((x) => x.need).filter(Boolean);
 }
 const whoLine = (c) => {
-  const w = (c.who_can_apply || []).filter(Boolean);
   const city = (c.cities || []).slice(0, 1).join("");
-  return [w[0] || city || "", c.category || ""].filter(Boolean).join(" • ");
+  return [city || "", c.category || ""].filter(Boolean).join(" • ");
 };
 
 /** Home ke chhote card ka shape (list_open_campaigns row → CampaignCard) */
@@ -270,7 +269,6 @@ export function homeCard(c, covers) {
 
 /** Discover / Explore card ka shape (list_open_campaigns / explore_campaigns row → CampaignCard) */
 export function campaignCard(x, covers = {}) {
-  const who = whoList(x);
   const el = x.eligibility || {};
   const city = (x.cities || []).slice(0, 2).join(", ");
   return {
@@ -281,8 +279,9 @@ export function campaignCard(x, covers = {}) {
     reward: compLine(x),
     deliver: delivLine(x),
     // category pehle se "Category: …" mein ho to dobara mat jodo
-    who: [who.length ? who.join(" • ") : "Open to every creator", who.some((w) => /category/i.test(w)) ? "" : x.category].filter(Boolean).join(" • "),
-    short: [who[0] || city, x.category].filter(Boolean).join(" • ") || "Open to every creator",
+    // eligibility (followers / gender / age …) card par nahi dikhate — sirf shehar + category; criteria apply ke baad hi
+    who: [city, x.category].filter(Boolean).join(" • ") || "Open to every creator",
+    short: [city, x.category].filter(Boolean).join(" • ") || "Open to every creator",
     city: city || "All India",
     till: x.ends_on ? fdate(x.ends_on) : "",
     worth: x.product_value ? money(x.product_value) : "",

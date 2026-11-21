@@ -8,6 +8,7 @@ import { useSession, useMyIg, isLive, needsMe, stepOf, STAGE_TXT, STAGE_SHORT, p
 import { RumiTip } from "@/components/creator/OnboardShell";
 import { stepsFor, DREAM_BRANDS, TYPE_LABEL, getSidekick } from "@/components/creator/data";
 import { ArrowRight } from "@/components/ui/Icons";
+import { holdSteps } from "@/components/creator/ApplySteps";
 
 /* stage → card par chhoti line (Figma "note") */
 const stageNote = (m) => STAGE_TXT[m.stage] || String(m.stage || "").replace(/_/g, " ");
@@ -54,8 +55,12 @@ export default function CreatorHome() {
   const dreamImg = (x) => DREAM_BRANDS.find((b) => b.name.toLowerCase().replace(/[^a-z]/g, "") === String(x.submitted_brand_name || "").toLowerCase().replace(/[^a-z]/g, ""))?.img;
 
   // "Next step" card — purane buildHome jaisa ek hi kaam jo abhi zaroori hai
+  // Apply kiya par on hold (profile mein kuch missing) → sabse pehle wahi poora karwao
+  const held = openList.find((x) => x.my_stage === "applied" && x.eligibility && x.eligibility.eligible === false && !holdSteps(x.eligibility).mismatch.length);
+  const heldN = held ? holdSteps(held.eligibility).steps : 0;
   let act;
-  if (locked) act = { tag: "Action needed", red: true, t: "Connect Instagram to apply", s: "Explore freely — brands check real reach when you apply.", b: "Connect Instagram", href: "/creator/onboarding/meta" };
+  if (held) act = { tag: "Action needed", red: true, t: `Your application for ${held.name || "a campaign"} is on hold`, s: `${heldN || 1} quick step${heldN === 1 ? "" : "s"} left to send it to the brand.`, b: "Finish now", href: `/creator/discover/${held.campaign_id}` };
+  else if (locked) act = { tag: "Action needed", red: true, t: "Connect Instagram to apply", s: "Explore freely — brands check real reach when you apply.", b: "Connect Instagram", href: "/creator/onboarding/meta" };
   else if (yours[0]) act = { tag: "Action needed", red: true, t: `${yours[0].brand ? yours[0].brand + " · " : ""}${STAGE_SHORT[yours[0].stage] || yours[0].campaign || "Campaign"}`, s: stageNote(yours[0]), b: "Open brief", href: `/creator/my-campaigns/${yours[0].participation_id || yours[0].campaign_id}` };
   else if (progress && !progress.complete) act = { tag: "Next step", t: `Your profile is ${progress.pct}% complete`, s: "Brands pick complete profiles first", b: "Finish profile", href: "/creator/profile/finish" };
   else act = { tag: "Next step", t: "Find your next campaign", s: `${fresh.length} campaigns open for you`, b: "Explore campaigns", href: "/creator/discover" };
@@ -154,9 +159,9 @@ export default function CreatorHome() {
               <p className="hm-mcamp__type">
                 🎁 {TYPE_LABEL[first.type]} · {first.type === "paid" ? "Fee" : "Product"}
               </p>
-              <span className={`hm-mcamp__pill ${firstOk ? "is-ok" : ""}`}>{["✓ You match", "Potential match", "✗ Not eligible yet"][locked ? 1 : first.elig]}</span>
+              <span className={`hm-mcamp__pill ${firstOk ? "is-ok" : ""}`}>{firstOk ? "✓ You match" : "✨ Open to apply"}</span>
               <div className="hm-mcamp__foot">
-                <p>{["You can apply now", "Not guaranteed eligible", "Finish your profile to qualify"][locked ? 1 : first.elig]}</p>
+                <p>{firstOk ? "You can apply now" : "Tap to apply in 30 seconds"}</p>
                 <Link href={`/creator/discover/${first.id}`} className="hm-mcamp__btn">
                   Explore
                 </Link>

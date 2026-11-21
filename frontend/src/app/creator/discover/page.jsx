@@ -121,7 +121,7 @@ export default function Discover() {
         className="dc-rumi"
         name={sk.name}
         img={sk.img}
-        text={locked ? "Explore freely — I'll ask for Instagram only when you apply." : "A high match isn't always eligible — check the reasons in each brief."}
+        text={locked ? "Explore freely — tap Apply on any campaign, I'll guide you through the rest." : "Found one you like? Tap Apply — I'll guide you through the rest."}
       />
 
       <style>{`

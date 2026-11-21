@@ -54,7 +54,8 @@ export default function ConnectingLoader() {
         }
         // Figma: connect hote hi media kit ban kar dikhe (onboarding ho ya andar app) — wahan "Continue setup" agle step par le jaata hai.
         // Apply ke beech connect kiya → wapas Discover (apply poora karne).
-        setDest(r.after === "discover" ? "/creator/discover" : "/creator/media-kit");
+        const ac = /^c:([0-9a-f-]{36})$/i.exec(String(r.after || ""));
+        setDest(ac ? `/creator/discover/${ac[1]}` : r.after === "discover" ? "/creator/discover" : "/creator/media-kit");
         setOk(true);
       })
       .catch((e) => setErr("Instagram sign-in failed: " + (e.message || e)));
