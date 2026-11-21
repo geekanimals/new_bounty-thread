@@ -167,7 +167,7 @@ export default function WorkspaceCreators() {
     if (posted === "Not posted") r = r.filter((x) => !x.posted);
     // screening: brief se match (api.campaign_brief_match — abhi ki eligibility se, live)
     if (fit !== "Brief match: all") {
-      const k = { "✓ Matches the brief": "ok", "✗ Doesn’t match": "no", "? Info missing in profile": "missing" }[fit];
+      const k = { "✓ Matches the brief": "ok", "✗ Doesn’t match": "no", "⏳ On hold — still filling": "missing" }[fit];
       r = r.filter((x) => {
         const ms = x.pid ? matchState((bmatch.data || {})[x.pid]) : null;
         return fit === "Not checked (not on Geek OS / past screening)" ? !ms : ms && ms.k === k;
@@ -264,7 +264,7 @@ export default function WorkspaceCreators() {
   const sendable = sel.map((rid) => all.find((x) => x.id === rid)).filter((x) => x && x.kind === "p" && ["applied", "eligible"].includes(x.x?.stage));
   const sendToBrand = async () => {
     if (!sendable.length) return setToast("Tick creators who are on Applied first.");
-    const notFit = sendable.filter((x) => (matchState((bmatch.data || {})[x.pid]) || {}).k === "no").length;
+    const notFit = sendable.filter((x) => ((matchState((bmatch.data || {})[x.pid]) || {}).no || 0) > 0).length;
     const v = await ask({
       title: `Send ${sendable.length} creator${sendable.length > 1 ? "s" : ""} to the brand?`,
       text: `They move to the brand's list — the brand sees only the creators you send (plus how many applied in total) and can approve only these.${notFit ? ` ⚠️ ${notFit} of them don't match the brief.` : ""}`,
@@ -480,7 +480,7 @@ export default function WorkspaceCreators() {
               [who, setWho, ["Everyone", "Our turn", "Creator’s turn", "On Geek OS", "Not yet on Geek"], "Who"],
               [size, setSize, ["Any size", "Nano · under 10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K+"], "Follower size"],
               [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
-              [fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "? Info missing in profile", "Not checked (not on Geek OS / past screening)"], "Brief match"],
+              [fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "⏳ On hold — still filling", "Not checked (not on Geek OS / past screening)"], "Brief match"],
               [dBy, setDBy, ["Date: invited", "Date: joined", "Date: last step"], "Which date"],
               [dWhen, setDWhen, ["Any time", "Today", "Yesterday", "Last 7 days", "Last 30 days", "Pick dates…"], "When"],
             ].map(([v, set, opts, label]) => (
@@ -508,7 +508,7 @@ export default function WorkspaceCreators() {
             {[
               ["✓ Matches the brief", fitN.ok, "ok"],
               ["✗ Doesn’t match", fitN.no, "no"],
-              ["? Info missing in profile", fitN.missing, "missing"],
+              ["⏳ On hold — still filling", fitN.missing, "missing"],
             ].map(([l, c, k]) => (
               <button
                 key={k}

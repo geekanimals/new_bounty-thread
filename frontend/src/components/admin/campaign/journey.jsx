@@ -586,7 +586,7 @@ export async function runAction(key, row, ctx) {
       // screened + brand ki list — ek click mein. Profile adhoora ho to brand ko nahi bhej sakte (server bhi rokta hai) — saaf bata do
       const ms = matchState(ctx.match);
       if (ms && ms.k === "missing") {
-        say(`Can't send ${who} yet — their profile is missing: ${ms.bad.map((b) => b.need).join(", ")}. They see "Add your…" buttons on the campaign; send them once it's filled.`);
+        say(`Can't send ${who} yet — their profile is missing: ${(ms.miss || ms.bad).map((b) => b.need).join(", ")}. They see "Add your…" buttons on the campaign; send them once it's filled.`);
         return false;
       }
       if (ms && ms.k === "no" && !window.confirm(`${who} doesn't match: ${ms.bad.map((b) => b.need).join(", ")}. Send to the brand anyway?`)) return false;
@@ -762,8 +762,12 @@ export function matchState(m) {
   if (!m || !Array.isArray(m.criteria) || !m.criteria.length) return null;
   const bad = m.criteria.filter((x) => !x.ok);
   if (!bad.length) return { k: "ok", label: "✓ Matches brief", tone: "green", bad };
-  if (bad.every((x) => MISSING_RE.test(x.have || ""))) return { k: "missing", label: "? Profile incomplete", tone: "orange", bad };
-  return { k: "no", label: "✗ Not a match", tone: "red", bad };
+  // Apply game: jab tak kuch bhi MISSING hai creator "on hold" hai (steps bhar raha hai) — chahe kuch match na kare.
+  // Admin ko chhupa mismatch bhi dikhe ("won't match"), creator ko "not eligible" sirf sab bharne ke baad.
+  const miss = bad.filter((x) => MISSING_RE.test(x.have || ""));
+  const no = bad.length - miss.length;
+  if (miss.length) return { k: "missing", label: `⏳ On hold · ${miss.length} left${no ? ` · ✗ ${no} won’t match` : ""}`, tone: "orange", bad, miss, no };
+  return { k: "no", label: "✗ Not a match", tone: "red", bad, miss: [], no: bad.length };
 }
 export function MatchDetails({ m }) {
   const s = matchState(m);
@@ -771,7 +775,7 @@ export function MatchDetails({ m }) {
   return (
     <div className="bm-box">
       <p className="bm-h">
-        {s.k === "ok" ? "Matches every criterion of the current brief." : s.k === "missing" ? "Can’t confirm yet — the creator hasn’t filled these in their profile." : `Doesn’t match ${s.bad.length} criteri${s.bad.length > 1 ? "a" : "on"} of the current brief.`}
+        {s.k === "ok" ? "Matches every criterion of the current brief." : s.k === "missing" ? "On hold — the creator is still filling these (marked ?). They are only told “not eligible” once everything is filled; any ✗ below already won’t match." : `Doesn’t match ${s.bad.length} criteri${s.bad.length > 1 ? "a" : "on"} of the current brief.`}
         <small> Checked live against the brief as it is now — editing eligibility re-checks everyone.</small>
       </p>
       <ul>
