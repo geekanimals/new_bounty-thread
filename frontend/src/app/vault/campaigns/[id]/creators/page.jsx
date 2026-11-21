@@ -124,6 +124,9 @@ export default function WorkspaceCreators() {
     return m;
   }, [pays.data, staged.data]);
   const [box, setBox] = useState(0);
+  // box ke andar ka chhota filter (All / aage badhe / atke) — box badalte hi apne aap "all"
+  const [subSt, setSubSt] = useState({ box: 0, v: "all" });
+  const sub = subSt.box === box ? subSt.v : "all";
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("Sort: furthest step");
   const [who, setWho] = useState("Everyone");
@@ -185,7 +188,12 @@ export default function WorkspaceCreators() {
   const counts = BX.map((b) => all.filter((c) => b.f(c, U)).length);
 
   const rows = useMemo(() => {
-    let r = all.filter((c) => (BX[box] || BX[0]).f(c, U)).filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
+    const fl = FLOW.find((x) => x[0] === (BX[box] || BX[0]).l && BX.some((y) => y.l === x[1]));
+    const nxt = fl ? BX.find((y) => y.l === fl[1]) : null;
+    let r = all
+      .filter((c) => (BX[box] || BX[0]).f(c, U))
+      .filter((c) => (!nxt || sub === "all" ? true : sub === "moved" ? nxt.f(c, U) : !nxt.f(c, U)))
+      .filter((x) => `${x.name} ${x.handle} ${x.phone} ${x.city} ${x.x?.phone || x.i?.phone || ""}`.toLowerCase().includes(q.trim().toLowerCase()));
     if (who === "Creator’s turn") r = r.filter((x) => x.turnWho === "creator");
     if (who === "Our turn") r = r.filter((x) => x.turnWho === "you");
     if (who === "On Geek OS") r = r.filter((x) => x.registered);
@@ -233,7 +241,7 @@ export default function WorkspaceCreators() {
     if (sort === "Followers: low → high") r.sort((a, b) => a.followersN - b.followersN);
     if (sort === "Most views") r.sort((a, b) => views(b) - views(a));
     return r;
-  }, [all, box, q, sort, who, size, posted, fit, bmatch.data, U, BX, dBy, dWhen, dFrom, dTo]);
+  }, [all, box, sub, q, sort, who, size, posted, fit, bmatch.data, U, BX, dBy, dWhen, dFrom, dTo]);
 
   // ek jagah filters: kya koi filter laga hai + sab saaf karo
   const sentIdx = BX.findIndex((b) => b.l === "Sent to brand");
@@ -340,6 +348,10 @@ export default function WorkspaceCreators() {
 
   // ⚡ jinka kaam hamari taraf baaki hai (purana "N need you — do it now")
   const needN = all.filter((x) => x.turnWho === "you" && !x.failed).length;
+  // kaunse filter is box par matlab ke hain — baaki chhupa do
+  const curT = (BX[box] || BX[0]).t;
+  const screenBox = ["all", "reach", "screen"].includes(curT) && !["Approved"].includes((BX[box] || BX[0]).l);
+  const preScreen = ["all", "reach"].includes(curT) || ["Ready to send", "On hold", "Not a match"].includes((BX[box] || BX[0]).l);
 
   // got the product, never posted, and the campaign is over or their video is overdue (purana ccNoPost)
   const today = new Date().toISOString().slice(0, 10);
@@ -481,7 +493,7 @@ export default function WorkspaceCreators() {
         </div>
         <div className="wcr-boxes">
           {BX.map((b, i) => (
-            <button key={b.l} type="button" className={`wcr-box wcr-box--${b.t || "all"} ${box === i ? "is-on" : ""} ${counts[i] ? "" : "is-zero"}`} onClick={() => setBox(i)} aria-pressed={box === i} title={b.s ? `${b.l} — ${b.s}` : b.l}>
+            <button key={b.l} type="button" className={`wcr-box wcr-box--${b.t || "all"} ${box === i ? "is-on" : ""} ${counts[i] ? "" : "is-zero"}`} onClick={() => (setBox(i), setFit("Brief match: all"))} aria-pressed={box === i} title={b.s ? `${b.l} — ${b.s}` : b.l}>
               <span className="wcr-box__l">
                 <i aria-hidden="true" />
                 {b.l}
@@ -492,10 +504,19 @@ export default function WorkspaceCreators() {
                 if (!f || loading || !counts[i]) return null;
                 const moved = Math.min(counts[i], counts[BX.findIndex((y) => y.l === f[1])] || 0);
                 const stuck = counts[i] - moved;
+                const pct = Math.round((100 * moved) / counts[i]);
                 return (
-                  <small className={`wcr-box__f wcr-box__f--${stuck ? f[4] : "ok"}`} title={stuck ? `${stuck} ${f[3]} — ${WHO_TXT[f[4]]}` : "Everyone moved ahead"}>
-                    ✓ {moved} {f[2]} ({Math.round((100 * moved) / counts[i])}%){stuck ? <> · <b>{stuck} {f[3]}</b></> : null}
-                  </small>
+                  <span className={`wcr-flow wcr-flow--${stuck ? f[4] : "ok"}`} title={stuck ? `${moved} ${f[2]} · ${stuck} ${f[3]} (${WHO_TXT[f[4]]})` : "Everyone moved ahead"}>
+                    <span className="wcr-flow__bar" aria-hidden="true">
+                      <i style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className="wcr-flow__meta">
+                      <em>
+                        {pct}% {f[2]}
+                      </em>
+                      {stuck ? <b>{stuck} {f[3]}</b> : <b className="is-ok">all moved ✓</b>}
+                    </span>
+                  </span>
                 );
               })()}
             </button>
@@ -510,23 +531,52 @@ export default function WorkspaceCreators() {
       )}
 
       <section className="ga-card wcr-card wcr-list">
-        <h2 className="ga-h2">Creators · {box === 0 ? n(0) : `${n(box)} ${(BX[box] || BX[0]).l.toLowerCase()}`}</h2>
+        <h2 className="ga-h2">
+          Creators · {box === 0 ? n(0) : `${n(box)} ${(BX[box] || BX[0]).l.toLowerCase()}`}
+          {sub !== "all" && (() => {
+            const fl = FLOW.find((x) => x[0] === (BX[box] || BX[0]).l);
+            return fl ? <span className="wcr-hsub"> → {rows.length} {sub === "moved" ? fl[2] : fl[3]}</span> : null;
+          })()}
+        </h2>
         <p className="wcr-sub">Tap a creator to open every step, chat and action.</p>
 
         {/* Saare filter, sort aur screening ek hi jagah */}
         <div className="wcr-fpanel">
+          {(() => {
+            const b0 = BX[box] || BX[0];
+            const fl = FLOW.find((x) => x[0] === b0.l && BX.some((y) => y.l === x[1]));
+            if (!fl || !counts[box]) return null;
+            const moved = Math.min(counts[box], counts[BX.findIndex((y) => y.l === fl[1])] || 0);
+            const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+            return (
+              <div className="wcr-seg" role="tablist" aria-label={`${b0.l} — show`}>
+                {[
+                  ["all", `All ${b0.l.toLowerCase()}`, counts[box]],
+                  ["moved", `✓ ${cap(fl[2])}`, moved],
+                  ["stuck", `⏳ ${cap(fl[3])}`, counts[box] - moved],
+                ].map(([k, l, n]) => (
+                  <button key={k} type="button" role="tab" aria-selected={sub === k} className={`wcr-seg__b wcr-seg__b--${k === "stuck" ? fl[4] : k} ${sub === k ? "is-on" : ""}`} disabled={!n && k !== "all"} onClick={() => setSubSt({ box, v: k })}>
+                    {l} <span>{n}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
           <div className="wcr-filters">
-            <input className="ga-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
+            <span className="wcr-searchwrap">
+              <span className="wcr-searchic" aria-hidden="true">⌕</span>
+              <input className="ga-input wcr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, @handle, phone, city…" aria-label="Search creators" />
+            </span>
             {[
               [sort, setSort, ["Sort: furthest step", "Sort: earliest step", "Newest invited", "Oldest invited", "Newest joined", "Latest step change", "Followers: high → low", "Followers: low → high", "Name A → Z", "Most views"], "Sort"],
               [who, setWho, ["Everyone", "Our turn", "Creator’s turn", "On Geek OS", "Not yet on Geek"], "Who"],
               [size, setSize, ["Any size", "Nano · under 10K", "Micro · 10K–50K", "Mid · 50K–200K", "Macro · 200K+"], "Follower size"],
-              [posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"],
-              [fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "⏳ On hold — still filling", "Not checked (not on Geek OS / past screening)"], "Brief match"],
+              ...(preScreen ? [] : [[posted, setPosted, ["Posted or not", "Posted", "Not posted"], "Posted"]]),
+              ...(screenBox ? [[fit, setFit, ["Brief match: all", "✓ Matches the brief", "✗ Doesn’t match", "⏳ On hold — still filling", "Not checked (not on Geek OS / past screening)"], "Brief match"]] : []),
               [dBy, setDBy, ["Date: invited", "Date: joined", "Date: last step"], "Which date"],
               [dWhen, setDWhen, ["Any time", "Today", "Yesterday", "Last 7 days", "Last 30 days", "Pick dates…"], "When"],
             ].map(([v, set, opts, label]) => (
-              <select key={label} className="ga-input wcr-sel" value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
+              <select key={label} className={`ga-input wcr-sel ${v !== opts[0] ? "is-set" : ""}`} value={v} onChange={(e) => set(e.target.value)} aria-label={label}>
                 {opts.map((o) => (
                   <option key={o}>{o}</option>
                 ))}
@@ -546,6 +596,7 @@ export default function WorkspaceCreators() {
             )}
           </div>
           <div className="wcr-screen">
+            {screenBox && (<>
             <span className="wcr-screen__l">Screening:</span>
             {[
               ["✓ Matches the brief", fitN.ok, "ok"],
@@ -561,12 +612,13 @@ export default function WorkspaceCreators() {
                   if (fit !== l) setBox(Math.max(0, BX.findIndex((b) => b.l === ({ ok: "Ready to send", missing: "On hold", no: "Not a match" }[k] || "Ready to send"))));
                 }}
               >
-                {l} · {c}
+                {l} <span className="wcr-fit__n">{c}</span>
               </button>
             ))}
-            {sentIdx >= 0 && (
+            </>)}
+            {screenBox && sentIdx >= 0 && (
               <button type="button" className={`wcr-fit wcr-fit--sent ${box === sentIdx ? "is-on" : ""}`} onClick={() => setBox(box === sentIdx ? 0 : sentIdx)}>
-                📤 Sent to brand · {counts[sentIdx]}
+                📤 Sent to brand <span className="wcr-fit__n">{counts[sentIdx]}</span>
               </button>
             )}
             {needN > 0 && (
@@ -574,9 +626,9 @@ export default function WorkspaceCreators() {
                 {who === "Our turn" ? "✕ Show everyone" : `⚡ ${needN} need${needN > 1 ? "" : "s"} you — do it now`}
               </button>
             )}
-            <button type="button" className="wcr-fit" onClick={() => (setBox(3), setSel(all.filter((x) => !x.failed && x.registered && !x.ig).map((x) => x.id)))}>
+            {preScreen && <button type="button" className="wcr-fit" onClick={() => (setBox(3), setSel(all.filter((x) => !x.failed && x.registered && !x.ig).map((x) => x.id)))}>
               📸 Pick everyone without Instagram
-            </button>
+            </button>}
             <span className="wcr-screen__sp" />
             <span className="wcr-count">Showing {rows.length}</span>
           </div>
@@ -697,9 +749,14 @@ export default function WorkspaceCreators() {
         .wcr-screen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--ad-soft-2); }
         .wcr-screen__l { font-size: 12px; font-weight: 700; color: var(--ad-muted); }
         .wcr-screen__sp { flex: 1; }
-        .wcr-fit { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        .wcr-fit { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 6px 0 13px; border-radius: 999px; border: 1px solid #e1e3f0; background: #fff; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; }
+        .wcr-fit:not(:has(.wcr-fit__n)) { padding-right: 13px; }
+        .wcr-fit:hover { transform: translateY(-1px); box-shadow: 0 6px 14px -10px rgba(40,30,120,.45); }
+        .wcr-fit__n { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center; background: currentColor; font-size: 11.5px; font-weight: 800; }
+        .wcr-fit__n { color: #fff; background: #9aa1bb; }
+        .wcr-fit--ok .wcr-fit__n { background: #12a36d; } .wcr-fit--no .wcr-fit__n { background: #d6453d; } .wcr-fit--missing .wcr-fit__n { background: #c27a00; } .wcr-fit--sent .wcr-fit__n { background: #6657e9; }
         .wcr-fit--ok { color: #0b9b6c; } .wcr-fit--no { color: #d6453d; } .wcr-fit--missing { color: #b46b00; }
-        .wcr-fit.is-on { border-color: currentColor; box-shadow: 0 0 0 2px rgba(103,87,245,.12); background: #fff; }
+        .wcr-fit.is-on { border-color: currentColor; box-shadow: 0 0 0 3px rgba(103,87,245,.12); background: #fbfaff; }
         .wcr-brand { height: 38px; padding: 0 14px; font-size: 13px; }
         .wcr-chips:empty { display: none; }
         .wcr-need { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #f3c27a; background: #fff6e6; font-size: 13px; font-weight: 800; color: #a15c00; cursor: pointer; }
@@ -717,13 +774,22 @@ export default function WorkspaceCreators() {
         .wcr-box { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 11px 13px 10px; border-radius: 12px; border: 1px solid var(--ad-line); background: linear-gradient(180deg, #fff 0%, #fbfbff 100%); text-align: left; box-shadow: 0 1px 2px rgba(20, 22, 60, 0.04); transition: border-color .15s, box-shadow .15s, transform .15s; }
         .wcr-box:hover { border-color: #c9c4f7; box-shadow: 0 6px 16px -10px rgba(103, 87, 245, 0.45); transform: translateY(-1px); }
         .wcr-box__l { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 11.5px; font-weight: 700; color: var(--ad-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .wcr-box__f { display: block; max-width: 100%; margin-top: -2px; font-size: 10.5px; font-weight: 600; line-height: 1.35; color: #6b7390; white-space: normal; }
-        .wcr-box__f b { font-weight: 800; }
-        .wcr-box__f--us b { color: #c0392b; }
-        .wcr-box__f--creator b { color: #b26a00; }
-        .wcr-box__f--courier b { color: #2f6fd6; }
-        .wcr-box__f--client b { color: #7c3aed; }
-        .wcr-box.is-on .wcr-box__f, .wcr-box.is-on .wcr-box__f b { color: rgba(255,255,255,.92); }
+        /* box ke andar: kitne aage badhe (bar) + kitne atke (pill) */
+        .wcr-flow { display: flex; flex-direction: column; gap: 5px; width: 100%; margin-top: 1px; }
+        .wcr-flow__bar { position: relative; display: block; height: 5px; border-radius: 999px; background: #eceef7; overflow: hidden; }
+        .wcr-flow__bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, #34c58b, #12a36d); }
+        .wcr-flow__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+        .wcr-flow__meta em { font-style: normal; font-size: 10.5px; font-weight: 700; color: #5d6683; white-space: nowrap; }
+        .wcr-flow__meta b { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .01em; white-space: nowrap; }
+        .wcr-flow--us .wcr-flow__meta b { background: #fde8e6; color: #b42318; }
+        .wcr-flow--creator .wcr-flow__meta b { background: #fff1db; color: #a35a00; }
+        .wcr-flow--courier .wcr-flow__meta b { background: #e3eefe; color: #1f5fc9; }
+        .wcr-flow--client .wcr-flow__meta b { background: #efe7fe; color: #6d28d9; }
+        .wcr-flow__meta b.is-ok { background: #def7ec; color: #0b7a52; }
+        .wcr-box.is-on .wcr-flow__bar { background: rgba(255,255,255,.28); }
+        .wcr-box.is-on .wcr-flow__bar i { background: #fff; }
+        .wcr-box.is-on .wcr-flow__meta em { color: rgba(255,255,255,.9); }
+        .wcr-box.is-on .wcr-flow__meta b { background: rgba(255,255,255,.2); color: #fff; }
         .wcr-box__l i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #a3a8c3; }
         .wcr-box--reach .wcr-box__l i { background: #5b8def; }
         .wcr-box--screen .wcr-box__l i { background: #7c6cf2; }
@@ -738,16 +804,35 @@ export default function WorkspaceCreators() {
         .wcr-box.is-on strong, .wcr-box.is-on .wcr-box__l { color: #fff; }
         .wcr-box.is-on .wcr-box__l i { background: #fff; }
 
-        .wcr-fpanel { margin-top: 20px; padding: 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fbfbff; }
+        .wcr-hsub { color: var(--ad-primary); }
+        .wcr-seg { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; padding: 4px; border-radius: 14px; background: #f0f0f8; border: 1px solid #e6e7f3; }
+        .wcr-seg__b { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 14px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: #4b5470; cursor: pointer; transition: background .15s, color .15s, box-shadow .15s; }
+        .wcr-seg__b span { min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center; background: #e2e4f0; font-size: 11.5px; font-weight: 800; color: #4b5470; }
+        .wcr-seg__b:hover:not(:disabled) { color: #1d2440; }
+        .wcr-seg__b:disabled { opacity: .45; cursor: not-allowed; }
+        .wcr-seg__b.is-on { background: #fff; color: #1d2440; box-shadow: 0 1px 2px rgba(20,22,60,.08), 0 6px 14px -10px rgba(40,30,120,.5); }
+        .wcr-seg__b--moved.is-on span { background: #12a36d; color: #fff; }
+        .wcr-seg__b--us.is-on span { background: #d6453d; color: #fff; }
+        .wcr-seg__b--creator.is-on span { background: #c27a00; color: #fff; }
+        .wcr-seg__b--courier.is-on span { background: #2f6fd6; color: #fff; }
+        .wcr-seg__b--client.is-on span { background: #7c3aed; color: #fff; }
+        .wcr-seg__b--all.is-on span { background: #6657e9; color: #fff; }
+        .wcr-fpanel { margin-top: 20px; padding: 16px; border-radius: 16px; border: 1px solid #e6e7f3; background: linear-gradient(180deg, #ffffff 0%, #f8f8fe 100%); box-shadow: 0 1px 2px rgba(20,22,60,.04), 0 10px 24px -20px rgba(70,60,180,.35); }
         .wcr-fpanel .wcr-screen { margin-top: 12px; padding: 0; background: none; }
         .wcr-filters { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
         .wcr-clear { font-size: 13px; }
         .wcr-count { font-size: 12.5px; font-weight: 700; color: var(--ad-muted); }
         .wcr-fit--sent { color: #6657e9; }
         .wcr-fpanel .wcr-need { height: 32px; font-size: 12.5px; }
-        .wcr-search { width: 270px; height: 43px; }
+        .wcr-searchwrap { position: relative; display: inline-flex; }
+        .wcr-searchic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); font-size: 17px; color: #8a90ab; pointer-events: none; }
+        .wcr-search { width: 280px; height: 42px; padding-left: 36px !important; border-radius: 12px !important; border-color: #e1e3f0 !important; background: #fff; transition: border-color .15s, box-shadow .15s; }
+        .wcr-search:focus { border-color: #8b7ff5 !important; box-shadow: 0 0 0 3px rgba(103,87,245,.14); }
         .wcr-search::placeholder { color: #757575; }
-        .wcr-sel { width: auto; height: 43px; padding: 0 30px 0 12px; font-size: 14px; color: #293652; appearance: none; background: #fff; }
+        .wcr-sel { width: auto; height: 42px; padding: 0 32px 0 14px; border-radius: 999px !important; border-color: #e1e3f0 !important; font-size: 13.5px; font-weight: 600; color: #293652; appearance: none; cursor: pointer;
+          background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236b7390' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 13px center; transition: border-color .15s, background-color .15s; }
+        .wcr-sel:hover { border-color: #c9c4f7 !important; }
+        .wcr-sel.is-set { border-color: #8b7ff5 !important; background-color: #f1efff; color: #4b3fd6; }
         .wcr-bulk { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; margin-top: 16px; }
         .wcr-all { position: relative; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ad-ink); cursor: pointer; }
         .wcr-all input { position: absolute; opacity: 0; }
@@ -772,6 +857,7 @@ export default function WorkspaceCreators() {
           .wcr-boxes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
           .wcr-box { padding: 10px 11px 9px; }
           .wcr-box strong { font-size: 19px; }
+          .wcr-searchwrap { width: 100%; }
           .wcr-search { width: 100%; }
           .wcr-sel { flex: 1 1 45%; }
           .wcr-wa { margin-left: 0; width: 100%; }
