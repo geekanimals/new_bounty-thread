@@ -708,7 +708,7 @@ export default function WorkspaceCreators() {
               onAction={() => act(x)}
               onReject={x.kind === "p" && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage) ? () => reject(x) : null}
               busy={busy === x.id}
-              onChat={() => router.push(`/vault/campaigns/${c.id}/creators/${x.id}`)}
+              onChat={() => router.push(`/vault/campaigns/${c.id}/creators/${x.id}?chat=1`)}
               stats={(mstats.data || {})[keyOf(x.id)]}
               unread={(U[keyOf(x.id)] || {}).n || 0}
               match={x.pid ? (bmatch.data || {})[x.pid] : null}

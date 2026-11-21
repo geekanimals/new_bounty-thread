@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, invoke, useRpc, errText } from "@/lib/supabase";
@@ -36,6 +36,9 @@ const dayOf = (at) => {
 export default function WorkspaceCreator() {
   const { id, cid = "" } = useParams();
   const router = useRouter();
+  // chat sirf tab khula jab 💬 dabake aaye (?chat=1) ya yahan "Open chat" dabaya — warna saaf summary
+  const sp = useSearchParams();
+  const [chatOpen, setChatOpen] = useState(sp?.get("chat") === "1");
   const c = { id };
   const isP = cid.startsWith("p-");
   const rid = cid.slice(2);
@@ -190,7 +193,7 @@ export default function WorkspaceCreator() {
   useEffect(() => {
     const box = endRef.current?.parentElement;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [msgs.length]);
+  }, [msgs.length, chatOpen]);
 
   // ✉️ Email (purane creator hub ka team_send_email) — sirf campaign mein jude creators
   const sendEmail = async () => {
@@ -369,7 +372,13 @@ export default function WorkspaceCreator() {
               setBusy("");
             }
           }}
-          onChat={() => document.getElementById("wcc-msg")?.focus()}
+          onChat={() => {
+            setChatOpen(true);
+            setTimeout(() => {
+              document.getElementById("wcc-chatbox")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              document.getElementById("wcc-msg")?.focus();
+            }, 60);
+          }}
           match={isP ? (bmatch.data || {})[rid] : null}
           onReject={
             isP && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage)
@@ -387,16 +396,55 @@ export default function WorkspaceCreator() {
           }
         />
 
-        <div className="wcc-grid">
-          {/* WhatsApp chat */}
-          <div className="wcc-chat">
+        <div className={`wcc-grid ${chatOpen ? "" : "wcc-grid--closed"}`}>
+          {/* WhatsApp chat — band ho to chhota card, khula ho to poori chat */}
+          {!chatOpen && (() => {
+            const last = [...msgs].reverse().find((m) => !m.sys);
+            return (
+              <div className="wcc-chatcard">
+                <div className="wcc-chatcard__top">
+                  <span className="wcc-chatcard__ic" aria-hidden="true">💬</span>
+                  <div>
+                    <b>WhatsApp chat</b>
+                    <small>
+                      {msgCount.wa} sent · {msgCount.in} repl{msgCount.in === 1 ? "y" : "ies"}
+                      {canSend ? " · 🟢 can reply now" : ""}
+                    </small>
+                  </div>
+                </div>
+                {last ? (
+                  <p className={`wcc-chatcard__last ${last.dir === "in" ? "is-in" : ""}`}>
+                    <em>{last.dir === "in" ? "They said" : "Last sent"} · {tm(last.at)}</em>
+                    {String(last.text || (last.tpl ? last.tpl.replace(/_/g, " ") : last.title || "") || "").slice(0, 140)}
+                  </p>
+                ) : (
+                  <p className="wcc-chatcard__last">No messages yet.</p>
+                )}
+                <div className="wcc-chatcard__acts">
+                  <button type="button" className="ga-btn ga-btn--primary" onClick={() => setChatOpen(true)}>
+                    💬 Open chat
+                  </button>
+                  <a href={phone ? `https://wa.me/${String(phone).replace(/\D/g, "")}` : "https://wa.me/"} target="_blank" rel="noreferrer" className="ga-btn">
+                    WhatsApp ↗
+                  </a>
+                </div>
+              </div>
+            );
+          })()}
+          {chatOpen && (
+          <div className="wcc-chat" id="wcc-chatbox">
             <div className="wcc-chat__head">
               <b>
                 {x.name} · {x.phone || "no WhatsApp"}
               </b>
-              <a href={phone ? `https://wa.me/${String(phone).replace(/\D/g, "")}` : "https://wa.me/"} target="_blank" rel="noreferrer" className="wcc-open">
-                Open in WhatsApp ↗
-              </a>
+              <span className="wcc-chat__hacts">
+                <a href={phone ? `https://wa.me/${String(phone).replace(/\D/g, "")}` : "https://wa.me/"} target="_blank" rel="noreferrer" className="wcc-open">
+                  Open in WhatsApp ↗
+                </a>
+                <button type="button" className="wcc-hide" onClick={() => setChatOpen(false)} aria-label="Hide chat" title="Hide chat">
+                  ✕
+                </button>
+              </span>
             </div>
             <div className="wcc-sum">
               🟢 {msgCount.wa} WhatsApp sent · 💬 {msgCount.in} repl{msgCount.in === 1 ? "y" : "ies"}
@@ -479,6 +527,7 @@ export default function WorkspaceCreator() {
               </p>
             )}
           </div>
+          )}
 
           <div className="wcc-side">
             <div className="wcc-box">
@@ -686,6 +735,20 @@ export default function WorkspaceCreator() {
         select.ga-input { appearance: none; -webkit-appearance: none; }
         .wcc { padding: 22px 22px 40px; }
         .wcc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .wcc-grid--closed { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .wcc-grid--closed .wcc-side { order: -1; }
+        .wcc-chatcard { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 16px; border: 1px solid #dbe9e3; background: linear-gradient(180deg, #f3fbf7 0%, #ffffff 70%); }
+        .wcc-chatcard__top { display: flex; align-items: center; gap: 12px; }
+        .wcc-chatcard__ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: #0d5c4a; font-size: 19px; }
+        .wcc-chatcard__top b { display: block; font-size: 15px; font-weight: 800; color: var(--ad-ink); }
+        .wcc-chatcard__top small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 600; color: var(--ad-muted); }
+        .wcc-chatcard__last { margin: 0; padding: 12px 14px; border-radius: 12px; background: #fff; border: 1px solid var(--ad-line); font-size: 13.5px; line-height: 1.5; color: var(--ad-ink); }
+        .wcc-chatcard__last.is-in { border-color: #bfe6d3; background: #f0fbf5; }
+        .wcc-chatcard__last em { display: block; margin-bottom: 3px; font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--ad-muted); }
+        .wcc-chatcard__acts { display: flex; flex-wrap: wrap; gap: 8px; }
+        .wcc-chat__hacts { display: inline-flex; align-items: center; gap: 8px; }
+        .wcc-hide { width: 34px; height: 34px; border: 0; border-radius: 10px; background: rgba(255,255,255,.16); color: #fff; font-size: 15px; cursor: pointer; }
+        .wcc-hide:hover { background: rgba(255,255,255,.28); }
         .wcc-grid { display: grid; grid-template-columns: minmax(0, 625fr) minmax(0, 432fr); gap: 18px; margin-top: 13px; align-items: start; }
 
         .wcc-chat { overflow: hidden; border-radius: 16px; border: 1px solid var(--ad-line); background: #fff; }
