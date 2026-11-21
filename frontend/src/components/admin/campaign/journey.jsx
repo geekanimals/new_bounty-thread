@@ -758,6 +758,7 @@ const igOf = (c) => String(c.handle || "").replace(/^@/, "").trim();
  * Har applicant ko campaign ki ABHI wali eligibility se check karta hai — brief badla to sab dobara check.
  */
 const MISSING_RE = /not in your profile yet|not connected|no city|not yet|not set|not enough recent|no categories/i;
+const CRIT_NAME = { gender: "Gender", age: "Birthday", followers: "Instagram", instagram: "Instagram", engagement: "More posts", location: "City", category: "Categories", pet: "Pets", marital: "Marital status", barter: "Barter terms" };
 export function matchState(m) {
   if (!m || !Array.isArray(m.criteria) || !m.criteria.length) return null;
   const bad = m.criteria.filter((x) => !x.ok);
@@ -766,8 +767,11 @@ export function matchState(m) {
   // Admin ko chhupa mismatch bhi dikhe ("won't match"), creator ko "not eligible" sirf sab bharne ke baad.
   const miss = bad.filter((x) => MISSING_RE.test(x.have || ""));
   const no = bad.length - miss.length;
-  if (miss.length) return { k: "missing", label: `⏳ On hold · ${miss.length} left${no ? ` · ✗ ${no} won’t match` : ""}`, tone: "orange", bad, miss, no };
-  return { k: "no", label: "✗ Not a match", tone: "red", bad, miss: [], no: bad.length };
+  // seedhe naam — admin ko ek nazar mein dikhe kya bacha hai / kya match nahi
+  const missNames = [...new Set(miss.map((x) => CRIT_NAME[x.key] || x.need))];
+  const noNames = [...new Set(bad.filter((x) => !MISSING_RE.test(x.have || "")).map((x) => CRIT_NAME[x.key] || x.need))];
+  if (miss.length) return { k: "missing", label: `⏳ On hold · needs ${missNames.join(", ")}${no ? ` · ✗ ${no} won’t match` : ""}`, tone: "orange", bad, miss, no, missNames, noNames };
+  return { k: "no", label: `✗ Not a match · ${noNames.join(", ")}`, tone: "red", bad, miss: [], no: bad.length, missNames: [], noNames };
 }
 export function MatchDetails({ m }) {
   const s = matchState(m);

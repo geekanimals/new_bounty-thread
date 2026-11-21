@@ -21,8 +21,8 @@ const BOXES = [
   { t: "reach", l: "Instagram", s: "media kit connected", f: (c) => !c.failed && (c.ig) },
   // Apply game: Applied = sirf jo sab bhar chuke + brief se match (ya match abhi load nahi hua).
   // Steps bhar rahe creators "On hold" mein, sab bhar ke bhi match nahi → "Not a match" (Applied mein nahi ginte)
-  { t: "screen", l: "Applied", s: "ready to screen", f: (c) => !c.failed && (c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand") && c.mk !== "missing" && c.mk !== "no" },
-  { t: "screen", l: "On hold", s: "applied, still filling profile", f: (c) => !c.failed && c.applied && c.x?.stage !== "sent_to_brand" && c.mk === "missing" },
+  { t: "screen", l: "Ready to send", s: "complete + matches the brief", f: (c) => !c.failed && (c.applied && c.registered && !c.failed && c.x?.stage !== "sent_to_brand") && c.mk !== "missing" && c.mk !== "no" },
+  { t: "screen", l: "On hold", s: "still filling profile", f: (c) => !c.failed && c.applied && c.x?.stage !== "sent_to_brand" && c.mk === "missing" },
   { t: "bad", l: "Not a match", s: "filled everything, doesn't fit", f: (c) => !c.failed && c.applied && c.x?.stage !== "sent_to_brand" && c.mk === "no" },
   { t: "screen", l: "Sent to brand", s: "waiting for the brand", f: (c) => !c.failed && (c.x?.stage === "sent_to_brand") },
   { t: "bad", l: "Rejected", s: "not a fit / brand passed", f: (c) => c.failed },
@@ -153,9 +153,17 @@ export default function WorkspaceCreators() {
       const d = String(r.phone || r.x?.phone || r.i?.phone || "").replace(/\D/g, "").slice(-10);
       return { ...r, payTo: (r.pid && PAY.p[r.pid]) || (h && PAY.h[h]) || (d.length === 10 && PAY.ph[d]) || null };
     }).map((r) => {
-      // brief match (live) → mk: ok | missing (on hold) | no (not a match) — Applied / On hold / Not a match boxes
+      // brief match (live) → mk: ok | missing (on hold) | no (not a match) — Ready to send / On hold / Not a match boxes
       const ms = r.pid && r.applied ? matchState((bmatch.data || {})[r.pid]) : null;
-      return ms ? { ...r, mk: ms.k } : r;
+      if (ms) r = { ...r, mk: ms.k, missNames: ms.missNames, noNames: ms.noNames };
+      // sheet se aaye (bulk): register ho gaye par profile adhoora → abhi campaign mein aaye hi nahi → On hold
+      else if (r.kind === "i" && r.registered && r.applied && (r.i?.needs || []).length)
+        r = { ...r, mk: "missing", missNames: [...new Set(r.i.needs.map((n) => (/instagram/i.test(n) ? "Instagram" : String(n).replace(/\s*\(.*\)$/, ""))))] };
+      // row ki line seedhi: kiski baari + kya bacha / kya match nahi
+      if (r.mk === "missing")
+        return { ...r, turnWho: "creator", turn: `⏳ Creator’s turn · On hold — still to fill: ${(r.missNames || []).join(", ") || "profile"}`, ...(r.kind === "p" ? { act: null, action: "" } : {}) };
+      if (r.mk === "no") return { ...r, turn: `⚡ Our turn · Filled everything but doesn’t fit: ${(r.noNames || []).join(", ")} — reject them`, act: null, action: "" };
+      return r;
     });
   }, [bt.data, people.data, prog.data, camp, extras.data, payCamp, PAY, bmatch.data]);
   const U = useMemo(() => unread.data || {}, [unread.data]);
@@ -177,7 +185,7 @@ export default function WorkspaceCreators() {
     if (fit !== "Brief match: all") {
       const k = { "✓ Matches the brief": "ok", "✗ Doesn’t match": "no", "⏳ On hold — still filling": "missing" }[fit];
       r = r.filter((x) => {
-        const ms = x.pid ? matchState((bmatch.data || {})[x.pid]) : null;
+        const ms = x.mk ? { k: x.mk } : x.pid ? matchState((bmatch.data || {})[x.pid]) : null;
         return fit === "Not checked (not on Geek OS / past screening)" ? !ms : ms && ms.k === k;
       });
     }
@@ -230,11 +238,11 @@ export default function WorkspaceCreators() {
   const fitN = useMemo(() => {
     const m = { ok: 0, no: 0, missing: 0 };
     all.forEach((x) => {
-      const ms = x.pid && x.applied && !x.failed && x.x?.stage !== "sent_to_brand" ? matchState((bmatch.data || {})[x.pid]) : null;
-      if (ms) m[ms.k]++;
+      // boxes jaisa hi (mk) — sheet wale adhoore profile bhi On hold mein ginte hain
+      if (x.mk && x.applied && !x.failed && x.x?.stage !== "sent_to_brand") m[x.mk]++;
     });
     return m;
-  }, [all, bmatch.data]);
+  }, [all]);
 
   // ⬇ list jaisi filter hai waisi hi — Excel / CSV
   const sheetRows = () => {
@@ -524,7 +532,7 @@ export default function WorkspaceCreators() {
                 className={`wcr-fit wcr-fit--${k} ${fit === l ? "is-on" : ""}`}
                 onClick={() => {
                   setFit(fit === l ? "Brief match: all" : l);
-                  if (fit !== l) setBox(Math.max(0, BX.findIndex((b) => b.l === ({ ok: "Applied", missing: "On hold", no: "Not a match" }[k] || "Applied"))));
+                  if (fit !== l) setBox(Math.max(0, BX.findIndex((b) => b.l === ({ ok: "Ready to send", missing: "On hold", no: "Not a match" }[k] || "Ready to send"))));
                 }}
               >
                 {l} · {c}
