@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Overview from "../overview/page";
 import { rpc, useRpc, errText } from "@/lib/supabase";
@@ -30,6 +30,7 @@ export default function FindMatching() {
   const ext = useRpc("admin", "api.list_external_invites", { p_campaign: id }, { skip: !on });
   const disc = useRpc("admin", "api.discover_external", { p_filters: {}, p_campaign: id, p_limit: 24 }, { skip: !on });
   const [mode, setMode] = useState("match");
+  const [extShow, setExtShow] = useState("all"); // off-platform: all | waiting | joined
   const [show, setShow] = useState("Not invited yet");
   const [q, setQ] = useState("");
   const [qq, setQq] = useState("");
@@ -77,6 +78,14 @@ export default function FindMatching() {
   const L = (Array.isArray(m.data) ? m.data : []).map(toRow);
   const disN = (Array.isArray(disc.data) ? disc.data : []).filter((c) => !c.invited).length;
   const extN = Array.isArray(ext.data) ? ext.data.length : 0;
+  // off-platform handles ki public Instagram profile (DP, naam, bio, followers…) — api.external_profiles
+  const extHandles = useMemo(() => (Array.isArray(ext.data) ? ext.data : []).map((i) => String(i.handle || "").replace(/^@/, "").toLowerCase()).filter(Boolean), [ext.data]);
+  const prof = useRpc("admin", "api.external_profiles", { p_handles: extHandles }, { skip: mode !== "ext" || !extHandles.length });
+  const profOf = useMemo(() => {
+    const m = {};
+    (Array.isArray(prof.data) ? prof.data : []).forEach((x) => x && x.handle && (m[String(x.handle).toLowerCase()] = x));
+    return m;
+  }, [prof.data]);
   const isInv = (r) => r.state !== "none" || mine[r.member];
   // jo abhi tak invite nahi hue / campaign mein nahi — wahi ginti (invite karte hi ghat jaati hai)
   const leftN = L.filter((r) => !isInv(r)).length;
@@ -229,15 +238,79 @@ export default function FindMatching() {
           {mode === "ext" && (
             <div className="fm-ext">
               <p className="fm-exth">Creators you invited by Instagram handle — not on Geek OS yet. DM them the message; the campaign waits in their account once they sign up.</p>
-              {(Array.isArray(ext.data) ? ext.data : []).map((i) => {
+              {(() => {
+                const L2 = Array.isArray(ext.data) ? ext.data : [];
+                const j = L2.filter((i) => i.claimed_at).length;
+                return (
+                  <div className="fm-exseg" role="tablist" aria-label="Show">
+                    {[
+                      ["all", "All", L2.length],
+                      ["waiting", "Not joined yet", L2.length - j],
+                      ["joined", "Joined", j],
+                    ].map(([k, l, n]) => (
+                      <button key={k} type="button" role="tab" aria-selected={extShow === k} className={extShow === k ? "is-on" : ""} onClick={() => setExtShow(k)}>
+                        {l} <span>{n}</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+              {(Array.isArray(ext.data) ? ext.data : []).filter((i) => (extShow === "joined" ? !!i.claimed_at : extShow === "waiting" ? !i.claimed_at : true)).map((i) => {
                 const h = String(i.handle || "").replace(/^@/, "").toLowerCase();
+                const P = profOf[h] || null;
                 const ST = { pending: "⏳ Not sent yet", manual: "✉️ Send the DM yourself", sent: "✅ DM sent", needs_permission: "✉️ Send the DM yourself", failed: "⚠️ Couldn't send" };
                 const msg = `Hi @${h} 👋 We'd love to have you on "${camp?.name || "our campaign"}" with us on Geek OS (Bounty & Threads).\n\nSign up free here and the campaign will be waiting in your account: ${typeof window !== "undefined" ? window.location.origin : ""}/creator\n\nYou'll see the full brief, what you get, and you can accept or pass — no obligation.`;
                 return (
-                  <div key={i.invite_id || h} className="fm-excard">
-                    <span>
-                      <b>@{h}</b> <span className="ga-badge">{i.claimed_at ? "Joined — invite sent ✓" : ST[i.dm_status] || i.dm_status || "Invited"}</span>
-                      {i.note ? <small> “{i.note}”</small> : null}
+                  <div key={i.invite_id || h} className={`fm-excard ${i.claimed_at ? "is-joined" : ""}`}>
+                    <span className="fm-exav">
+                      {P && P.profile_picture_url ? <img src={P.profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} /> : null}
+                      <i aria-hidden="true">{h.charAt(0).toUpperCase()}</i>
+                    </span>
+                    <span className="fm-exinfo">
+                      <span className="fm-exname">
+                        {P && P.name ? <b>{P.name}</b> : null}
+                        <a href={`https://www.instagram.com/${encodeURIComponent(h)}/`} target="_blank" rel="noopener noreferrer">
+                          @{h} ↗
+                        </a>
+                        <span className={`ga-badge ${i.claimed_at ? "ga-badge--green" : ""}`}>{i.claimed_at ? "Joined — invite sent ✓" : ST[i.dm_status] || i.dm_status || "Invited"}</span>
+                      </span>
+                      {P && P.fetched !== false ? (
+                        <span className="fm-exstats">
+                          {P.followers != null && (
+                            <span>
+                              <b>{fmtNum(P.followers)}</b> followers
+                            </span>
+                          )}
+                          {P.engagement != null && (
+                            <span>
+                              <b>{Math.round(P.engagement * 10) / 10}%</b> engagement
+                            </span>
+                          )}
+                          {P.avg_likes != null && (
+                            <span>
+                              <b>{fmtNum(P.avg_likes)}</b> avg likes
+                            </span>
+                          )}
+                          {P.posts != null && (
+                            <span>
+                              <b>{fmtNum(P.posts)}</b> posts
+                            </span>
+                          )}
+                          {P.city && <span>📍 {P.city}</span>}
+                        </span>
+                      ) : (
+                        <span className="fm-exstats fm-exstats--none">{prof.loading ? "Loading profile…" : "Public profile not fetched yet"}</span>
+                      )}
+                      {P && Array.isArray(P.categories) && P.categories.length > 0 && (
+                        <span className="fm-excats">
+                          {P.categories.slice(0, 4).map((c2) => (
+                            <span key={c2}>{c2}</span>
+                          ))}
+                        </span>
+                      )}
+                      {P && P.bio && <span className="fm-exbio">{P.bio}</span>}
+                      {i.note ? <small className="fm-exnote">Note: “{i.note}”</small> : null}
+                      <small className="fm-exnote">Invited {new Date(i.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}{i.claimed_at ? ` · joined ${new Date(i.claimed_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}` : ""}</small>
                     </span>
                     {!i.claimed_at && (
                       <span className="fm-exact">
@@ -282,6 +355,30 @@ export default function FindMatching() {
       {toast && <div className="ga-toast fm-toast">{toast}</div>}
 
       <style>{`
+        .fm-exseg { display: inline-flex; gap: 4px; margin: 4px 0 14px; padding: 4px; border-radius: 12px; background: #f1f2f8; }
+        .fm-exseg button { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 8px 0 13px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 12.5px; font-weight: 700; color: #4b5470; cursor: pointer; }
+        .fm-exseg button span { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; background: #e2e4f0; font-size: 11px; font-weight: 800; }
+        .fm-exseg button.is-on { background: #fff; color: #1d2440; box-shadow: 0 1px 2px rgba(20,22,60,.08), 0 6px 14px -10px rgba(40,30,120,.5); }
+        .fm-exseg button.is-on span { background: var(--ad-primary); color: #fff; }
+        .fm-excard { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--ad-line); background: #fff; }
+        .fm-excard.is-joined { background: #f6fcf9; border-color: #cfeadc; }
+        .fm-exav { position: relative; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #f58529, #dd2a7b 55%, #8134af); padding: 2px; }
+        .fm-exav i { position: absolute; inset: 2px; border-radius: 50%; display: grid; place-items: center; background: #fff; font-style: normal; font-size: 20px; font-weight: 800; color: #8134af; }
+        .fm-exav img { position: absolute; inset: 2px; z-index: 1; width: calc(100% - 4px); height: calc(100% - 4px); border-radius: 50%; object-fit: cover; border: 2px solid #fff; }
+        .fm-exinfo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .fm-exname { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+        .fm-exname b { font-size: 14.5px; font-weight: 800; color: var(--ad-ink); }
+        .fm-exname a { font-size: 13px; font-weight: 700; color: var(--ad-primary); text-decoration: none; }
+        .fm-exname a:hover { text-decoration: underline; }
+        .fm-exstats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ad-muted); }
+        .fm-exstats b { color: var(--ad-ink); font-weight: 800; }
+        .fm-exstats--none { font-style: italic; }
+        .fm-excats { display: flex; flex-wrap: wrap; gap: 5px; }
+        .fm-excats span { height: 20px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; background: #f1efff; color: #5b4fd9; font-size: 10.5px; font-weight: 700; }
+        .fm-exbio { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; font-size: 12px; line-height: 1.45; color: #4b5470; }
+        .fm-exnote { font-size: 11px; color: #9aa1bb; }
+        .fm-excard .fm-exact { align-self: center; }
+        @media (max-width: 640px) { .fm-excard { grid-template-columns: 48px minmax(0, 1fr); } .fm-exav { width: 48px; height: 48px; } .fm-excard .fm-exact { grid-column: 1 / -1; } }
         .fm-noel { display: inline-flex; flex-direction: column; gap: 3px; max-width: 220px; }
         .fm-noel small { font-size: 11px; color: var(--ad-muted); white-space: normal; }
         /* Figma: select par arrow nahi */
@@ -305,7 +402,6 @@ export default function FindMatching() {
         .fm-q { margin-top: 14px; }
         .fm-ext { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
         .fm-exth { font-size: 12.5px; color: var(--ad-muted); }
-        .fm-excard { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ad-line); font-size: 13px; }
         .fm-excard small { color: var(--ad-muted); }
         .fm-exact { display: flex; gap: 6px; flex-wrap: wrap; }
         .fm-exb { height: 34px; padding: 0 12px; font-size: 12.5px; }
