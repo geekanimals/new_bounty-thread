@@ -1,7 +1,7 @@
 "use client";
 
 import BriefBlocks from "@/components/creator/BriefBlocks";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Logo from "@/components/creator/Logo";
@@ -22,6 +22,16 @@ export default function GuestBrief() {
   const covers = useCovers();
   const { loading, list } = useOpenCampaigns({ publicList: true });
   const x = useMemo(() => list.find((r) => String(r.campaign_id) === String(id)), [list, id]);
+  // mobile: upar wala Apply box screen se bahar jaye tab neeche chipka Apply bar dikhe
+  const applyRef = useRef(null);
+  const [bar, setBar] = useState(false);
+  useEffect(() => {
+    const el = applyRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setBar(!e.isIntersecting), { rootMargin: "-62px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [x]);
   const apply = (e) => {
     e.preventDefault();
     rememberApply(id);
@@ -55,12 +65,22 @@ export default function GuestBrief() {
     rewardKit: compLine(x),
     rewardNote: compSub(x),
     deliver: delivLine(x),
+    // poori list chhoti karke (brackets hata ke) — "1 Reel · 1 Story · 1 Google review"
+    deliverAll: x.deliverables_text
+      ? String(x.deliverables_text)
+          .replace(/\s*\([^)]*\)/g, "")
+          .split(/\+|\n|;/)
+          .map((v) => v.trim())
+          .filter(Boolean)
+          .join(" · ")
+      : delivLine(x),
     who: who.length ? who.join(" • ") : "Open to every creator",
     deadline: t.content_days ? `${t.content_days} days after ${deadlineFrom(k)}` : x.ends_on ? `Till ${fdate(x.ends_on)}` : "Shown in your agreement",
     usage: t.ad_rights_months ? `${t.ad_rights_months} month${t.ad_rights_months > 1 ? "s" : ""}` : "None",
     collab: t.collab_rights ? "Required" : "Not required",
     excl: t.exclusivity || "None",
     city: (x.cities || []).join(", "),
+    cityNice: (x.cities || []).map((v) => String(v).replace(/\b\w/g, (m) => m.toUpperCase())).join(", "),
   };
   const line = (label, v) =>
     v ? (
@@ -104,6 +124,13 @@ export default function GuestBrief() {
             <h1 className="gb-title">{c.title}</h1>
             <p className="gb-brand">{c.brand}</p>
 
+            <div className="gb-apply" ref={applyRef}>
+              <a href="/creator/login" className="gb-apply__btn" onClick={apply}>
+                Apply now →
+              </a>
+              <p>Quick WhatsApp check, then you&apos;re in. You review and accept terms if selected.</p>
+            </div>
+
             <div className="gb-boxes">
               <div className="gb-box">
                 <Gift size={16} />
@@ -115,7 +142,7 @@ export default function GuestBrief() {
               <div className="gb-box">
                 <Film size={16} />
                 <span>
-                  <strong>{c.deliver}</strong>
+                  <strong>{c.deliverAll}</strong>
                   <small>Submit draft for approval</small>
                 </span>
               </div>
@@ -147,7 +174,16 @@ export default function GuestBrief() {
                   <small>{c.excl}</small>
                 </span>
               </div>
+              {c.cityNice && (
+                <div className="gb-box gb-box--wide">
+                  <span className="gb-pin" aria-hidden="true">📍</span>
+                  <span>
+                    <b>{k === "visit" ? "Where:" : "Cities:"}</b> <small className="gb-inl">{c.cityNice}</small>
+                  </span>
+                </div>
+              )}
             </div>
+
 
             <ol className="gb-journey">
               {journeyFor(k, vz).map(([ic, j]) => (
@@ -161,13 +197,6 @@ export default function GuestBrief() {
 
           {/* Right: apply + brief */}
           <section className="gb-right">
-            <div className="gb-apply">
-              <a href="/creator/login" className="gb-apply__btn" onClick={apply}>
-                Apply now →
-              </a>
-              <p>Quick WhatsApp check, then you&apos;re in. You review and accept terms if selected.</p>
-            </div>
-
             <details className="gb-brief" open>
               <summary>
                 📄 Read full creative brief <ChevronDown size={14} />
@@ -196,7 +225,7 @@ export default function GuestBrief() {
                     </a>
                   </p>
                 )}
-                {c.city && line("Cities", c.city)}
+                {c.city && line("Cities", c.cityNice)}
                 {(x.languages || []).length > 0 && line("Languages", x.languages.join(", "))}
                 <h4>ⓘ Terms &amp; disclosure</h4>
                 <ul>
@@ -233,6 +262,16 @@ export default function GuestBrief() {
         </div>
       </main>
 
+      <div className={`gb-bar ${bar ? "is-on" : ""}`} aria-hidden={!bar}>
+        <span className="gb-bar__t">
+          <b>{c.rewardKit}</b>
+          <small>{c.title}</small>
+        </span>
+        <a href="/creator/login" className="gb-bar__btn" onClick={apply} tabIndex={bar ? 0 : -1}>
+          Apply now →
+        </a>
+      </div>
+
       <GuestNav active="campaigns" />
 
       <style>{`
@@ -248,9 +287,10 @@ export default function GuestBrief() {
         .gb-head .gb-sign { font-family: var(--bx-jak); font-size: 14px; font-weight: 700; }
         .gb-nav a { font-family: var(--bx-sans); }
         .gb-back { font-family: var(--bx-jak); font-size: 14px; font-weight: 700; color: #14231a; }
-        .gb-main { max-width: 1100px; margin: 0 auto; padding: 22px 32px 60px; }
-        .gb-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; padding: 18px; border-radius: 22px; background: rgba(246,232,201,.75); border: 1px solid var(--bx-line); }
-        .gb-img { position: relative; height: 210px; border-radius: 6px; overflow: hidden; }
+        .gb-main { max-width: 1200px; margin: 0 auto; padding: 22px 32px 120px; }
+        .gb-wrap { display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 1fr); gap: 28px; align-items: start; padding: 20px; border-radius: 22px; background: rgba(246,232,201,.75); border: 1px solid var(--bx-line); }
+        .gb-left { position: sticky; top: 80px; }
+        .gb-img { position: relative; height: 200px; border-radius: 14px; overflow: hidden; box-shadow: 0 14px 30px -18px rgba(40,25,5,.55); }
         .gb-img img { width: 100%; height: 100%; object-fit: cover; }
         .gb-img span { position: absolute; left: 0; bottom: 14px; padding: 3px 10px; background: rgba(20,35,26,.9); border: 1px solid rgba(246,217,139,.6); color: var(--bx-gold-2); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
         .gb-title { margin-top: 16px; font-family: var(--bx-serif); font-size: 30px; font-weight: 600; line-height: 34.5px; text-align: center; color: #14231a; }
@@ -261,13 +301,15 @@ export default function GuestBrief() {
         .gb-box strong { display: block; font-family: var(--bx-serif); font-size: 15px; font-weight: 600; line-height: 18px; color: #14231a; }
         .gb-box small { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; color: #4a4436; }
         .gb-box b { font-size: 13px; font-weight: 700; color: #14231a; }
-        .gb-box--wide { grid-column: 1 / -1; }
+        .gb-box--wide { grid-column: 1 / -1; align-items: center; }
+        .gb-pin { flex-shrink: 0; font-size: 14px; }
+        .gb-inl { display: inline !important; font-size: 13px !important; }
         .gb-journey { list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 16px 0 0; padding: 0; }
         .gb-journey li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-family: var(--bx-sans); font-size: 11.5px; font-weight: 500; line-height: 15px; color: #14231a; }
         .gb-journey span { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--bx-line); background: #fffaf0; display: grid; place-items: center; font-size: 14px; }
 
-        .gb-right { display: flex; flex-direction: column; gap: 12px; }
-        .gb-apply { margin-top: 30px; padding: 16px; border-radius: 16px; background: #3b2e22; text-align: center; }
+        .gb-right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+        .gb-apply { margin: 0 0 14px; padding: 14px; border-radius: 16px; background: #3b2e22; text-align: center; }
         .gb-apply__btn { display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 999px; background: var(--bx-sky); color: #0b2530; font-family: var(--bx-jak); font-size: 19px; font-weight: 800; letter-spacing: -0.1px; box-shadow: 0 10px 24px -12px rgba(34,184,230,.9); }
         .gb-apply__btn:hover { filter: brightness(1.06); }
         .gb-apply p { margin: 10px 0 0; font-family: var(--bx-sans); font-size: 12px; font-weight: 500; color: #fbf3e2; }
@@ -283,8 +325,13 @@ export default function GuestBrief() {
         .gb-brief b { font-weight: 700; }
         .gb-brief ul { margin: 0; padding-left: 17px; font-family: var(--bx-sans); font-size: 13px; line-height: 19.5px; color: #14231a; }
         .gb-rumi { justify-content: center; }
+        /* lamba central brief: desktop par box ke andar scroll (page bahut lamba na ho) */
+        @media (min-width: 901px) {
+          .gb-brief .bb-central.is-open .bb-body { max-height: 380px; overflow-y: auto; padding-right: 6px; scrollbar-width: thin; scrollbar-color: rgba(246,217,139,.5) transparent; }
+        }
+        .gb-bar { display: none; }
 
-        @media (max-width: 900px) { .gb-wrap { grid-template-columns: minmax(0, 1fr); } .gb-apply { margin-top: 0; } }
+        @media (max-width: 900px) { .gb-wrap { grid-template-columns: minmax(0, 1fr); } .gb-left { position: static; } }
         @media (max-width: 767px) {
           .gb-head { position: fixed; left: 0; right: 0; padding: 0 16px; justify-content: space-between; }
           .gb-nav { display: none; }
@@ -296,6 +343,25 @@ export default function GuestBrief() {
           .gb-wrap { padding: 0 16px 16px; border-radius: 0; border: 0; background: none; }
           .gb-img { height: 170px; }
           .gb-left .bx-back { margin: 18px 0 10px; }
+          .gb-title { font-size: 26px; line-height: 30px; }
+          .gb-boxes { gap: 6px; }
+          .gb-box { padding: 10px; }
+          .gb-box strong { font-size: 14px; line-height: 17px; }
+          .gb-journey { margin-top: 14px; }
+          .gb-journey li { font-size: 10.5px; line-height: 13px; }
+          .gb-bar {
+            position: fixed; left: 10px; right: 10px; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 34;
+            display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 999px;
+            background: #3b2e22; box-shadow: 0 12px 26px -10px rgba(20,12,4,.6);
+            transform: translateY(140%); opacity: 0; pointer-events: none; transition: transform .25s ease, opacity .25s ease;
+          }
+          .gb-bar.is-on { transform: none; opacity: 1; pointer-events: auto; }
+          .gb-bar__t { flex: 1; min-width: 0; line-height: 1.2; }
+          .gb-bar__t b { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--bx-jak); font-size: 13.5px; color: #fff; }
+          .gb-bar__t small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; color: #e6d3b3; }
+          .gb-bar__btn { flex-shrink: 0; height: 44px; padding: 0 18px; border-radius: 999px; display: grid; place-items: center; background: var(--bx-sky); color: #0b2530; font-family: var(--bx-jak); font-size: 15px; font-weight: 800; }
+          .gb .gn-tip { bottom: 150px; }
+          .gb:has(.gb-bar.is-on) .gn-tip { display: none; }
         }
       `}</style>
     </div>
