@@ -44,9 +44,11 @@ export default function IgImg({ door = "admin", handle, src, kind = "pic", perma
     setDead(!src);
     setTried(false);
   }, [src]);
-  // link hi nahi hai par handle hai → seedha Instagram se
+  // link hi nahi hai par handle hai → seedha Instagram se.
+  // (pehle `tried` deps mein tha: setTried(true) se effect ka cleanup chal kar apni hi lookup ka jawab phenk deta tha —
+  //  isliye bina link wali rows (invite rows) ki photo kabhi nahi aati thi)
   useEffect(() => {
-    if (src || tried || !handle) return;
+    if (src || !handle) return;
     setTried(true);
     let on = true;
     igLookup(door, handle).then((x) => {
@@ -56,7 +58,7 @@ export default function IgImg({ door = "admin", handle, src, kind = "pic", perma
     return () => {
       on = false;
     };
-  }, [src, tried, handle, door, kind, permalink]);
+  }, [src, handle, door, kind, permalink]);
 
   const onError = () => {
     if (tried || !handle) return setDead(true);

@@ -207,7 +207,7 @@ export function buildRows({ tracker, people, progress, kind }) {
       nx,
       name: i.name || (i.handle ? "@" + i.handle : i.phone || i.email || "Creator"),
       handle: i.handle ? "@" + i.handle : "",
-      pic: null,
+      pic: i.pic || null, // registered creator ki saved Instagram photo (campaign_people.invites.pic)
       tags: [[`via ${i.source && i.source !== "upload" ? i.source : "upload"} · ${fmtDate(i.created_at)}`, "violet"], [reg ? (waitIg ? "On Geek · connect Instagram" : "On Geek") : "Not yet on Geek", reg ? "orange" : ""]],
       phone: maskPhone(i.phone),
       followersN: Number(i.followers) || 0,
