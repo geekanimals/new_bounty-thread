@@ -854,6 +854,31 @@ function CopyBtn({ text, what }) {
   );
 }
 
+/* campaign ke andar har creator ki taarikhen: contract, parcel kab gaya / pahuncha, video kab aaya, kab post hua */
+function journeyDates(c) {
+  if (c.kind !== "p" || !c.x) return [];
+  const x = c.x;
+  const st = x.steps || {};
+  const con = x.contract || {};
+  const ship = x.shipment || {};
+  const sub = x.submission || null;
+  const rev = x.review || null;
+  const posts = Array.isArray(x.posts) ? x.posts : [];
+  const today = new Date().toISOString().slice(0, 10);
+  const D = [];
+  const add = (k, icon, label, at, tone) => at && D.push({ k, icon, label, at, tone });
+  add("sign", "📜", "Signed", con.signed_at || st.contract_signed);
+  add("addr", "📍", "Address", x.address_confirmed_at || st.address_confirmed);
+  add("ship", "🚚", "Parcel sent", ship.shipped_at || st.product_sent);
+  add("deliv", "📦", "Delivered", ship.delivered_at);
+  const posted = posts.map((p) => p.posted_at).filter(Boolean).sort()[0] || st.published || st.completed;
+  if (x.due_on && !sub && !posted && !["published", "completed"].includes(x.stage)) add("due", "⏳", x.due_on < today ? "Video overdue since" : "Video due", x.due_on, x.due_on < today ? "bad" : "");
+  add("vid", "🎬", sub && sub.rounds > 1 ? `Video (round ${sub.rounds})` : "Video", (sub && sub.submitted_at) || st.content_submitted);
+  add("ok", "✅", "Client OK", (rev && rev.decision === "approved" && rev.at) || st.content_approved);
+  add("post", "📲", posts.length > 1 ? `Posted ×${posts.length}` : "Posted", posted, "ok");
+  return D;
+}
+
 export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0 }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
@@ -902,6 +927,15 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
             {c.dates.reinvited && <span title="Invite sent again">↻ Re-sent {fmtDate(c.dates.reinvited)}</span>}
             {c.dates.joined && <span title={`Joined / applied ${new Date(c.dates.joined).toLocaleString("en-IN")}`}>✅ Joined {fmtDate(c.dates.joined)}</span>}
             {c.dates.moved && c.kind === "p" && <span title="Last step change">🔄 Step {fmtDate(c.dates.moved)}</span>}
+          </span>
+        )}
+        {journeyDates(c).length > 0 && (
+          <span className="jr-jdates">
+            {journeyDates(c).map((d) => (
+              <span key={d.k} className={d.tone ? `is-${d.tone}` : ""} title={`${d.label} ${new Date(d.at).toLocaleString("en-IN")}`}>
+                {d.icon} {d.label} <b>{fmtDate(d.at)}</b>
+              </span>
+            ))}
           </span>
         )}
       </div>
@@ -1052,6 +1086,11 @@ const JR_CSS = `
   .jr-tags { display: flex; flex-wrap: wrap; gap: 4px; }
   .jr-dates { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; font-size: 11.5px; color: var(--ad-muted); }
   .jr-dates span { white-space: nowrap; }
+  .jr-jdates { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .jr-jdates span { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border-radius: 6px; background: #f3f4fa; color: #5b6380; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+  .jr-jdates b { color: #1d2440; font-weight: 800; }
+  .jr-jdates .is-ok { background: #e7f8ef; color: #0b7a52; } .jr-jdates .is-ok b { color: #065f3f; }
+  .jr-jdates .is-bad { background: #fdecea; color: #b42318; } .jr-jdates .is-bad b { color: #912018; }
   .jr-tags .ga-badge { height: 20px; padding: 0 8px; font-size: 10.5px; }
   .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 700; }
   /* lamba "On hold · needs …" badge apne column mein hi wrap ho — email column par na chadhe */
