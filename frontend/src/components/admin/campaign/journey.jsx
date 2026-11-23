@@ -856,8 +856,8 @@ function CopyBtn({ text, what }) {
 
 /* campaign ke andar har creator ki taarikhen: contract, parcel kab gaya / pahuncha, video kab aaya, kab post hua */
 function journeyDates(c) {
-  if (c.kind !== "p" || !c.x) return [];
-  const x = c.x;
+  // har row mein wahi 7 khaane, wahi jagah — jo step abhi nahi hua wo khaali (sab rows ek line mein)
+  const x = (c.kind === "p" && c.x) || {};
   const st = x.steps || {};
   const con = x.contract || {};
   const ship = x.shipment || {};
@@ -865,18 +865,22 @@ function journeyDates(c) {
   const rev = x.review || null;
   const posts = Array.isArray(x.posts) ? x.posts : [];
   const today = new Date().toISOString().slice(0, 10);
-  const D = [];
-  const add = (k, icon, label, at, tone) => at && D.push({ k, icon, label, at, tone });
-  add("sign", "📜", "Signed", con.signed_at || st.contract_signed);
-  add("addr", "📍", "Address", x.address_confirmed_at || st.address_confirmed);
-  add("ship", "🚚", "Parcel sent", ship.shipped_at || st.product_sent);
-  add("deliv", "📦", "Delivered", ship.delivered_at);
-  const posted = posts.map((p) => p.posted_at).filter(Boolean).sort()[0] || st.published || st.completed;
-  if (x.due_on && !sub && !posted && !["published", "completed"].includes(x.stage)) add("due", "⏳", x.due_on < today ? "Video overdue since" : "Video due", x.due_on, x.due_on < today ? "bad" : "");
-  add("vid", "🎬", sub && sub.rounds > 1 ? `Video (round ${sub.rounds})` : "Video", (sub && sub.submitted_at) || st.content_submitted);
-  add("ok", "✅", "Client OK", (rev && rev.decision === "approved" && rev.at) || st.content_approved);
-  add("post", "📲", posts.length > 1 ? `Posted ×${posts.length}` : "Posted", posted, "ok");
-  return D;
+  const posted = posts.map((p) => p.posted_at).filter(Boolean).sort()[0] || st.published || st.completed || null;
+  const vid = (sub && sub.submitted_at) || st.content_submitted || null;
+  const due = x.due_on && !vid && !posted && !["published", "completed"].includes(x.stage) ? x.due_on : null;
+  return [
+    { k: "sign", icon: "📜", label: "Signed", at: con.signed_at || st.contract_signed || null },
+    { k: "addr", icon: "📍", label: "Address", at: x.address_confirmed_at || st.address_confirmed || null },
+    { k: "ship", icon: "🚚", label: "Parcel sent", at: ship.shipped_at || st.product_sent || null },
+    { k: "deliv", icon: "📦", label: "Delivered", at: ship.delivered_at || null },
+    vid
+      ? { k: "vid", icon: "🎬", label: sub && sub.rounds > 1 ? `Video ·${sub.rounds}` : "Video", at: vid }
+      : due
+        ? { k: "vid", icon: "⏳", label: due < today ? "Overdue" : "Video due", at: due, tone: due < today ? "bad" : "" }
+        : { k: "vid", icon: "🎬", label: "Video", at: null },
+    { k: "ok", icon: "✅", label: "Client OK", at: (rev && rev.decision === "approved" && rev.at) || st.content_approved || null },
+    { k: "post", icon: "📲", label: posts.length > 1 ? `Posted ×${posts.length}` : "Posted", at: posted, tone: posted ? "ok" : "" },
+  ];
 }
 
 export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0 }) {
@@ -927,15 +931,6 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
             {c.dates.reinvited && <span title="Invite sent again">↻ Re-sent {fmtDate(c.dates.reinvited)}</span>}
             {c.dates.joined && <span title={`Joined / applied ${new Date(c.dates.joined).toLocaleString("en-IN")}`}>✅ Joined {fmtDate(c.dates.joined)}</span>}
             {c.dates.moved && c.kind === "p" && <span title="Last step change">🔄 Step {fmtDate(c.dates.moved)}</span>}
-          </span>
-        )}
-        {journeyDates(c).length > 0 && (
-          <span className="jr-jdates">
-            {journeyDates(c).map((d) => (
-              <span key={d.k} className={d.tone ? `is-${d.tone}` : ""} title={`${d.label} ${new Date(d.at).toLocaleString("en-IN")}`}>
-                {d.icon} {d.label} <b>{fmtDate(d.at)}</b>
-              </span>
-            ))}
           </span>
         )}
       </div>
@@ -1059,6 +1054,17 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
         </span>
       </div>
 
+      {/* campaign ki taarikhen — poori row ki chaudai mein ek patli timeline (creator column lamba na ho) */}
+      <div className="jr-jdates" aria-label="Campaign dates">
+        {journeyDates(c).map((d) => (
+          <span key={d.k} className={`jr-jd ${d.at ? "" : "is-empty"} ${d.tone ? `is-${d.tone}` : ""}`} title={d.at ? `${d.label} ${new Date(d.at).toLocaleString("en-IN")}` : `${d.label} — not yet`}>
+            <span className="jr-jd__l">
+              {d.icon} {d.label}
+            </span>
+            <b className="jr-jd__d">{d.at ? fmtDate(d.at) : "—"}</b>
+          </span>
+        ))}
+      </div>
       {ms && showMatch && (
         <div className="jr-matchrow">
           <MatchDetails m={match} />
@@ -1086,11 +1092,17 @@ const JR_CSS = `
   .jr-tags { display: flex; flex-wrap: wrap; gap: 4px; }
   .jr-dates { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; font-size: 11.5px; color: var(--ad-muted); }
   .jr-dates span { white-space: nowrap; }
-  .jr-jdates { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-  .jr-jdates span { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border-radius: 6px; background: #f3f4fa; color: #5b6380; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
-  .jr-jdates b { color: #1d2440; font-weight: 800; }
-  .jr-jdates .is-ok { background: #e7f8ef; color: #0b7a52; } .jr-jdates .is-ok b { color: #065f3f; }
-  .jr-jdates .is-bad { background: #fdecea; color: #b42318; } .jr-jdates .is-bad b { color: #912018; }
+  .jr > .jr-jdates { grid-column: 3 / -1; }
+  .jr.jr--nocheck > .jr-jdates { grid-column: 2 / -1; }
+  .jr-jdates { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: -2px; padding-top: 8px; border-top: 1px dashed #e7e9f2; }
+  .jr-jd { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 5px 8px; border-radius: 8px; background: #f3f4fa; }
+  .jr-jd__l { font-size: 10px; font-weight: 700; color: #6b7391; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jr-jd__d { font-size: 11.5px; font-weight: 800; color: #1d2440; white-space: nowrap; }
+  .jr-jd.is-empty { background: transparent; border: 1px dashed #e3e6f0; }
+  .jr-jd.is-empty .jr-jd__l { color: #b3b9cc; }
+  .jr-jd.is-empty .jr-jd__d { color: #c9cedd; font-weight: 600; }
+  .jr-jd.is-ok { background: #e7f8ef; } .jr-jd.is-ok .jr-jd__l, .jr-jd.is-ok .jr-jd__d { color: #0b7a52; }
+  .jr-jd.is-bad { background: #fdecea; } .jr-jd.is-bad .jr-jd__l, .jr-jd.is-bad .jr-jd__d { color: #b42318; }
   .jr-tags .ga-badge { height: 20px; padding: 0 8px; font-size: 10.5px; }
   .jr-match { border: 0; cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 700; }
   /* lamba "On hold · needs …" badge apne column mein hi wrap ho — email column par na chadhe */
@@ -1146,5 +1158,7 @@ const JR_CSS = `
     .jr > .jr-who { grid-column: auto; }
     .jr-act { flex-direction: column; }
     .jr-av { width: 32px; height: 32px; font-size: 15px; }
+    .jr > .jr-jdates, .jr.jr--nocheck > .jr-jdates { grid-column: 1 / -1; }
+    .jr-jdates { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
   }
 `;
