@@ -202,6 +202,22 @@ export const markReceived = (participation) => api("creator_mark_received", { p_
 export const submitVideo = (participation, url, note) => api("submit_campaign_video", { p_participation: participation, p_url: url, p_note: note || null });
 /** Post ka link (api.record_campaign_post) — payload { media_type, permalink, caption } */
 export const recordPost = (participation, payload) => api("record_campaign_post", { p_participation: participation, p_payload: payload });
+
+/** Story ka screenshot (R2 par) → api.record_campaign_post({ media_type: "story", screenshot_url }) — story ka proof yahi hai */
+export async function recordStoryShot(participation, campaignId, file, caption = "") {
+  if (!file || !/^image\//.test(file.type || "image/")) return { data: null, error: { message: "Pick a screenshot (image) of your story" } };
+  const uid = await myUserId();
+  if (!uid) return { data: null, error: { message: "Please log in again" } };
+  const ext = ((file.name || "").match(/\.[^.]+$/) || [".jpg"])[0].toLowerCase();
+  let up;
+  try {
+    up = await uploadMedia(DOOR, "review-proofs", file, { scope: campaignId, fallback: { bucket: "review-proofs", path: `c/${uid}/${campaignId}/story-${Date.now()}${ext}` } });
+  } catch (e) {
+    return { data: null, error: { message: e.message || "Upload failed — try again" } };
+  }
+  if (!up || !up.url) return { data: null, error: { message: "The screenshot did not upload — try again" } };
+  return api("record_campaign_post", { p_participation: participation, p_payload: { media_type: "story", screenshot_url: up.url, caption } });
+}
 /** Campaign ke baad feedback (api.submit_campaign_feedback) */
 export const submitFeedback = (participation, payload) => api("submit_campaign_feedback", { p_participation: participation, p_payload: payload });
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import TrackerFrame, { useTracker, TrackerWait, StepMismatch } from "@/components/creator/TrackerSteps";
 import PostStats from "@/components/creator/PostStats";
-import { postProgress, recordPost } from "@/services/creator";
+import { postProgress, recordPost, recordStoryShot } from "@/services/creator";
 import { Instagram } from "@/components/ui/Icons";
 
 /**
@@ -21,6 +21,7 @@ export default function PostStep() {
   const [err, setErr] = useState("");
   const [warn, setWarn] = useState("");
   const [busy, setBusy] = useState(false);
+  const [shot, setShot] = useState(null); // story ka screenshot (File)
 
   if (!t.m)
     return (
@@ -37,6 +38,19 @@ export default function PostStep() {
   const submit = async () => {
     setErr("");
     setWarn("");
+    // Story: proof = screenshot (link nahi chahiye)
+    if (mt === "story") {
+      if (!shot) return setErr("Upload a screenshot of your story — that's the proof for the brand.");
+      setBusy(true);
+      const r = await recordStoryShot(m.participation_id, c.id || m.campaign_id, shot, caption.trim());
+      setBusy(false);
+      if (r.error) return setErr(r.error.message || String(r.error));
+      setShot(null);
+      setCaption("");
+      setKind("");
+      t.reload();
+      return;
+    }
     const permalink = link.trim();
     if (!/^https?:\/\/(www\.|m\.)?instagram\.com\/(reel|reels|p|tv|stories)\//i.test(permalink))
       return setErr("Paste the Instagram link of the post (instagram.com/reel/… , /p/… or /stories/…).");
@@ -81,19 +95,41 @@ export default function PostStep() {
           <option value="story">Story</option>
           <option value="post">Feed post</option>
         </select>
-        <label className="bx-label" htmlFor="po-link">
-          <Instagram size={12} /> Your post link
-        </label>
-        <input id="po-link" className="bx-input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://www.instagram.com/reel/…" />
+        {mt === "story" ? (
+          <>
+            <label className="bx-label" htmlFor="po-shot">
+              📸 Screenshot of your story
+            </label>
+            <label className="po-shot" htmlFor="po-shot">
+              {shot ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={URL.createObjectURL(shot)} alt="Your story screenshot" />
+                  <span>{shot.name} · tap to change</span>
+                </>
+              ) : (
+                <span>Tap to choose the screenshot — take it while your story is live (it shows the brand tag)</span>
+              )}
+            </label>
+            <input id="po-shot" type="file" accept="image/*" hidden onChange={(e) => setShot((e.target.files && e.target.files[0]) || null)} />
+          </>
+        ) : (
+          <>
+            <label className="bx-label" htmlFor="po-link">
+              <Instagram size={12} /> Your post link
+            </label>
+            <input id="po-link" className="bx-input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://www.instagram.com/reel/…" />
+          </>
+        )}
         <label className="bx-label" htmlFor="po-cap">
-          Caption you used
+          {mt === "story" ? "Text / tags on your story (optional)" : "Caption you used"}
         </label>
         <textarea id="po-cap" className="bx-input" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Paste your caption incl. #hashtags and @mentions" />
         {err && <p className="ts-err">{err}</p>}
         {warn && <p className="ts-note">{warn}</p>}
         <div className="po-btns">
           <button type="button" className="bx-btn bx-btn--dark ts-mt" disabled={busy} onClick={submit}>
-            {busy ? "Recording…" : "Submit link →"}
+            {busy ? (mt === "story" ? "Uploading…" : "Recording…") : mt === "story" ? "Upload story screenshot →" : "Submit link →"}
           </button>
           <Link href={`/creator/instagram?p=${m.participation_id}`} className="bx-btn bx-btn--ghost ts-mt">
             📲 Post from Bounty
@@ -115,6 +151,8 @@ export default function PostStep() {
         .po-pp span { padding: 4px 10px; border-radius: 999px; background: #fffaf0; border: 1px solid var(--bx-line); font-size: 12px; }
         .po-pp span.is-ok { background: var(--bx-ok-bg); border-color: transparent; color: var(--bx-ok); }
         .po-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+        .po-shot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px; padding: 14px; border: 1.5px dashed var(--bx-line); border-radius: 14px; background: #fffdf6; cursor: pointer; text-align: center; font-size: 13px; color: #6b6553; }
+        .po-shot img { max-height: 260px; max-width: 100%; border-radius: 10px; object-fit: contain; }
       `}</style>
     </BountyShell>
   );
