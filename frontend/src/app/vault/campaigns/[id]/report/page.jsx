@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
@@ -10,6 +10,7 @@ import { Panel, MiniStats, Note, TableState, useToast, downloadFile, num } from 
 import { useRpc, rpc, errText, SUPABASE_URL } from "@/lib/supabase";
 import { useAsk, readInsightsShot, uploadInsightsProof } from "@/components/admin/campaign/journey";
 import { useProofNeeds } from "@/components/admin/campaign2/ContentTabs";
+import { shotSha, sigOf, shotDupMessage, rememberShot } from "@/lib/proofShot";
 
 /*
  * 📈 Campaign report.
@@ -27,14 +28,14 @@ const kindOf = (p) => {
 const KIND_LABEL = { reel: "Reel", story: "Story", feed: "Post" };
 const COLS = {
   all: [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["shares", "Shares"], ["saves", "Saves"]],
-  reel: [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["reposts", "Reposts"], ["shares", "Shares"], ["saves", "Saves"], ["avg_watch_s", "Avg watch"], ["follows", "Follows"]],
-  story: [["views", "Views"], ["reach", "Reach"], ["interactions", "Interactions"], ["profile_visits", "Profile activity"], ["replies", "Replies"], ["link_clicks", "Link clicks"], ["sticker_taps", "Sticker taps"], ["followers_pct", "Followers %"]],
+  reel: [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["reposts", "Reposts"], ["shares", "Shares"], ["saves", "Saves"], ["avg_watch_s", "Avg watch"], ["skip_rate_pct", "Skip rate"], ["follows", "Follows"]],
+  story: [["views", "Views"], ["reach", "Reach"], ["interactions", "Interactions"], ["profile_visits", "Profile activity"], ["replies", "Replies"], ["link_clicks", "Link clicks"], ["sticker_taps", "Sticker taps"], ["followers_pct", "Followers %"], ["forward", "Forward"], ["back", "Back"], ["next_story", "Next story"], ["exited", "Exited"]],
 };
 COLS.feed = COLS.reel.filter(([k]) => k !== "avg_watch_s");
 // ye columns hamesha dikhte hain; baaki tabhi jab kisi creator ka number ho
 const CORE = new Set(["views", "reach", "likes", "comments", "interactions"]);
-const FORM_LABEL = { views: "Views", reach: "Reach (Viewers / Accounts reached)", likes: "Likes ❤️", comments: "Comments 💬", reposts: "Reposts 🔁", shares: "Shares / sends ✈️", saves: "Saves 🔖", avg_watch_s: "Average watch time (seconds — 7s, 1m 5s)", follows: "Follows", interactions: "Interactions", profile_visits: "Profile activity", replies: "Replies", link_clicks: "Link clicks", sticker_taps: "Sticker taps", followers_pct: "Viewed by followers (%)" };
-const fmt = (k, v) => (v == null || v === "" ? "—" : k === "avg_watch_s" ? (v >= 60 ? `${Math.floor(v / 60)}m ${Math.round(v % 60)}s` : `${v}s`) : k === "followers_pct" ? `${v}%` : num(v));
+const FORM_LABEL = { views: "Views", reach: "Reach (Viewers / Accounts reached)", likes: "Likes ❤️", comments: "Comments 💬", reposts: "Reposts 🔁", shares: "Shares / sends ✈️", saves: "Saves 🔖", avg_watch_s: "Average watch time (seconds — 7s, 1m 5s)", skip_rate_pct: "Skip rate (%)", follows: "Follows", interactions: "Interactions", profile_visits: "Profile activity", replies: "Replies", link_clicks: "Link clicks", sticker_taps: "Sticker taps", followers_pct: "Viewed by followers (%)", forward: "Forward taps", back: "Back taps", next_story: "Next story", exited: "Exited" };
+const fmt = (k, v) => (v == null || v === "" ? "—" : k === "avg_watch_s" ? (v >= 60 ? `${Math.floor(v / 60)}m ${Math.round(v % 60)}s` : `${v}s`) : /_pct$/.test(k) ? `${v}%` : num(v));
 // "12,400" "12.4k" "1.2M" "7s" "1m 5s" "97.1%" → number (null = empty / unreadable)
 function parseVal(k, raw) {
   const t = String(raw ?? "").trim().toLowerCase().replace(/,/g, "");
@@ -43,9 +44,9 @@ function parseVal(k, raw) {
     const m = t.match(/^(?:(\d+)\s*m)?\s*(?:(\d+(?:\.\d+)?)\s*s?)?$/);
     return m && (m[1] || m[2]) ? Number(m[1] || 0) * 60 + Number(m[2] || 0) : null;
   }
-  if (k === "followers_pct") {
+  if (/_pct$/.test(k)) {
     const m = t.match(/^(\d{1,3}(?:\.\d+)?)\s*%?$/);
-    return m && Number(m[1]) <= 100 ? Math.round(Number(m[1]) * 10) / 10 : null;
+    return m && Number(m[1]) <= 100 ? Math.round(Number(m[1]) * 100) / 100 : null;
   }
   const m = t.replace(/\s/g, "").match(/^([0-9]+(?:\.[0-9]+)?)(k|m|l|lakh)?$/);
   return m ? Math.round(Number(m[1]) * (m[2] === "k" ? 1e3 : m[2] === "m" ? 1e6 : m[2] ? 1e5 : 1)) : null;
@@ -56,13 +57,9 @@ export default function CampaignReport() {
   const { id } = useParams();
   const [toast, show] = useToast();
   const [q, setQ] = useState("");
-  const [view, setView] = useState("all"); // all | reel-1 | story-2 | feed-1 | reviews
+  // all | reel-1 | story-2 | feed-1 | reviews — ?view=story-1 (Story screenshots page ka link) se wahi chip khule
+  const [view, setView] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view")) || "all");
   const [askEl, ask] = useAsk();
-  // ?view=story-1 (Story screenshots page ka link) → wahi chip khule
-  useEffect(() => {
-    const v = new URLSearchParams(window.location.search).get("view");
-    if (v) setView(v);
-  }, []);
   const { data, error, loading, reload } = useRpc("admin", "api.campaign_analytics", { p_campaign: id }, { skip: !id || id === "sample" });
   const proofs = useProofNeeds(id);
   const needs = proofs.needs || {};
@@ -185,7 +182,7 @@ export default function CampaignReport() {
       ok: "Save numbers",
       fields: [
         { k: "shot", label: isNewStory ? "📸 Story insights screenshot (needed)" : "📷 Insights screenshot — numbers fill in on their own", file: true, onFile: (f, setV) => readInsightsShot(f, k0, setV) },
-        ...keys.map((k) => ({ k, label: FORM_LABEL[k], value: st[k] == null ? "" : String(st[k]), placeholder: k === "avg_watch_s" ? "e.g. 7s" : k === "followers_pct" ? "e.g. 97.1" : "e.g. 12,400 or 12.4k" })),
+        ...keys.map((k) => ({ k, label: FORM_LABEL[k], value: st[k] == null ? "" : String(st[k]), placeholder: k === "avg_watch_s" ? "e.g. 7s" : /_pct$/.test(k) ? "e.g. 67.85" : "e.g. 12,400 or 12.4k" })),
       ],
     });
     if (!v) return;
@@ -201,8 +198,15 @@ export default function CampaignReport() {
     const file = v.shot && typeof v.shot === "object" ? v.shot : null;
     if (isNewStory && !file) return show("Add the story's screenshot — it is the story's proof.");
     if (!Object.keys(metrics).length && !file) return show("Add at least one number or the screenshot.");
-    let shot = null;
+    let shot = null,
+      sha = null;
+    const sig = sigOf(metrics);
+    const owner = { participation_id: r.participation_id, invite_id: r.invite_id };
     if (file) {
+      // the same screenshot can't be on another creator (or twice on this one) — exact file or the very same numbers
+      sha = await shotSha(file);
+      const dup = await shotDupMessage("admin", id, sha, sig, owner, { allowSameCreator: !!p });
+      if (dup) return show(dup);
       try {
         shot = await uploadInsightsProof(file);
       } catch (e) {
@@ -210,13 +214,15 @@ export default function CampaignReport() {
       }
     }
     const mt = k0 === "feed" ? "post" : k0;
-    let res;
+    let res,
+      postRef = (p && (p.post_id || p.id)) || null;
     if (r.participation_id) {
       let postId = p && p.post_id;
       if (isNewStory) {
         const add = await rpc("admin", "api.bp_add_post_link", { p_participation: r.participation_id, p_payload: { media_type: "story", screenshot_url: shot } });
         if (add.error) return show(errText(add.error));
         postId = add.data && add.data.post_id;
+        postRef = postId;
       }
       res = Object.keys(metrics).length || shot ? await rpc("admin", "api.bp_record_metrics", { p_participation: r.participation_id, p_payload: { ...metrics, ...(shot ? { screenshot_url: shot } : {}), ...(postId ? { post_id: postId } : {}) } }) : { error: null };
       // sirf screenshot, koi number nahi → bp_record_metrics "add at least one number" bolta hai; story ka proof to jud chuka
@@ -228,6 +234,8 @@ export default function CampaignReport() {
       });
     }
     if (res.error) return show(errText(res.error));
+    if (!r.participation_id && res.data && res.data.id) postRef = res.data.id;
+    if (sha) await rememberShot("admin", id, sha, sig, owner, postRef, shot);
     show(isNewStory ? "Story added with its numbers ✓" : "Numbers saved ✓");
     reload();
     proofs.reload && proofs.reload();
@@ -237,7 +245,7 @@ export default function CampaignReport() {
   // ---- CSV: har post, saare numbers ----
   const download = () => {
     const c = a.campaign || {};
-    const KEYS = [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["reposts", "Reposts"], ["shares", "Shares"], ["saves", "Saves"], ["avg_watch_s", "Avg watch time (s)"], ["follows", "Follows"], ["interactions", "Interactions"], ["profile_visits", "Profile activity"], ["replies", "Replies"], ["link_clicks", "Link clicks"], ["sticker_taps", "Sticker taps"], ["followers_pct", "Viewed by followers %"]];
+    const KEYS = [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["reposts", "Reposts"], ["shares", "Shares"], ["saves", "Saves"], ["avg_watch_s", "Avg watch time (s)"], ["skip_rate_pct", "Skip rate %"], ["follows", "Follows"], ["interactions", "Interactions"], ["profile_visits", "Profile activity"], ["replies", "Replies"], ["link_clicks", "Link clicks"], ["sticker_taps", "Sticker taps"], ["followers_pct", "Viewed by followers %"], ["forward", "Forward taps"], ["back", "Back taps"], ["next_story", "Next story"], ["exited", "Exited"]];
     const head = ["Instagram", "Name", "Profile link", "On Geek OS", "Followers", "Deliverable", "Post link", "Posted on", ...KEYS.map((x) => x[1]), "Insights screenshot", "Numbers from", "Status"];
     const lines = [];
     rows.forEach((r) => {

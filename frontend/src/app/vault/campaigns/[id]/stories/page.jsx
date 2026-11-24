@@ -10,6 +10,7 @@ import { Panel, Note, TableState, useToast } from "@/components/admin/campaign2/
 import { rpc, errText } from "@/lib/supabase";
 import { uploadInsightsProof } from "@/components/admin/campaign/journey";
 import { readInsightsOcr } from "@/lib/insightsOcr";
+import { shotSha, sigOf, shotDupMessage, rememberShot } from "@/lib/proofShot";
 
 /*
  * 📸 Story screenshots — brief mein Story ho tab. Story ka proof = screenshot (Instagram se check nahi).
@@ -99,20 +100,51 @@ export default function StoryShots() {
   };
 
   // screenshot upload + (agar insights ka screenshot hai) uske numbers bhi padh ke saath save — report mein seedha dikhte hain
-  const saveOne = async (file, c) => {
-    const [url, read] = await Promise.all([uploadInsightsProof(file), readInsightsOcr(file, "story").catch(() => ({ metrics: {} }))]);
+  // screenshot → (1) not already used in this campaign (same file / same numbers) → (2) upload → (3) story + its numbers saved → (4) remembered
+  // replacing = the new one is saved first, then the old one removed (nothing is lost if the upload fails)
+  const saveOne = async (file, c, { replace = null, seen = null } = {}) => {
+    if (!replace && need > 0 && c.shots.length >= need) throw new Error("already has its story — use ↻ Replace to change it");
+    const [sha, read] = await Promise.all([shotSha(file), readInsightsOcr(file, "story").catch(() => ({ metrics: {} }))]);
     const metrics = (read && read.metrics) || {};
+    const sig = sigOf(metrics);
+    if (seen) {
+      if (seen.has(sha) || (sig && seen.has(sig))) throw new Error("the same screenshot is twice in this batch");
+      seen.add(sha);
+      if (sig) seen.add(sig);
+    }
+    const owner = { participation_id: c.participation_id, invite_id: c.invite_id };
+    const dup = await shotDupMessage("admin", id, sha, sig, owner);
+    if (dup && !(replace && /for this creator/.test(dup))) throw new Error(dup);
+    const url = await uploadInsightsProof(file);
     const payload = { media_type: "story", screenshot_url: url };
+    let postRef = null;
     if (c.participation_id) {
       const r = await rpc("admin", "api.bp_add_post_link", { p_participation: c.participation_id, p_payload: payload });
       if (r.error) throw new Error(errText(r.error));
-      const postId = r.data && r.data.post_id;
-      if (postId && Object.keys(metrics).length) await rpc("admin", "api.bp_record_metrics", { p_participation: c.participation_id, p_payload: { ...metrics, screenshot_url: url, post_id: postId } });
+      postRef = r.data && r.data.post_id;
+      if (postRef && Object.keys(metrics).length) await rpc("admin", "api.bp_record_metrics", { p_participation: c.participation_id, p_payload: { ...metrics, screenshot_url: url, post_id: postRef } });
     } else {
       const r = await rpc("admin", "api.invite_add_post", { p_invite: c.invite_id, p_payload: { ...payload, metrics } });
       if (r.error) throw new Error(errText(r.error));
+      postRef = r.data && r.data.id;
     }
+    await rememberShot("admin", id, sha, sig, owner, postRef, url);
+    if (replace) await removeStory(c, replace, { quiet: true });
     return Object.keys(metrics).length;
+  };
+  // ✕ on a story screenshot — the story, its numbers and its fingerprint go
+  const removeStory = async (c, s, { quiet = false } = {}) => {
+    if (!quiet && !window.confirm(`Remove this story screenshot from ${c.name || "@" + c.handle}? Its numbers go from the report too.`)) return false;
+    const r = await rpc("admin", "api.delete_story_proof", c.participation_id ? { p_post: s.id } : { p_invite_post: s.id });
+    if (r.error) {
+      show(errText(r.error));
+      return false;
+    }
+    if (!quiet) {
+      show("Story screenshot removed");
+      reload();
+    }
+    return true;
   };
   const uploadBatch = async () => {
     const go = batch.filter((b) => b.key);
@@ -120,11 +152,12 @@ export default function StoryShots() {
     let ok = 0,
       withNums = 0;
     const fails = [];
+    const seen = new Set(); // same picture twice in one batch
     for (let i = 0; i < go.length; i++) {
       setBusy(`Reading & uploading ${i + 1} / ${go.length}…`);
       const c = list.find((x) => x.key === go[i].key);
       try {
-        if (await saveOne(go[i].file, c)) withNums++;
+        if (await saveOne(go[i].file, c, { seen })) withNums++;
         ok++;
       } catch (e) {
         fails.push(`${c ? c.name || c.handle : go[i].file.name}: ${e.message}`);
@@ -139,11 +172,11 @@ export default function StoryShots() {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
     if (!file || !oneFor) return;
-    const c = list.find((x) => x.key === oneFor);
-    setBusy(oneFor);
+    const c = list.find((x) => x.key === oneFor.key);
+    setBusy(oneFor.key);
     try {
-      const n = await saveOne(file, c);
-      show(n ? `✓ Story screenshot added · ${n} numbers read off it (see the report)` : "✓ Story screenshot added");
+      const n = await saveOne(file, c, { replace: oneFor.replace || null });
+      show(`✓ Story screenshot ${oneFor.replace ? "replaced" : "added"}${n ? ` · ${n} numbers read off it (see the report)` : ""}`);
       reload();
     } catch (er) {
       show(er.message);
@@ -304,26 +337,45 @@ export default function StoryShots() {
                             🔗 Story link
                           </a>
                         ) : (
-                        <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer" download title={`Added ${new Date(s.at).toLocaleString("en-IN")} — open / download`}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={s.url} alt="Story screenshot" className="st-th" />
-                        </a>
+                        <span key={s.id} className="st-pf">
+                          <a href={s.url} target="_blank" rel="noopener noreferrer" download title={`Added ${new Date(s.at).toLocaleString("en-IN")} — open / download`}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={s.url} alt="Story screenshot" className="st-th" />
+                          </a>
+                          <button type="button" aria-label="Remove this story screenshot" title="Remove" onClick={() => removeStory(c, s)} disabled={!!busy}>
+                            ✕
+                          </button>
+                        </span>
                         )
                       )}
                       {need > 0 && c.shots.length < need && canAdd(c) && <span className="ga-badge ga-badge--red">Missing {need - c.shots.length}</span>}
                       {need > 0 && c.shots.length < need && !canAdd(c) && <span className="st-mute st-wait">After the video brief</span>}
                       {need > 0 && c.shots.length >= need && <span className="ga-badge ga-badge--green">✓ Story done</span>}
-                      {need > 0 && canAdd(c) && (
+                      {need > 0 && canAdd(c) && c.shots.length < need && (
                         <button
                           type="button"
                           className="c2-tbtn"
                           disabled={busy === c.key}
                           onClick={() => {
-                            setOneFor(c.key);
+                            setOneFor({ key: c.key });
                             one.current && one.current.click();
                           }}
                         >
                           {busy === c.key ? "…" : "+ Add"}
+                        </button>
+                      )}
+                      {need > 0 && c.shots.length >= need && (
+                        <button
+                          type="button"
+                          className="c2-tbtn"
+                          disabled={busy === c.key}
+                          title="Put a different screenshot in place of this one"
+                          onClick={() => {
+                            setOneFor({ key: c.key, replace: c.shots[c.shots.length - 1] });
+                            one.current && one.current.click();
+                          }}
+                        >
+                          {busy === c.key ? "…" : "↻ Replace"}
                         </button>
                       )}
                     </div>
@@ -367,6 +419,9 @@ export default function StoryShots() {
         .st-sub { display: block; font-size: 11px; color: var(--ad-muted); }
         .st-old { display: inline-flex; align-items: center; height: 46px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--ad-line); font-size: 12px; color: var(--ad-text); background: var(--ad-soft-2); }
         .st-wait { text-transform: none; }
+        .st-pf { position: relative; display: inline-block; }
+        .st-pf button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: #1f2433; color: #fff; font-size: 10px; line-height: 18px; cursor: pointer; opacity: .85; }
+        .st-pf button:hover { background: #dc2626; opacity: 1; }
         .st-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         @media (max-width: 900px) { .st-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
       `}</style>

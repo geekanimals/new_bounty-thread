@@ -14,6 +14,7 @@ import { uploadMedia } from "@/lib/media";
 import { useRpc } from "@/lib/supabase";
 import { DOOR, sb, call, api, apiCreator, myUserId, K, ls } from "./core";
 import { useCreator } from "./auth";
+import { shotSha, shotDupMessage, rememberShot } from "@/lib/proofShot";
 import { myIgRow, getIgAccounts } from "./instagram";
 
 /* =====================================================================
@@ -208,6 +209,15 @@ export async function recordStoryShot(participation, campaignId, file, caption =
   if (!file || !/^image\//.test(file.type || "image/")) return { data: null, error: { message: "Pick a screenshot (image) of your story" } };
   const uid = await myUserId();
   if (!uid) return { data: null, error: { message: "Please log in again" } };
+  // the same screenshot can't be used twice in this campaign (by you or anyone else)
+  let sha = null;
+  try {
+    sha = await shotSha(file);
+    const dup = await shotDupMessage(DOOR, campaignId, sha, null, { participation_id: participation });
+    if (dup) return { data: null, error: { message: /for this creator/.test(dup) ? "You've already uploaded this screenshot." : "This screenshot is already used in this campaign — upload a screenshot of your own story." } };
+  } catch (e) {
+    sha = null;
+  }
   const ext = ((file.name || "").match(/\.[^.]+$/) || [".jpg"])[0].toLowerCase();
   let up;
   try {
@@ -216,7 +226,9 @@ export async function recordStoryShot(participation, campaignId, file, caption =
     return { data: null, error: { message: e.message || "Upload failed — try again" } };
   }
   if (!up || !up.url) return { data: null, error: { message: "The screenshot did not upload — try again" } };
-  return api("record_campaign_post", { p_participation: participation, p_payload: { media_type: "story", screenshot_url: up.url, caption } });
+  const r = await api("record_campaign_post", { p_participation: participation, p_payload: { media_type: "story", screenshot_url: up.url, caption } });
+  if (!r.error && sha) await rememberShot(DOOR, campaignId, sha, null, { participation_id: participation }, (r.data && r.data.post_id) || null, up.url);
+  return r;
 }
 /** Campaign ke baad feedback (api.submit_campaign_feedback) */
 export const submitFeedback = (participation, payload) => api("submit_campaign_feedback", { p_participation: participation, p_payload: payload });
