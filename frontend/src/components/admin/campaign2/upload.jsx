@@ -273,7 +273,7 @@ export const sheetLine = (up, i) => (up.rows[i]?.line ?? i) + (up.off || 2);
 /* ---------- row ko kya chahiye (purane BK_REQ / bkRowNeeds) ---------- */
 const REQ = [
   ["address_confirmed", "Address confirmed", [["address", "Address"], ["city", "City"], ["state", "State"], ["pincode", "PIN code"]], true],
-  ["courier_sent", "Courier sent", [["courier", "Courier"], ["tracking", "Tracking ID"]], true],
+  // 24 Nov 2026: courier + tracking optional — row nahi rukti, upload ke baad "without courier" warning dikhti hai
   ["video_submitted", "Video submitted", [["video_link", "Video link"]], false],
   ["posted", "Posted / Done", [["post_link", "Post link (Instagram)"]], false],
 ];
