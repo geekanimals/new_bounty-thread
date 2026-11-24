@@ -32,8 +32,9 @@ const COLS = {
   story: [["views", "Views"], ["reach", "Reach"], ["interactions", "Interactions"], ["profile_visits", "Profile activity"], ["replies", "Replies"], ["link_clicks", "Link clicks"], ["sticker_taps", "Sticker taps"], ["followers_pct", "Followers %"], ["forward", "Forward"], ["back", "Back"], ["next_story", "Next story"], ["exited", "Exited"]],
 };
 COLS.feed = COLS.reel.filter(([k]) => k !== "avg_watch_s");
-// ye columns hamesha dikhte hain; baaki tabhi jab kisi creator ka number ho
-const CORE = new Set(["views", "reach", "likes", "comments", "interactions"]);
+// har type ke ye columns hamesha dikhte hain; baaki tabhi jab kisi creator ka number ho (story ke Overview mein reach hota hi nahi)
+const CORE = { reel: ["views", "reach", "likes", "comments"], feed: ["views", "reach", "likes", "comments"], story: ["views", "interactions", "profile_visits"] };
+const colsFor = (kd, list) => COLS[kd].filter(([k]) => CORE[kd].includes(k) || list.some(({ p }) => p && p.stats && p.stats[k] != null));
 const FORM_LABEL = { views: "Views", reach: "Reach (Viewers / Accounts reached)", likes: "Likes ❤️", comments: "Comments 💬", reposts: "Reposts 🔁", shares: "Shares / sends ✈️", saves: "Saves 🔖", avg_watch_s: "Average watch time (seconds — 7s, 1m 5s)", skip_rate_pct: "Skip rate (%)", follows: "Follows", interactions: "Interactions", profile_visits: "Profile activity", replies: "Replies", link_clicks: "Link clicks", sticker_taps: "Sticker taps", followers_pct: "Viewed by followers (%)", forward: "Forward taps", back: "Back taps", next_story: "Next story", exited: "Exited" };
 const fmt = (k, v) => (v == null || v === "" ? "—" : k === "avg_watch_s" ? (v >= 60 ? `${Math.floor(v / 60)}m ${Math.round(v % 60)}s` : `${v}s`) : /_pct$/.test(k) ? `${v}%` : num(v));
 // "12,400" "12.4k" "1.2M" "7s" "1m 5s" "97.1%" → number (null = empty / unreadable)
@@ -94,7 +95,11 @@ export default function CampaignReport() {
   }, [rows, chip.k]); // eslint-disable-line react-hooks/exhaustive-deps
   const qq = q.trim().toLowerCase();
   const shown = qq ? allRows.filter(({ r }) => `${nameOf(r)} ${handleOf(r)} ${(r.creator || {}).city || ""}`.toLowerCase().includes(qq)) : allRows;
-  const cols = COLS[kind].filter(([k]) => CORE.has(k) || allRows.some(({ p }) => p && p.stats && p.stats[k] != null));
+  // All posts → har type ka apna hissa (Reels · Stories · Posts), apne columns ke saath — kabhi mila ke nahi
+  const sections =
+    kind === "all"
+      ? ["reel", "story", "feed"].map((kd) => ({ kd, list: shown.filter(({ p }) => kindOf(p) === kd), total: allRows.filter(({ p }) => kindOf(p) === kd).length })).filter((x) => x.total > 0)
+      : [{ kd: kind, list: shown, total: allRows.length }];
 
   // ---- tiles (sirf asli numbers jodo, andaza nahi) ----
   const sumOf = (list, k) => {
@@ -112,8 +117,6 @@ export default function CampaignReport() {
   const cov = (n, of) => (of ? `from ${n} of ${of} creator${of > 1 ? "s" : ""}` : "");
   let tiles;
   if (kind === "all") {
-    const views = sumOf(rows.map((r) => r.totals), "views"),
-      reach = sumOf(rows.map((r) => r.totals), "reach");
     let eNum = 0,
       eFol = 0;
     rows.forEach((r) => {
@@ -124,11 +127,14 @@ export default function CampaignReport() {
         eNum += (+x.likes || 0) + (+x.comments || 0) + (+x.shares || 0) + (+x.saves || 0);
       }
     });
+    const of = (kd) => rows.flatMap((r) => (r.posts || []).filter((p) => kindOf(p) === kd).map((p) => p.stats || {}));
+    const reelV = sumOf(of("reel"), "views"),
+      storyV = sumOf(of("story"), "views");
     tiles = [
       { value: num(t.creators_live), label: "Creators live" },
-      { value: num(t.posts), label: "Posts", note: t.waiting_numbers ? `${t.waiting_numbers} waiting for numbers` : "" },
-      { value: num(views.v), label: "Views", note: cov(views.n, N) },
-      { value: num(reach.v), label: "Reach", note: cov(reach.n, N) },
+      { value: num(of("reel").length), label: "Reels", note: of("story").length ? `${of("story").length} stories` : "" },
+      { value: num(reelV.v), label: "Reel views", note: reelV.n ? `from ${reelV.n} reels` : "" },
+      { value: num(storyV.v), label: "Story views", note: storyV.n ? `from ${storyV.n} stories` : "" },
       { value: eFol ? ((100 * eNum) / eFol).toFixed(1) + "%" : "—", label: "Engagement on followers" },
     ];
   } else if (kind !== "story") {
@@ -156,15 +162,17 @@ export default function CampaignReport() {
   } else {
     const ps = allRows.filter((x) => x.p).map((x) => x.p.stats || {});
     const views = sumOf(ps, "views"),
-      reach = sumOf(ps, "reach"),
       inter = sumOf(ps, "interactions"),
-      prof = sumOf(ps, "profile_visits");
+      prof = sumOf(ps, "profile_visits"),
+      taps = sumOf(ps, "sticker_taps"),
+      reps = sumOf(ps, "replies");
+    const extra = taps.n ? { value: num(taps.v), label: "Sticker taps", note: cov(taps.n, N) } : { value: num(reps.v), label: "Replies", note: cov(reps.n, N) };
     tiles = [
       { value: `${ps.length} / ${N}`, label: `${chip.label.replace(/^\S+\s/, "")} in` },
       { value: num(views.v), label: "Story views", note: cov(views.n, N) },
-      { value: num(reach.v), label: "Story reach", note: cov(reach.n, N) },
       { value: num(inter.v), label: "Interactions", note: cov(inter.n, N) },
       { value: num(prof.v), label: "Profile activity", note: cov(prof.n, N) },
+      extra,
     ];
   }
 
@@ -375,77 +383,105 @@ export default function CampaignReport() {
             </p>
           </div>
         ) : (
-          <div className="c2-tw">
-            <table className="c2-t rp-t">
-              <thead>
-                <tr>
-                  <th>Creator</th>
-                  <th>{kind === "all" ? "Post" : KIND_LABEL[kind]}</th>
-                  {cols.map(([k, l]) => (
-                    <th key={k}>{l}</th>
-                  ))}
-                  <th>Insights</th>
-                  <th aria-label="Numbers" />
-                </tr>
-              </thead>
-              <tbody>
-                <TableState cols={cols.length + 4} loading={loading && !data} error={!data && error} onRetry={reload} empty={data && !allRows.length && "No posts yet — creators show up here as soon as their reel goes live."} />
-                {shown.map(({ r, p, key }) => {
-                  const s = (p && p.stats) || {};
-                  const kd = p ? kindOf(p) : kind;
-                  const shot = s.screenshot_url || (p && p.screenshot_url);
-                  const has = cols.some(([k]) => s[k] != null);
-                  return (
-                    <tr key={key} className={p ? "" : "rp-miss"}>
-                      <td>
-                        <b>{nameOf(r)}</b>
-                        {r.on_sheet && <small className="rp-sub">not on Geek OS yet</small>}
-                      </td>
-                      <td>
-                        {!p ? (
-                          <span className="rp-mute">{kd === "story" ? "Not in yet" : "Not posted yet"}</span>
-                        ) : p.permalink ? (
-                          <a className="c2-link" href={p.permalink} target="_blank" rel="noreferrer">
-                            {KIND_LABEL[kd]} ↗
-                          </a>
-                        ) : (
-                          KIND_LABEL[kd]
+          <>
+            {((loading && !data) || (!data && error) || (data && !allRows.length)) && (
+              <div className="c2-tw">
+                <table className="c2-t rp-t">
+                  <tbody>
+                    <TableState cols={6} loading={loading && !data} error={!data && error} onRetry={reload} empty={data && !allRows.length && "No posts yet — creators show up here as soon as their reel goes live."} />
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {sections.map(({ kd, list, total }) => {
+              const cols = colsFor(kd, list);
+              return (
+                <div key={kd} className="rp-sec">
+                  {kind === "all" && (
+                    <h3 className="rp-h">
+                      {kd === "reel" ? "🎬 Reels" : kd === "story" ? "📸 Stories" : "🖼️ Posts"} <span>{total}</span>
+                    </h3>
+                  )}
+                  <div className="c2-tw">
+                    <table className="c2-t rp-t">
+                      <thead>
+                        <tr>
+                          <th>Creator</th>
+                          <th>{KIND_LABEL[kd]}</th>
+                          {cols.map(([k, l]) => (
+                            <th key={k}>{l}</th>
+                          ))}
+                          <th>Insights</th>
+                          <th aria-label="Numbers" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {!list.length && (
+                          <tr>
+                            <td colSpan={cols.length + 4} className="rp-mute">
+                              No one matches this filter.
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      {cols.map(([k]) => (
-                        <td key={k}>{p ? fmt(k, s[k]) : ""}</td>
-                      ))}
-                      <td>
-                        {shot ? (
-                          <a href={abs(shot)} target="_blank" rel="noopener noreferrer" download title="Insights screenshot — open / download">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={abs(shot)} alt="Insights screenshot" className="rp-th" />
-                          </a>
-                        ) : (
-                          <span className="rp-mute">—</span>
-                        )}
-                      </td>
-                      <td>
-                        {!p ? (
-                          kd === "story" ? (
-                            <button type="button" className="rp-ins" onClick={() => addNums(r, null, "story")}>
-                              📸 Add story
-                            </button>
-                          ) : null
-                        ) : canEdit(r, p) ? (
-                          <button type="button" className="rp-ins" onClick={() => addNums(r, p)} title="Add the insights screenshot — the numbers fill in on their own">
-                            {has ? "✏️ Update" : "📷 Add insights"}
-                          </button>
-                        ) : (
-                          <span className="rp-mute" title="No post link yet">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {list.map(({ r, p, key }) => {
+                          const s = (p && p.stats) || {};
+                          const shot = s.screenshot_url || (p && p.screenshot_url);
+                          const has = cols.some(([k]) => s[k] != null);
+                          return (
+                            <tr key={key} className={p ? "" : "rp-miss"}>
+                              <td>
+                                <b>{nameOf(r)}</b>
+                                {r.on_sheet && <small className="rp-sub">not on Geek OS yet</small>}
+                              </td>
+                              <td>
+                                {!p ? (
+                                  <span className="rp-mute">{kd === "story" ? "Not in yet" : "Not posted yet"}</span>
+                                ) : p.permalink ? (
+                                  <a className="c2-link" href={p.permalink} target="_blank" rel="noreferrer">
+                                    {KIND_LABEL[kd]} ↗
+                                  </a>
+                                ) : (
+                                  KIND_LABEL[kd]
+                                )}
+                              </td>
+                              {cols.map(([k]) => (
+                                <td key={k}>{p ? fmt(k, s[k]) : ""}</td>
+                              ))}
+                              <td>
+                                {shot ? (
+                                  <a href={abs(shot)} target="_blank" rel="noopener noreferrer" download title="Insights screenshot — open / download">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={abs(shot)} alt="Insights screenshot" className="rp-th" />
+                                  </a>
+                                ) : (
+                                  <span className="rp-mute" title="No screenshot yet">—</span>
+                                )}
+                              </td>
+                              <td>
+                                {!p ? (
+                                  kd === "story" ? (
+                                    <button type="button" className="rp-ins" onClick={() => addNums(r, null, "story")}>
+                                      📸 Add story
+                                    </button>
+                                  ) : null
+                                ) : canEdit(r, p) ? (
+                                  <button type="button" className="rp-ins" onClick={() => addNums(r, p)} title="Add the insights screenshot — the numbers fill in on their own">
+                                    {has ? "✏️ Update" : "📷 Add insights"}
+                                  </button>
+                                ) : (
+                                  <span className="rp-mute" title="No post link yet">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+          </>
         )}
       </Panel>
       {toast}
@@ -459,6 +495,9 @@ export default function CampaignReport() {
         .rp-stats { margin-top: -8px; }
         .rp-note { margin-top: 16px; }
         .rp-t { margin-top: 12px; }
+        .rp-sec + .rp-sec { margin-top: 26px; }
+        .rp-h { margin: 22px 0 0; font-size: 16px; font-weight: 800; color: var(--ad-ink); }
+        .rp-h span { margin-left: 6px; padding: 2px 9px; border-radius: 999px; background: #efedff; color: #6657e9; font-size: 12px; }
         .rp-q { margin-top: 18px; width: min(340px, 100%); height: 42px; }
         .rp-ins { border: 1px solid var(--ad-line-2); border-radius: 9px; background: #fff; padding: 6px 10px; font-size: 12px; font-weight: 800; color: #6657e9; white-space: nowrap; cursor: pointer; }
         .rp-ins:hover { border-color: var(--ad-primary); }
