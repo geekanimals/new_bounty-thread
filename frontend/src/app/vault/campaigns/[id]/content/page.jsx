@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
-import { SubTabs } from "@/components/admin/campaign2/kit";
+import ContentTabs from "@/components/admin/campaign2/ContentTabs";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { useRpc, errText } from "@/lib/supabase";
 import { useCampaign, fmtDate } from "@/components/admin/campaign/live";
@@ -26,13 +26,7 @@ export default function WorkspaceContent() {
   return (
     <AdminShell>
       <WorkspaceHead id={id} campaign={camp} />
-      <SubTabs
-        active="content"
-        items={[
-          { k: "content", label: "🎬 Content submissions", href: `/vault/campaigns/${id}/content` },
-          { k: "reviews", label: "⭐ Review screenshots", href: `/vault/campaigns/${id}/reviews` },
-        ]}
-      />
+      <ContentTabs id={id} active="content" />
       <section className="ga-card wct">
         <h2 className="ga-h2">Content submissions</h2>
         <p className="wct-sub">Review against brief, ad disclosure, rights and creator consent.</p>

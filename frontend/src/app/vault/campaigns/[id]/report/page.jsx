@@ -8,6 +8,8 @@ import ReportTabs from "@/components/admin/campaign2/ReportTabs";
 import { Panel, MiniStats, Note, TableState, useToast, downloadFile, num } from "@/components/admin/campaign2/kit";
 import { useRpc, rpc, errText } from "@/lib/supabase";
 import { useAsk, readInsightsShot, uploadInsightsProof } from "@/components/admin/campaign/journey";
+import Link from "next/link";
+import { useProofNeeds } from "@/components/admin/campaign2/ContentTabs";
 
 /*
  * 📈 Campaign report — purane bpAnalyticsHtml / bpDownloadReport jaisa.
@@ -35,7 +37,8 @@ export default function CampaignReport() {
       ok: "Save numbers",
       fields: [
         { k: "shot", label: "📷 Insights screenshot (optional) — we read the numbers off it", file: true, onFile: (f, setV) => readInsightsShot(f, p.media_type, setV) },
-        ...NUMS.map(([k, l]) => ({ k, label: l, value: st.source === "public" || st[k] == null ? "" : String(st[k]) })),
+        // jo numbers pehle se hain (Instagram / public profile / typed) wahi bhare rahein — save par koi number na mite
+        ...NUMS.map(([k, l]) => ({ k, label: l, value: st[k] == null ? "" : String(st[k]) })),
       ],
     });
     if (!v) return;
@@ -53,13 +56,27 @@ export default function CampaignReport() {
         return show(e.message || String(e));
       }
     }
-    const { error: e } = await rpc("admin", "api.bp_record_metrics", { p_participation: r.participation_id, p_payload: pl });
+    // Geek OS creator → bp_record_metrics · sheet creator (abhi Geek OS par nahi) → invite_add_post (wahi post update hoti hai)
+    const { error: e } = r.participation_id
+      ? await rpc("admin", "api.bp_record_metrics", { p_participation: r.participation_id, p_payload: pl })
+      : await rpc("admin", "api.invite_add_post", {
+          p_invite: r.invite_id,
+          p_payload: { permalink: p.permalink || null, media_type: String(p.media_type || "reel").toLowerCase().includes("stor") ? "story" : String(p.media_type || "").toLowerCase().includes("post") || String(p.media_type || "").toUpperCase() === "IMAGE" ? "post" : "reel", metrics: Object.fromEntries(Object.entries(pl).filter(([k]) => k !== "post_id" && k !== "screenshot_url")), screenshot_url: pl.screenshot_url || null },
+        });
     if (e) return show(errText(e));
     show("Numbers saved ✓");
     reload();
   };
   const { data, error, loading, reload } = useRpc("admin", "api.campaign_analytics", { p_campaign: id }, { skip: !id || id === "sample" });
   const a = data || {};
+  const proofs = useProofNeeds(id);
+  const storyNeed = proofs.story;
+  const storyRows = (proofs.board && proofs.board.rows) || [];
+  const shotsOf = (r) => {
+    const x = storyRows.find((b) => (r.participation_id && b.participation_id === r.participation_id) || (r.invite_id && b.invite_id === r.invite_id));
+    return x ? (x.stories || []).filter((s) => s.url) : [];
+  };
+  const storyDone = storyRows.filter((b) => (b.stories || []).filter((s) => s.url).length >= storyNeed).length;
   const t = a.totals || {};
   const rows = a.creators || [];
   const N = rows.length;
@@ -101,14 +118,14 @@ export default function CampaignReport() {
 
   const download = () => {
     const c = a.campaign || {};
-    const head = ["Instagram", "Name", "Profile link", "On Geek OS", "Followers", "Post type", "Post link", "Posted on", "Views", "Reach", "Likes", "Comments", "Shares", "Saves", "Numbers from", "Status"];
+    const head = ["Instagram", "Name", "Profile link", "On Geek OS", "Followers", "Post type", "Post link", "Posted on", "Views", "Reach", "Likes", "Comments", "Shares", "Saves", "Numbers from", "Status", ...(storyNeed ? ["Story screenshots"] : [])];
     const lines = [];
     rows.forEach((r) => {
       const cr = r.creator || {},
         h = handleOf(r);
       (r.posts || []).forEach((p) => {
         const s = p.stats || {};
-        lines.push([h ? "@" + h : "", cr.name || "", h ? `https://instagram.com/${h}` : "", r.on_sheet || r.not_connected || cr.followers == null ? "Not yet" : "Yes", cr.followers ?? "", p.media_type, p.permalink || "", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : "", s.views ?? "", s.reach ?? "", s.likes ?? "", s.comments ?? "", s.shares ?? "", s.saves ?? "", s.source === "public" ? "public profile" : s.source === "screenshot" ? "screenshot" : s.source === "manual" ? "typed in" : "Instagram insights", r.stage]);
+        lines.push([h ? "@" + h : "", cr.name || "", h ? `https://instagram.com/${h}` : "", r.on_sheet || r.not_connected || cr.followers == null ? "Not yet" : "Yes", cr.followers ?? "", p.media_type, p.permalink || "", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : "", s.views ?? "", s.reach ?? "", s.likes ?? "", s.comments ?? "", s.shares ?? "", s.saves ?? "", s.source === "public" ? "public profile" : s.source === "screenshot" ? "screenshot" : s.source === "manual" ? "typed in" : "Instagram insights", r.stage, ...(storyNeed ? [shotsOf(r).map((x) => x.url).join(" ")] : [])]);
       });
     });
     const tot = [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["shares", "Shares"], ["saves", "Saves"]].map(([k, l]) => {
@@ -154,6 +171,20 @@ export default function CampaignReport() {
             </Note>
           </div>
         )}
+        {storyNeed > 0 && (
+          <div className="rp-note">
+            <Note tone={storyDone >= storyRows.length && storyRows.length ? "green" : "amber"} icon="📸">
+              <b>
+                Stories: {storyDone} of {storyRows.length} creators have their story screenshot{storyNeed > 1 ? `s (${storyNeed} each)` : ""}
+              </b>{" "}
+              — a story&apos;s proof is its screenshot.{" "}
+              <Link href={`/vault/campaigns/${id}/stories`}>
+                <u>Open story screenshots</u>
+              </Link>{" "}
+              to see, download or add them (one by one or in bulk).
+            </Note>
+          </div>
+        )}
         <input className="ga-input rp-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 Filter these rows — name, @handle, city" aria-label="Filter report rows" />
         <div className="c2-tw">
           <table className="c2-t rp-t">
@@ -196,12 +227,12 @@ export default function CampaignReport() {
                     <td>{num(s.shares)}</td>
                     <td>{num(s.saves)}</td>
                     <td>
-                      {r.participation_id ? (
-                        <button type="button" className="rp-ins" onClick={() => addNums(r, p)} title="Instagram didn't share the numbers? Type them from the creator's insights screenshot">
-                          {s.source === "screenshot" || s.source === "manual" ? "✏️ Update" : "📷 Add insights"}
+                      {r.participation_id || (r.invite_id && p.permalink) ? (
+                        <button type="button" className="rp-ins" onClick={() => addNums(r, p)} title="Add or correct the numbers from the creator's insights screenshot">
+                          {s.source === "screenshot" || s.source === "manual" ? "✏️ Update" : s.views != null || s.likes != null || s.reach != null ? "✏️ Edit numbers" : "📷 Add insights"}
                         </button>
                       ) : (
-                        <span className="rp-mute" title="Not registered on Geek OS yet">—</span>
+                        <span className="rp-mute" title="No post link yet">—</span>
                       )}
                     </td>
                   </tr>

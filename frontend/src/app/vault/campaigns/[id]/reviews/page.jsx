@@ -6,7 +6,8 @@ import { useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
-import { Panel, SubTabs, Note, TableState, useToast } from "@/components/admin/campaign2/kit";
+import { Panel, Note, TableState, useToast } from "@/components/admin/campaign2/kit";
+import ContentTabs from "@/components/admin/campaign2/ContentTabs";
 import { rpc, useRpc, errText, sbFor, SUPABASE_URL } from "@/lib/supabase";
 
 /*
@@ -134,13 +135,7 @@ export default function ReviewScreens() {
   return (
     <AdminShell>
       <WorkspaceHead id={id} />
-      <SubTabs
-        active="reviews"
-        items={[
-          { k: "content", label: "🎬 Content submissions", href: `/vault/campaigns/${id}/content` },
-          { k: "reviews", label: "⭐ Review screenshots", href: `/vault/campaigns/${id}/reviews` },
-        ]}
-      />
+      <ContentTabs id={id} active="reviews" />
       <Panel title="⭐ Review screenshots" sub="Google / District review proof from each creator. A creator is marked done only when their screenshots are in.">
         {data && !asks.length && (
           <Note tone="amber" icon="ℹ️">
