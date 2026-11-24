@@ -10,6 +10,7 @@ import Link from "next/link";
 import { rpc, invoke, errText, sbFor } from "@/lib/supabase";
 import { BP_FAIL, effIndex, stepLabel, inviteStepRank, INVITE_STEPS, fmtNum, fmtDate, maskPhone, initials, FLOW_TOTAL, flowNoOfStage, FLOW_NO_OF_INVITE, flowName } from "@/components/admin/campaign/live";
 import IgImg from "@/lib/igFresh";
+import { readInsightsOcr, OCR_KEYS } from "@/lib/insightsOcr";
 
 /* Figma ke 12 steps (row ki progress bar: "Step 9/12 · Courier delivered") */
 export const JOURNEY_STEPS = ["Invited", "Registered", "Instagram connected", "Applied", "Approved", "Contract signed", "Address confirmed", "Courier sent", "In transit", "Courier delivered", "Video brief sent", "Video submitted", "Done"];
@@ -511,9 +512,20 @@ export function useAsk() {
 }
 
 /** 📷 Insights screenshot → numbers (purana shotReader — edge function post-shot-read) */
-export const SHOT_KEYS = ["views", "reach", "likes", "comments", "shares", "saves"];
+export const SHOT_KEYS = OCR_KEYS;
+/** Insights screenshot → numbers into the form. Free OCR in the browser first (no key needed);
+ *  the server reader (post-shot-read) only as a backup when OCR found nothing and that reader is switched on. */
 export async function readInsightsShot(file, kind, setV) {
   if (file.size > 8 * 1024 * 1024) return "That screenshot is over 8 MB — crop it first.";
+  let why = "";
+  try {
+    const { metrics } = await readInsightsOcr(file, String(kind || "reel").toLowerCase().includes("stor") ? "story" : "reel");
+    const ks = Object.keys(metrics);
+    ks.forEach((k) => setV(k, String(metrics[k])));
+    if (ks.length) return `✓ Read ${ks.length} number${ks.length > 1 ? "s" : ""} off the screenshot — check them below, then save.`;
+  } catch (e) {
+    why = e.message || "";
+  }
   const b64 = await new Promise((r) => {
     const fr = new FileReader();
     fr.onload = () => r(String(fr.result || ""));
@@ -521,6 +533,7 @@ export async function readInsightsShot(file, kind, setV) {
     fr.readAsDataURL(file);
   });
   const { data, error } = await invoke("admin", "post-shot-read", { image: b64, media_type: kind || "reel" });
+  if (data && data.off) return `No numbers found on this screenshot — is it the insights screen? Type them below.${why ? " (" + why + ")" : ""}`;
   if (error || !data || data.error) return "Couldn't read it — type the numbers below. " + ((data && data.error) || "");
   const m = data.metrics || {};
   Object.entries(m).forEach(([k, v]) => SHOT_KEYS.includes(k) && setV(k, String(v)));

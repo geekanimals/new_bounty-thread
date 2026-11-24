@@ -9,6 +9,7 @@ import ContentTabs, { useProofNeeds } from "@/components/admin/campaign2/Content
 import { Panel, Note, TableState, useToast } from "@/components/admin/campaign2/kit";
 import { rpc, errText } from "@/lib/supabase";
 import { uploadInsightsProof } from "@/components/admin/campaign/journey";
+import { readInsightsOcr } from "@/lib/insightsOcr";
 
 /*
  * 📸 Story screenshots — brief mein Story ho tab. Story ka proof = screenshot (Instagram se check nahi).
@@ -97,22 +98,33 @@ export default function StoryShots() {
     setBatch(got);
   };
 
+  // screenshot upload + (agar insights ka screenshot hai) uske numbers bhi padh ke saath save — report mein seedha dikhte hain
   const saveOne = async (file, c) => {
-    const url = await uploadInsightsProof(file);
+    const [url, read] = await Promise.all([uploadInsightsProof(file), readInsightsOcr(file, "story").catch(() => ({ metrics: {} }))]);
+    const metrics = (read && read.metrics) || {};
     const payload = { media_type: "story", screenshot_url: url };
-    const r = c.participation_id ? await rpc("admin", "api.bp_add_post_link", { p_participation: c.participation_id, p_payload: payload }) : await rpc("admin", "api.invite_add_post", { p_invite: c.invite_id, p_payload: payload });
-    if (r.error) throw new Error(errText(r.error));
+    if (c.participation_id) {
+      const r = await rpc("admin", "api.bp_add_post_link", { p_participation: c.participation_id, p_payload: payload });
+      if (r.error) throw new Error(errText(r.error));
+      const postId = r.data && r.data.post_id;
+      if (postId && Object.keys(metrics).length) await rpc("admin", "api.bp_record_metrics", { p_participation: c.participation_id, p_payload: { ...metrics, screenshot_url: url, post_id: postId } });
+    } else {
+      const r = await rpc("admin", "api.invite_add_post", { p_invite: c.invite_id, p_payload: { ...payload, metrics } });
+      if (r.error) throw new Error(errText(r.error));
+    }
+    return Object.keys(metrics).length;
   };
   const uploadBatch = async () => {
     const go = batch.filter((b) => b.key);
     if (!go.length) return show("Match at least one screenshot to a creator");
-    let ok = 0;
+    let ok = 0,
+      withNums = 0;
     const fails = [];
     for (let i = 0; i < go.length; i++) {
-      setBusy(`Uploading ${i + 1} / ${go.length}…`);
+      setBusy(`Reading & uploading ${i + 1} / ${go.length}…`);
       const c = list.find((x) => x.key === go[i].key);
       try {
-        await saveOne(go[i].file, c);
+        if (await saveOne(go[i].file, c)) withNums++;
         ok++;
       } catch (e) {
         fails.push(`${c ? c.name || c.handle : go[i].file.name}: ${e.message}`);
@@ -121,7 +133,7 @@ export default function StoryShots() {
     setBusy("");
     setBatch(null);
     reload();
-    show(`✓ ${ok} story screenshot${ok === 1 ? "" : "s"} added${fails.length ? ` · ${fails.length} not added — ${fails.slice(0, 2).join(" · ")}` : ""}`);
+    show(`✓ ${ok} story screenshot${ok === 1 ? "" : "s"} added${withNums ? ` · numbers read off ${withNums} (see the report)` : ""}${fails.length ? ` · ${fails.length} not added — ${fails.slice(0, 2).join(" · ")}` : ""}`);
   };
   const onOne = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -130,8 +142,8 @@ export default function StoryShots() {
     const c = list.find((x) => x.key === oneFor);
     setBusy(oneFor);
     try {
-      await saveOne(file, c);
-      show("✓ Story screenshot added");
+      const n = await saveOne(file, c);
+      show(n ? `✓ Story screenshot added · ${n} numbers read off it (see the report)` : "✓ Story screenshot added");
       reload();
     } catch (er) {
       show(er.message);
@@ -181,10 +193,13 @@ export default function StoryShots() {
               <div>
                 <b>📁 Upload many story screenshots at once</b>
                 <small>
-                  Images named with the creator’s <b>@handle</b>, <b>name</b> or <b># serial</b> from the list (e.g. <code>priya.eats.jpg</code>, <code>12.png</code>) go to that creator. The rest go in <b>list order from the first row</b> to creators still missing a story — you see every match before saving.
+                  Images named with the creator’s <b>@handle</b>, <b>name</b> or <b># serial</b> from the list (e.g. <code>priya.eats.jpg</code>, <code>12.png</code>) go to that creator. The rest go in <b>list order from the first row</b> to creators still missing a story — you see every match before saving. Story <b>insights</b> screenshots also fill the story&apos;s numbers in the report.
                 </small>
               </div>
               <div className="st-bulk__act">
+                <Link href={`/vault/campaigns/${id}/report?view=story-1`} className="ga-btn ga-btn--ghost st-rep">
+                  📈 Story numbers in the report
+                </Link>
                 <button type="button" className="ga-btn ga-btn--primary" onClick={() => filesIn.current && filesIn.current.click()} disabled={!!busy}>
                   Choose images
                 </button>
@@ -246,7 +261,7 @@ export default function StoryShots() {
                 </div>
                 <div className="st-batch__act">
                   <button type="button" className="ga-btn ga-btn--primary" onClick={uploadBatch} disabled={!!busy || !matched}>
-                    {busy && busy.startsWith("Uploading") ? busy : `Save ${matched} screenshot${matched === 1 ? "" : "s"}`}
+                    {busy && busy.startsWith("Reading") ? busy : `Save ${matched} screenshot${matched === 1 ? "" : "s"}`}
                   </button>
                   <button type="button" className="ga-btn ga-btn--ghost" onClick={() => setBatch(null)} disabled={!!busy}>
                     Cancel
@@ -333,7 +348,9 @@ export default function StoryShots() {
         .st-bulk b { font-size: 14px; color: var(--ad-ink); }
         .st-bulk small { display: block; margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--ad-muted); }
         .st-bulk small b { font-size: 12px; } .st-bulk code { font-size: 11.5px; background: #fff; padding: 1px 5px; border-radius: 5px; }
+        .st-bulk__act { display: flex; gap: 8px; flex-wrap: wrap; }
         .st-bulk__act .ga-btn { height: 40px; }
+        .st-rep { display: inline-flex; align-items: center; text-decoration: none; }
         .st-batch { margin-top: 14px; padding: 14px; border-radius: 14px; border: 1px solid var(--ad-line); }
         .st-batch__h { font-size: 13px; color: var(--ad-text); }
         .st-batch__act { display: flex; gap: 8px; margin-top: 12px; }
