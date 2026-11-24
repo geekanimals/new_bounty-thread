@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import TrackerFrame, { useTracker, TrackerWait, StepMismatch } from "@/components/creator/TrackerSteps";
@@ -22,6 +22,8 @@ export default function PostStep() {
   const [warn, setWarn] = useState("");
   const [busy, setBusy] = useState(false);
   const [shot, setShot] = useState(null); // story ka screenshot (File)
+  const shotUrl = useMemo(() => (shot ? URL.createObjectURL(shot) : ""), [shot]);
+  useEffect(() => () => shotUrl && URL.revokeObjectURL(shotUrl), [shotUrl]);
 
   if (!t.m)
     return (
@@ -104,7 +106,7 @@ export default function PostStep() {
               {shot ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={URL.createObjectURL(shot)} alt="Your story screenshot" />
+                  <img src={shotUrl} alt="Your story screenshot" />
                   <span>{shot.name} · tap to change</span>
                 </>
               ) : (

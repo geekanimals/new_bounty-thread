@@ -74,9 +74,9 @@ export default function CampaignReport() {
   const storyRows = (proofs.board && proofs.board.rows) || [];
   const shotsOf = (r) => {
     const x = storyRows.find((b) => (r.participation_id && b.participation_id === r.participation_id) || (r.invite_id && b.invite_id === r.invite_id));
-    return x ? (x.stories || []).filter((s) => s.url) : [];
+    return x ? (x.stories || []).filter((s) => s.url || s.old) : [];
   };
-  const storyDone = storyRows.filter((b) => (b.stories || []).filter((s) => s.url).length >= storyNeed).length;
+  const storyDone = storyRows.filter((b) => (b.stories || []).filter((s) => s.url || s.old).length >= storyNeed).length;
   const t = a.totals || {};
   const rows = a.creators || [];
   const N = rows.length;
@@ -125,7 +125,7 @@ export default function CampaignReport() {
         h = handleOf(r);
       (r.posts || []).forEach((p) => {
         const s = p.stats || {};
-        lines.push([h ? "@" + h : "", cr.name || "", h ? `https://instagram.com/${h}` : "", r.on_sheet || r.not_connected || cr.followers == null ? "Not yet" : "Yes", cr.followers ?? "", p.media_type, p.permalink || "", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : "", s.views ?? "", s.reach ?? "", s.likes ?? "", s.comments ?? "", s.shares ?? "", s.saves ?? "", s.source === "public" ? "public profile" : s.source === "screenshot" ? "screenshot" : s.source === "manual" ? "typed in" : "Instagram insights", r.stage, ...(storyNeed ? [shotsOf(r).map((x) => x.url).join(" ")] : [])]);
+        lines.push([h ? "@" + h : "", cr.name || "", h ? `https://instagram.com/${h}` : "", r.on_sheet || r.not_connected || cr.followers == null ? "Not yet" : "Yes", cr.followers ?? "", p.media_type, p.permalink || "", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : "", s.views ?? "", s.reach ?? "", s.likes ?? "", s.comments ?? "", s.shares ?? "", s.saves ?? "", s.source === "public" ? "public profile" : s.source === "screenshot" ? "screenshot" : s.source === "manual" ? "typed in" : "Instagram insights", r.stage, ...(storyNeed ? [shotsOf(r).map((x) => x.url || x.link).join(" ")] : [])]);
       });
     });
     const tot = [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["shares", "Shares"], ["saves", "Saves"]].map(([k, l]) => {

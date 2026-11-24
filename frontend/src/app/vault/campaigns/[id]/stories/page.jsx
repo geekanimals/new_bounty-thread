@@ -19,12 +19,23 @@ import { uploadInsightsProof } from "@/components/admin/campaign/journey";
 const IMG = /\.(jpe?g|png|webp|heic|gif)$/i;
 const norm = (s) => String(s || "").toLowerCase().replace(/^@/, "");
 
+// Geek OS creator par post / story tabhi jud sakti hai jab use video brief mil chuka ho (backend bhi yahi maanta hai)
+const AFTER_BRIEF = new Set(["content_created", "content_submitted", "changes_requested", "content_approved", "published", "completed"]);
+const canAdd = (c) => !!c.invite_id || AFTER_BRIEF.has(c.stage);
+const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 function guessKey(file, list) {
-  const path = norm(file.webkitRelativePath || file.name);
+  const path = norm((file.webkitRelativePath || file.name).replace(/\.[^./]+$/, ""));
   const base = norm(file.name.replace(/\.[^.]+$/, ""));
-  const byHandle = list.filter((x) => x.handle && norm(x.handle).length >= 3 && path.includes(norm(x.handle))).sort((a, b) => norm(b.handle).length - norm(a.handle).length)[0];
+  // @handle poora shabd ho (aage-peeche letter / number / . na ho) — "art" ab "start.jpg" se match nahi hoga
+  const byHandle = list
+    .filter((x) => x.handle && norm(x.handle).length >= 3 && new RegExp(`(^|[^a-z0-9.])${esc(norm(x.handle))}([^a-z0-9.]|$)`).test(path))
+    .sort((a, b) => norm(b.handle).length - norm(a.handle).length)[0];
   if (byHandle) return { key: byHandle.key, how: "handle" };
-  const byName = list.find((x) => x.name && norm(x.name).replace(/\s+/g, "").length >= 4 && base.replace(/[\s_\-.]+/g, "").includes(norm(x.name).replace(/\s+/g, "")));
+  const flat = base.replace(/[\s_\-.]+/g, "");
+  const byName = list
+    .filter((x) => x.name && norm(x.name).replace(/\s+/g, "").length >= 4 && flat.includes(norm(x.name).replace(/\s+/g, "")))
+    .sort((a, b) => b.name.length - a.name.length)[0];
   if (byName) return { key: byName.key, how: "name" };
   const m = /^(\d{1,4})(?:\D|$)/.exec(base);
   if (m && list[Number(m[1]) - 1]) return { key: list[Number(m[1]) - 1].key, how: "serial" };
@@ -48,7 +59,7 @@ export default function StoryShots() {
       ((board && board.rows) || []).map((r) => ({
         ...r,
         key: r.participation_id ? "p-" + r.participation_id : "i-" + r.invite_id,
-        shots: (r.stories || []).filter((s) => s.url),
+        shots: (r.stories || []).filter((s) => s.url || s.old), // old = 24 Nov se pehle sirf link se record hui story (purane rule mein maani gayi)
       })),
     [board]
   );
@@ -66,9 +77,15 @@ export default function StoryShots() {
   const pickFiles = (files) => {
     const imgs = [...(files || [])].filter((x) => IMG.test(x.name)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     if (!imgs.length) return show("No images found (jpg, png, webp, heic)");
-    const got = imgs.slice(0, 500).map((file) => ({ file, url: URL.createObjectURL(file), ...guessKey(file, list) }));
+    const got = imgs.slice(0, 500).map((file) => {
+      const g = guessKey(file, list);
+      const c = g.key && list.find((x) => x.key === g.key);
+      // naam se mila creator abhi video brief tak nahi pahuncha → yahan nahi jud sakta, team khud chune
+      if (c && !canAdd(c)) return { file, url: URL.createObjectURL(file), key: "", how: "", note: `${c.handle ? "@" + c.handle : c.name} hasn’t got the video brief yet` };
+      return { file, url: URL.createObjectURL(file), ...g };
+    });
     const want = {};
-    list.forEach((c) => (want[c.key] = Math.max(0, need - c.shots.length)));
+    list.forEach((c) => (want[c.key] = canAdd(c) ? Math.max(0, need - c.shots.length) : 0));
     got.forEach((g) => g.key && (want[g.key] = (want[g.key] || 0) - 1));
     const queue = list.filter((c) => want[c.key] > 0).flatMap((c) => Array.from({ length: want[c.key] }, () => c.key));
     got.forEach((g) => {
@@ -203,15 +220,16 @@ export default function StoryShots() {
                           </td>
                           <td className="st-fn">
                             {b.file.name}
-                            <small>{b.how ? `matched by ${b.how}` : "⚠️ no match — pick the creator"}</small>
+                            <small>{b.how ? `matched by ${b.how}` : `⚠️ ${b.note || "no match"} — pick the creator`}</small>
                           </td>
                           <td>
                             <select className="ga-input st-sel" value={b.key} onChange={(e) => setBatch((B) => B.map((x, j) => (j === i ? { ...x, key: e.target.value, how: e.target.value ? "you" : "" } : x)))}>
                               <option value="">— skip this image —</option>
                               {list.map((c, n) => (
-                                <option key={c.key} value={c.key}>
+                                <option key={c.key} value={c.key} disabled={!canAdd(c)}>
                                   #{n + 1} · {c.name || "—"}
                                   {c.handle ? ` · @${c.handle}` : ""}
+                                  {canAdd(c) ? "" : " (no video brief yet)"}
                                 </option>
                               ))}
                             </select>
@@ -265,15 +283,22 @@ export default function StoryShots() {
                   <td className="st-mute">{String(c.stage || "—").replace(/_/g, " ")}</td>
                   <td>
                     <div className="st-cell">
-                      {c.shots.map((s) => (
+                      {c.shots.map((s) =>
+                        !s.url ? (
+                          <a key={s.id} href={s.link || undefined} target="_blank" rel="noopener noreferrer" className="st-old" title={`Recorded ${new Date(s.at).toLocaleDateString("en-IN")} with a link, before screenshots were needed`}>
+                            🔗 Story link
+                          </a>
+                        ) : (
                         <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer" download title={`Added ${new Date(s.at).toLocaleString("en-IN")} — open / download`}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={s.url} alt="Story screenshot" className="st-th" />
                         </a>
-                      ))}
-                      {need > 0 && c.shots.length < need && <span className="ga-badge ga-badge--red">Missing {need - c.shots.length}</span>}
+                        )
+                      )}
+                      {need > 0 && c.shots.length < need && canAdd(c) && <span className="ga-badge ga-badge--red">Missing {need - c.shots.length}</span>}
+                      {need > 0 && c.shots.length < need && !canAdd(c) && <span className="st-mute st-wait">After the video brief</span>}
                       {need > 0 && c.shots.length >= need && <span className="ga-badge ga-badge--green">✓ Story done</span>}
-                      {need > 0 && (
+                      {need > 0 && canAdd(c) && (
                         <button
                           type="button"
                           className="c2-tbtn"
@@ -323,6 +348,8 @@ export default function StoryShots() {
         .st-t td { vertical-align: middle; }
         .st-mute { font-size: 12px; color: var(--ad-muted); text-transform: capitalize; }
         .st-sub { display: block; font-size: 11px; color: var(--ad-muted); }
+        .st-old { display: inline-flex; align-items: center; height: 46px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--ad-line); font-size: 12px; color: var(--ad-text); background: var(--ad-soft-2); }
+        .st-wait { text-transform: none; }
         .st-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         @media (max-width: 900px) { .st-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
       `}</style>
