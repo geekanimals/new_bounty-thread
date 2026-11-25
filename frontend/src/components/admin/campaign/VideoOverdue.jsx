@@ -13,16 +13,17 @@ import { fmtDate } from "@/components/admin/campaign/live";
  */
 export const OVERDUE_DAYS = 3;
 /** row (buildRows) apne aap overdue? — product delivered 3+ din pehle ya due date nikal gayi, video nahi */
-export function autoOverdue(c) {
-  if (!c || c.kind !== "p") return false;
-  const x = c.x || {};
+export function autoOverdue(c, deliveredAt = null) {
+  if (!c) return false;
+  const x = (c.kind === "p" && c.x) || {};
   const today = new Date().toISOString().slice(0, 10);
   if (x.due_on && x.due_on < today) return true;
-  const d = x.shipment && x.shipment.delivered_at;
+  // sheet creator: delivered date (bulk "Delivered on" / Move to / apne aap) se
+  const d = (x.shipment && x.shipment.delivered_at) || deliveredAt;
   return !!d && Date.now() - new Date(d).getTime() > OVERDUE_DAYS * 86400000;
 }
 
-export default function VideoOverdue({ campaignId, row, waiting }) {
+export default function VideoOverdue({ campaignId, row, waiting, deliveredAt = null }) {
   const on = !!campaignId && campaignId !== "sample" && !!row;
   const vo = useRpc("admin", "api.campaign_video_overdue", { p_campaign: campaignId }, { skip: !on });
   const [askEl, ask] = useAsk();
@@ -31,7 +32,7 @@ export default function VideoOverdue({ campaignId, row, waiting }) {
   if (!on || vo.error || !waiting) return null;
   const list = Array.isArray(vo.data) ? vo.data : [];
   const mark = list.find((m) => (row.kind === "p" ? m.participation_id === row.pid : m.invite_id === row.iid));
-  const auto = autoOverdue(row);
+  const auto = autoOverdue(row, deliveredAt);
 
   const doMark = async () => {
     const v = await ask({ title: "Mark video overdue", text: "Team only — the creator isn’t messaged. It stays in Video overdue until their video comes in or you clear it.", ok: "⏰ Mark overdue", fields: [{ k: "note", label: "Note (optional)", placeholder: "e.g. Parcel delivered 20 Nov, no reply on WhatsApp" }] });

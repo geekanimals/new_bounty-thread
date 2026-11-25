@@ -438,6 +438,7 @@ export default function WorkspaceCreator() {
         <VideoOverdue
           campaignId={id}
           row={x}
+          deliveredAt={(((cexd.data || {}).rows || {})[cid.replace(/^([pi])-/, "$1:")] || {}).delivered_at || null}
           waiting={
             !x.failed &&
             (x.kind === "p"

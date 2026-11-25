@@ -34,9 +34,6 @@ const TPL_COLS = [
   ["Video link", "Drive / video link — for Video submitted / Client approved", "https://drive.google.com/…", "for those 2"],
   ["Post link", "Link of every post — for Posted / Done", "https://www.instagram.com/reel/…", "for Posted"],
   ["Fee (₹)", "This creator's total fee — goes into their contract only", "15000", "optional", "pay"],
-  ["Paid amount", "For Advance paid / Fully paid — what you already paid (blank = the advance due / everything left)", "7500", "optional", "pay"],
-  ["UTR", "For Advance paid / Fully paid — UTR / transaction reference of the payment you made", "UTR123456789", "for Advance / Fully paid", "pay"],
-  ["Paid on", "Date you paid", "24/11/2026", "optional", "pay"],
   ["Advance %", "Paid once they sign", "50", "optional", "pay"],
   ["Pay days", "The rest — days after every post is live", "7", "optional", "pay"],
   ["Terms", "Anything else agreed", "includes 1 story repost", "optional", "pay"],
@@ -44,10 +41,13 @@ const TPL_COLS = [
   ["Account no", "Bank account number", "50100123456789", "optional", "pay"],
   ["IFSC", "Bank IFSC code", "HDFC0001234", "with Account no", "pay"],
   ["Account holder", "Name on the bank account / UPI (must be the creator's)", "Asha Rao", "with UPI / Account no", "pay"],
+  ["Paid amount", "For Advance paid / Fully paid — what you already paid (blank = the advance due / everything left)", "7500", "optional", "pay"],
+  ["UTR", "For Advance paid / Fully paid — UTR / transaction reference of the payment you made", "UTR123456789", "for Advance / Fully paid", "pay"],
+  ["Paid on", "Date you paid", "24/11/2026", "optional", "pay"],
 ];
 const TPL_EX = [
   { Name: "Asha Rao", Instagram: "@asha.creates", WhatsApp: "9876543210", Email: "asha@example.com", City: "Mumbai", Status: "Approved", "Fee (₹)": "15000", "Advance %": "50", "Pay days": "7", Terms: "includes 1 story repost", "UPI ID": "asha@okhdfcbank", "Account holder": "Asha Rao" },
-  { Name: "Rohan Mehta", Instagram: "rohan.eats", WhatsApp: "+91 98111 22233", Email: "rohan@example.com", City: "Delhi" },
+  { Name: "Rohan Mehta", Instagram: "rohan.eats", WhatsApp: "98111 22233", Email: "rohan@example.com", City: "Delhi" },
   { Name: "Meera Shah", Instagram: "meera.styles", WhatsApp: "9000011111", City: "Pune", Status: "Address confirmed", Address: "Flat 4B, Lake View, Koregaon Park", State: "Maharashtra", "PIN code": "411001", "Fee (₹)": "8000", "Advance %": "0", "Pay days": "5", "Account no": "50100123456789", IFSC: "HDFC0001234", "Account holder": "Meera Shah" },
   { Name: "Kabir Sen", Instagram: "@kabir.cooks", WhatsApp: "9830012345", Email: "kabir@example.com", City: "Kolkata", Status: "Courier sent", Address: "12 Park St", State: "West Bengal", "PIN code": "700016", Courier: "DTDC", Tracking: "D12345678" },
   { Name: "Nisha Jain", Instagram: "nisha.home", WhatsApp: "9123456780", City: "Jaipur", Status: "Video submitted", "Video link": "https://drive.google.com/file/d/example" },
@@ -87,7 +87,7 @@ const tplRows = (kind, crit) => {
   const cols = tplCols(kind, crit);
   const cv = Object.fromEntries(critTpl(crit).map(([, l, , ex]) => [l, ex]));
   // paid / visit: product nahi → Delivery issue ki example row nahi
-  return [cols.map((c) => c[0]), ...TPL_EX.filter((r) => !(r.ship && (kind === "paid" || kind === "visit")) && !(r.only && !r.only.includes(kind))).map((r, ri) => cols.map((c) => (cv[c[0]] ? (ri < 6 ? cv[c[0]][ri % cv[c[0]].length] : "") : (kind === "paid" || kind === "visit") && ["Address confirmed", "Courier sent", "Courier delivered"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
+  return [cols.map((c) => c[0]), ...TPL_EX.filter((r) => !((r.ship || ["Courier sent"].includes(r.Status)) && (kind === "paid" || kind === "visit")) && !(r.only && !r.only.includes(kind))).map((r, ri) => cols.map((c) => (cv[c[0]] ? (ri < 6 ? cv[c[0]][ri % cv[c[0]].length] : "") : (kind === "paid" || kind === "visit") && ["Address confirmed", "Courier sent", "Courier delivered"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
 };
 
 const PAY_COLS = [["Fee (₹)", "fee"], ["Advance %", "advance_pct"], ["Pay days", "pay_days"], ["Terms", "pay_terms"], ["UPI ID", "upi"], ["Account no", "account_no"], ["IFSC", "ifsc"], ["Account holder", "account_name"]];
@@ -460,7 +460,7 @@ export default function UploadStart({ id, mode = "upload" }) {
             <p className="us-gsub">{KIND_LABEL[kind]} template · one creator per row · keep the first row as column names</p>
             <h3>📝 Step by step</h3>
             <p className="us-gtxt">
-              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it is flagged, and one “Upload all anyway” button sends every such row without a message. 6. For creators already on the campaign the ★ statuses work too: {kind === "visit" ? "Visit booked (with Visit date), Visited, Missed visit, " : ""}Video overdue, Changes requested (Reason = what to change), {kind === "barter" ? "" : "Advance paid / Fully paid (UTR — only recorded, no money is sent), "}Rejected (Reason), Backout{kind === "paid" || kind === "visit" ? "" : ", Delivery issue"} (Reason). The template’s example rows show each one. 7. The brief’s criteria get their own required columns (only the ones this campaign asks for{crit ? `: ${[crit.gender && "Gender", crit.age && "Age", crit.marital && "Marital status", crit.categories && "Categories", crit.pet && "Pet name / type / breed / age"].filter(Boolean).join(", ") || "none"}` : ""}) — more than one pet goes comma-separated in the same cell (Bruno, Kitty), and everything is saved on the creator’s account.{kind === "paid" || kind === "visit" ? "" : " 8. Delivered on = the day the parcel arrived (blank = today)."}
+              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it is flagged, and one “Upload all anyway” button sends every such row without a message. 6. For creators already on the campaign the ★ statuses work too: {kind === "visit" ? "Visit booked (with Visit date), Visited, Missed visit, " : ""}Video overdue, Changes requested (Reason = what to change), {kind === "barter" ? "" : "Advance paid / Fully paid (UTR — only recorded, no money is sent), "}Rejected (Reason), Backout{kind === "paid" || kind === "visit" ? "" : ", Delivery issue"} (Reason). The template’s example rows show each one. 7. The brief’s criteria get their own required columns (only the ones this campaign asks for{crit ? `: ${[crit.gender && "Gender", crit.age && "Age", crit.marital && "Marital status", crit.categories && "Categories", crit.pet && "Pet name / type / breed / age"].filter(Boolean).join(", ") || "none"}` : ""}) {crit && crit.pet ? " — more than one pet goes comma-separated in the same cell (Bruno, Kitty)" : ""} — everything is saved on the creator’s account.{kind === "paid" || kind === "visit" ? "" : " 8. Delivered on = the day the parcel arrived (blank = today)."}
               {kind !== "barter" ? " 6. Fee, Advance %, Pay days, UPI / Account no + IFSC columns set each creator’s payment as they land." : ""}
             </p>
             <div className="us-gbtns">

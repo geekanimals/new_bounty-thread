@@ -7,6 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import ReportTabs from "@/components/admin/campaign2/ReportTabs";
 import { Panel, MiniStats, Note, TableState, useToast, downloadFile, num } from "@/components/admin/campaign2/kit";
+import IgImg from "@/lib/igFresh";
 import { useRpc, rpc, errText, SUPABASE_URL } from "@/lib/supabase";
 import { useAsk, readInsightsShot, uploadInsightsProof } from "@/components/admin/campaign/journey";
 import { useProofNeeds } from "@/components/admin/campaign2/ContentTabs";
@@ -67,6 +68,7 @@ export default function CampaignReport() {
   const [askEl, ask] = useAsk();
   // { reel: [keys], story: [...], feed: [...], details: [...] } — na ho to apne aap (CORE + jinka number hai); browser yaad rakhta hai
   const pkKey = `geek_report_cols_${id}`;
+  const [colsOpen, setColsOpen] = useState(false);
   const [pick, setPickRaw] = useState(() => {
     try {
       return (typeof window !== "undefined" && JSON.parse(window.localStorage.getItem(pkKey) || "null")) || {};
@@ -357,9 +359,16 @@ export default function CampaignReport() {
         title="📈 Campaign report"
         sub="Every creator's numbers, by what the brief asks for. Updates on its own as Instagram shares insights — or add the insights screenshot and we read the numbers."
         actions={
-          <button type="button" className="ga-btn ga-btn--primary" onClick={download} disabled={!rows.length}>
-            ⬇️ Download report
-          </button>
+          <div className="rp-acts">
+            {chip.k !== "reviews" && sections.length > 0 && (
+              <button type="button" className={`ga-btn ga-btn--ghost rp-colbtn ${colsOpen ? "is-on" : ""}`} onClick={() => setColsOpen((v) => !v)} aria-expanded={colsOpen}>
+                ☑ Columns <span>{sections.reduce((n, { kd, list }) => n + effCols(kd, list).length, 0) + det.length}</span> {colsOpen ? "▴" : "▾"}
+              </button>
+            )}
+            <button type="button" className="ga-btn ga-btn--primary" onClick={download} disabled={!rows.length}>
+              ⬇️ Download report
+            </button>
+          </div>
         }
       >
         {chips.length > 1 && (
@@ -372,19 +381,25 @@ export default function CampaignReport() {
           </div>
         )}
 
-        {chip.k !== "reviews" && sections.length > 0 && (
+        {chip.k !== "reviews" && sections.length > 0 && colsOpen && (
           <div className="rp-pick" aria-label="Choose columns">
             <p className="rp-pick__t">
-              ☑ Choose columns — what you tick shows here and goes into the download{" "}
-              <button type="button" className="rp-pick__x" onClick={resetCols}>
-                Reset
-              </button>
+              What you tick shows in the table and goes into the download.
+              <span className="rp-pick__btns">
+                <button type="button" className="rp-pick__x" onClick={resetCols}>
+                  Reset
+                </button>
+                <button type="button" className="rp-pick__x" onClick={() => setColsOpen(false)}>
+                  Done
+                </button>
+              </span>
             </p>
             {sections.map(({ kd, list }) => {
               const on = effCols(kd, list).map(([k]) => k);
               return (
                 <div key={kd} className="rp-pick__row">
                   <span className="rp-pick__g">{kd === "reel" ? "🎬 Reels" : kd === "story" ? "📸 Stories" : "🖼️ Posts"}</span>
+                  <div>
                   {COLS[kd].map(([k, l]) => (
                     <label key={k} className={`rp-tick ${on.includes(k) ? "is-on" : ""}`}>
                       <input type="checkbox" checked={on.includes(k)} onChange={() => toggleCol(kd, k, list)} />
@@ -394,17 +409,20 @@ export default function CampaignReport() {
                   <button type="button" className="rp-pick__x" onClick={() => setAllCols(kd, on.length < COLS[kd].length)}>
                     {on.length < COLS[kd].length ? "All" : "None"}
                   </button>
+                  </div>
                 </div>
               );
             })}
             <div className="rp-pick__row">
               <span className="rp-pick__g">🧾 Details</span>
+              <div>
               {DETAILS.map(([k, l]) => (
                 <label key={k} className={`rp-tick ${hasDet(k) ? "is-on" : ""}`}>
                   <input type="checkbox" checked={hasDet(k)} onChange={() => toggleDet(k)} />
                   {l}
                 </label>
               ))}
+              </div>
             </div>
           </div>
         )}
@@ -504,21 +522,21 @@ export default function CampaignReport() {
                       {kd === "reel" ? "🎬 Reels" : kd === "story" ? "📸 Stories" : "🖼️ Posts"} <span>{total}</span>
                     </h3>
                   )}
-                  <div className="c2-tw">
-                    <table className="c2-t rp-t">
+                  <div className="c2-tw rp-tw">
+                    <table className="c2-t rp-t rp-grid">
                       <thead>
                         <tr>
-                          <th>Creator</th>
+                          <th className="rp-c1">Creator</th>
                           {hasDet("followers") && <th>Followers</th>}
                           <th>{KIND_LABEL[kd]}</th>
                           {hasDet("posted_on") && <th>Posted on</th>}
                           {cols.map(([k, l]) => (
-                            <th key={k}>{l}</th>
+                            <th key={k} className="rp-n">{l}</th>
                           ))}
                           {hasDet("screenshot") && <th>Insights</th>}
                           {hasDet("source") && <th>Numbers from</th>}
                           {hasDet("status") && <th>Status</th>}
-                          <th aria-label="Numbers" />
+                          <th className="rp-cz" aria-label="Add numbers" />
                         </tr>
                       </thead>
                       <tbody>
@@ -535,16 +553,18 @@ export default function CampaignReport() {
                           const has = cols.some(([k]) => s[k] != null);
                           return (
                             <tr key={key} className={p ? "" : "rp-miss"}>
-                              <td>
-                                <b>{nameOf(r)}</b>
-                                {hasDet("profile_link") && handleOf(r) && (
-                                  <a className="rp-sub c2-link" href={`https://instagram.com/${handleOf(r)}`} target="_blank" rel="noopener noreferrer">
-                                    @{handleOf(r)} ↗
-                                  </a>
-                                )}
-                                {hasDet("on_geek") && r.on_sheet && <small className="rp-sub">not on Geek OS yet</small>}
+                              <td className="rp-c1">
+                                {/* creators list jaisa: Instagram photo + naam + @handle (saada text — profile link sirf download mein) */}
+                                <div className="rp-who">
+                                  <IgImg className="rp-av" handle={handleOf(r)} src={(r.creator || {}).profile_picture_url || null} alt="" fallback={<span className="rp-av rp-av--txt">{nameOf(r).replace(/^@/, "").charAt(0).toUpperCase()}</span>} />
+                                  <div className="rp-who__t">
+                                    <b className="rp-name" title={nameOf(r)}>{nameOf(r)}</b>
+                                    {handleOf(r) && <small className="rp-sub">@{handleOf(r)}</small>}
+                                    {hasDet("on_geek") && r.on_sheet && <small className="rp-sub">not on Geek OS yet</small>}
+                                  </div>
+                                </div>
                               </td>
-                              {hasDet("followers") && <td>{(r.creator || {}).followers != null ? num((r.creator || {}).followers) : "—"}</td>}
+                              {hasDet("followers") && <td className="rp-n">{(r.creator || {}).followers != null ? num((r.creator || {}).followers) : "—"}</td>}
                               <td>
                                 {!p ? (
                                   <span className="rp-mute">{kd === "story" ? "Not in yet" : "Not posted yet"}</span>
@@ -558,7 +578,7 @@ export default function CampaignReport() {
                               </td>
                               {hasDet("posted_on") && <td>{p && p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "—"}</td>}
                               {cols.map(([k]) => (
-                                <td key={k}>{p ? fmt(k, s[k]) : ""}</td>
+                                <td key={k} className="rp-n">{p ? fmt(k, s[k]) : ""}</td>
                               ))}
                               {hasDet("screenshot") && (
                               <td>
@@ -574,7 +594,7 @@ export default function CampaignReport() {
                               )}
                               {hasDet("source") && <td>{p ? SRC_TXT(s) || "—" : ""}</td>}
                               {hasDet("status") && <td className="rp-st">{STAGE_TXT(r.stage)}</td>}
-                              <td>
+                              <td className="rp-cz">
                                 {!p ? (
                                   kd === "story" ? (
                                     <button type="button" className="rp-ins" onClick={() => addNums(r, null, "story")}>
@@ -605,12 +625,17 @@ export default function CampaignReport() {
       {askEl}
 
       <style>{`
+        .rp-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+        .rp-colbtn span { margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: #efedff; color: #6657e9; font-size: 11px; }
+        .rp-colbtn.is-on { border-color: #6657e9; color: #3b2fc4; }
         .rp-pick { margin: -4px 0 16px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--ad-line-2); background: #fafbff; }
-        .rp-pick__t { margin: 0 0 8px; font-size: 12.5px; font-weight: 700; color: var(--ad-muted); }
-        .rp-pick__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
-        .rp-pick__g { min-width: 84px; font-size: 12px; font-weight: 800; color: var(--ad-text); }
-        .rp-tick { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; font-weight: 700; color: var(--ad-muted); cursor: pointer; user-select: none; }
-        .rp-tick input { width: 15px; height: 15px; accent-color: #6657e9; margin: 0; }
+        .rp-pick__t { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--ad-muted); }
+        .rp-pick__btns { display: inline-flex; gap: 6px; }
+        .rp-pick__row { display: grid; grid-template-columns: 92px 1fr; align-items: start; gap: 8px; padding: 8px 0; border-top: 1px dashed var(--ad-line); }
+        .rp-pick__row > div { display: flex; flex-wrap: wrap; gap: 6px; }
+        .rp-pick__g { padding-top: 6px; font-size: 12px; font-weight: 800; color: var(--ad-text); }
+        .rp-tick { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12px; font-weight: 700; color: var(--ad-muted); cursor: pointer; user-select: none; }
+        .rp-tick input { width: 14px; height: 14px; accent-color: #6657e9; margin: 0; }
         .rp-tick.is-on { border-color: #6657e9; background: #f1efff; color: #3b2fc4; }
         .rp-pick__x { border: 0; background: none; padding: 0 4px; font-size: 12px; font-weight: 700; color: var(--ad-primary); cursor: pointer; }
         .rp-st { text-transform: capitalize; font-size: 12.5px; }
@@ -631,6 +656,24 @@ export default function CampaignReport() {
         .rp-sub { display: block; font-size: 11px; color: var(--ad-muted); }
         .rp-t td { height: 48px; padding-top: 6px; padding-bottom: 6px; }
         .rp-miss td { background: #fcfbff; }
+        /* table: pehla column (creator) aur aakhri (button) chipke rahein, beech wale scroll hon */
+        .rp-tw { position: relative; border: 1px solid var(--ad-line); border-radius: 14px; margin-top: 12px; }
+        .rp-grid { margin-top: 0; min-width: 100%; width: max-content; }
+        .rp-grid th { background: #f8f9fc; }
+        .rp-grid th, .rp-grid td { padding-left: 14px; padding-right: 14px; }
+        .rp-grid .rp-n { text-align: right; font-variant-numeric: tabular-nums; }
+        .rp-grid .rp-c1 { position: sticky; left: 0; z-index: 1; background: #fff; min-width: 180px; max-width: 240px; box-shadow: 1px 0 0 var(--ad-line); }
+        .rp-grid th.rp-c1 { background: #f8f9fc; z-index: 2; }
+        .rp-grid .rp-cz { position: sticky; right: 0; z-index: 1; background: #fff; box-shadow: -1px 0 0 var(--ad-line); text-align: center; }
+        .rp-grid th.rp-cz { background: #f8f9fc; z-index: 2; }
+        .rp-grid tr:hover td { background: #fbfbff; }
+        .rp-grid tr:hover td.rp-c1, .rp-grid tr:hover td.rp-cz { background: #fbfbff; }
+        .rp-who { display: flex; align-items: center; gap: 10px; }
+        .rp-who__t { min-width: 0; }
+        .rp-av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #efedff; }
+        .rp-av--txt { display: grid; place-items: center; font-size: 14px; font-weight: 800; color: #6657e9; }
+        .rp-name { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+        .rp-miss td.rp-c1, .rp-miss td.rp-cz { background: #fcfbff; }
         .rp-th { width: 34px; height: 34px; object-fit: cover; border-radius: 7px; border: 1px solid var(--ad-line); display: block; }
         .rp-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         .rp-foot { margin-top: 12px; font-size: 13px; }

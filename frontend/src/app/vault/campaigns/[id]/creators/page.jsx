@@ -144,7 +144,8 @@ export default function WorkspaceCreators() {
   const BX = useMemo(() => {
     const base = [...boxesFor(kind, V)]; // copy — BOXES constant ko mutate nahi karna
     const nv = base.find((b) => b.l === "No video yet");
-    const late = (c) => !!nv && nv.f(c) && (!!voOf[c.id] || autoOverdue(c));
+    const delOf = (c) => ((((cex.data || {}).rows || {})[c.kind === "p" ? "p:" + c.pid : "i:" + c.iid]) || {}).delivered_at || null;
+    const late = (c) => !!nv && nv.f(c) && (!!voOf[c.id] || autoOverdue(c, delOf(c)));
     const i = base.indexOf(nv);
     if (nv) base.splice(i + 1, 0, { t: "bad", l: "Video overdue", s: "3+ days after delivery / due date passed / marked", f: late });
     return [
@@ -153,7 +154,7 @@ export default function WorkspaceCreators() {
       // delivery issue — sirf product wale campaign (paid mein product hi nahi)
       ...(kind === "barter" || kind === "barter_paid" ? [{ t: "bad", l: "Delivery issue", s: "damaged / wrong product, courier lost … until resolved", f: (c) => !!diOf[c.id] }] : []),
     ];
-  }, [kind, V, boOf, diOf, voOf]);
+  }, [kind, V, boOf, diOf, voOf, cex.data]);
   const lateOf = (c) => {
     const b = BX.find((x) => x.l === "Video overdue");
     return b && b.f(c) ? voOf[c.id] || { auto: true } : null;

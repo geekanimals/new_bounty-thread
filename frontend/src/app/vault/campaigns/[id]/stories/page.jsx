@@ -8,6 +8,7 @@ import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import ContentTabs, { useProofNeeds } from "@/components/admin/campaign2/ContentTabs";
 import { Panel, Note, TableState, useToast } from "@/components/admin/campaign2/kit";
 import { rpc, errText } from "@/lib/supabase";
+import IgImg from "@/lib/igFresh";
 import { uploadInsightsProof } from "@/components/admin/campaign/journey";
 import { readInsightsOcr } from "@/lib/insightsOcr";
 import { shotSha, sigOf, shotDupMessage, rememberShot } from "@/lib/proofShot";
@@ -324,9 +325,15 @@ export default function StoryShots() {
                 <tr key={c.key}>
                   <td className="st-mute">{c.n}</td>
                   <td>
-                    <b>{c.name || "—"}</b>
-                    {c.handle && <small className="st-sub">@{c.handle}</small>}
-                    {c.invite_id && <small className="st-sub">not on Geek OS yet</small>}
+                    {/* creators list / report jaisa: Instagram photo + Instagram naam + @handle (saada text, link nahi) */}
+                    <div className="st-who">
+                      <IgImg className="st-av" handle={c.handle} src={c.pic || null} alt="" fallback={<span className="st-av st-av--txt">{String(c.name || c.handle || "?").replace(/^@/, "").charAt(0).toUpperCase()}</span>} />
+                      <div>
+                        <b>{c.name || (c.handle ? "@" + c.handle : "—")}</b>
+                        {c.handle && <small className="st-sub">@{c.handle}</small>}
+                        {c.invite_id && <small className="st-sub">not on Geek OS yet</small>}
+                      </div>
+                    </div>
                   </td>
                   <td className="st-mute">{String(c.stage || "—").replace(/_/g, " ")}</td>
                   <td>
@@ -388,6 +395,9 @@ export default function StoryShots() {
       </Panel>
       {toast}
       <style>{`
+        .st-who { display: flex; align-items: center; gap: 10px; }
+        .st-av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #efedff; }
+        .st-av--txt { display: grid; place-items: center; font-size: 14px; font-weight: 800; color: #6657e9; }
         .st-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
         .st-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; text-align: left; cursor: pointer; }
         .st-tile b { font-family: var(--ad-head); font-size: 22px; color: var(--ad-ink); }
