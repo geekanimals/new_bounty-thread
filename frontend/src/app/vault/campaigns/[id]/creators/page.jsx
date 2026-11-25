@@ -7,7 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
-import { CreatorRow, CreatorHead, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, matchState, autoReject } from "@/components/admin/campaign/journey";
+import { CreatorRow, CreatorHead, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, rejectionReasons, matchState, autoReject } from "@/components/admin/campaign/journey";
 import Backouts from "@/components/admin/campaign/Backouts";
 import DeliveryIssues from "@/components/admin/campaign/DeliveryIssues";
 import { autoOverdue } from "@/components/admin/campaign/VideoOverdue";
@@ -198,6 +198,9 @@ export default function WorkspaceCreators() {
   const [sel, setSel] = useState([]);
   const [busy, setBusy] = useState("");
   const [bulkN, setBulkN] = useState(null); // { done, total } — bulk approve/reject chal raha ho to
+  useEffect(() => {
+    rejectionReasons().catch(() => {}); // reject box turant khule
+  }, []);
   const [toast, setToast] = useToast(3200);
   const [askEl, ask] = useAsk();
 
@@ -769,12 +772,7 @@ export default function WorkspaceCreators() {
           <button type="button" className="ga-btn ga-btn--ghost wcr-wa" disabled={busy === "wa"} onClick={waSelected} title="Tick creators — or open it and pick who replied in the last 24 hours">
             {busy === "wa" ? "Sending…" : `💬 WhatsApp to selected (${sel.length})`}
           </button>
-          <button type="button" className="ga-btn ga-btn--primary wcr-brand" disabled={!sendable.length || busy === "brand"} onClick={sendToBrand} title="Only the creators you send here are shown to the brand">
-            {busy === "brand" ? "Sending…" : `📤 Send to brand (${sendable.length})`}
-          </button>
-          <button type="button" className="wcr-txt wcr-txt--no" disabled={!declinable.length || busy === "decl"} onClick={declineSel}>
-            ✖ Reject selected ({declinable.length})
-          </button>
+          {!sel.length && <span className="wcr-tip">☑ Tick creators to approve or reject them together</span>}
           <button type="button" className="wcr-txt" disabled={!notReg.length || busy === "re"} onClick={resendAll}>
             {busy === "re" ? "Sending…" : `↻ Resend invite to not-registered (${notReg.length})`}
           </button>
@@ -825,39 +823,48 @@ export default function WorkspaceCreators() {
         {sel.length > 0 && (
           <div className="wcr-act" role="region" aria-label="Selected creators">
             <div className="wcr-act__n">
-              <b>{sel.length}</b> selected
-              {bulkN && <span className="wcr-act__prog">Working… {bulkN.done} / {bulkN.total}</span>}
+              <span className="wcr-act__num">{sel.length}</span>
+              <span>selected</span>
             </div>
-            {sendable.length > 0 && (
-              <div className="wcr-act__g">
-                <span className="wcr-act__l">On hold · {sendable.length}</span>
-                <button type="button" className="wcr-act__b wcr-act__b--yes" disabled={!!busy} onClick={sendToBrand}>
-                  {busy === "brand" ? "Sending…" : `✅ Approve — send to brand (${sendable.length})`}
-                </button>
-                <button type="button" className="wcr-act__b wcr-act__b--no" disabled={!!busy} onClick={declineSel}>
-                  {busy === "decl" ? "Rejecting…" : `✖ Reject (${declinable.length})`}
-                </button>
+            {bulkN ? (
+              <div className="wcr-act__run">
+                <span>Working on it… {bulkN.done} of {bulkN.total}</span>
+                <span className="wcr-act__bar"><i style={{ width: `${Math.round((bulkN.done / Math.max(1, bulkN.total)) * 100)}%` }} /></span>
               </div>
+            ) : (
+              <>
+                {sendable.length > 0 && (
+                  <div className="wcr-act__g">
+                    <span className="wcr-act__l">⏳ On hold <b>{sendable.length}</b></span>
+                    <button type="button" className="wcr-act__b wcr-act__b--yes" disabled={!!busy} onClick={sendToBrand}>
+                      ✓ Approve
+                    </button>
+                    <button type="button" className="wcr-act__b wcr-act__b--no" disabled={!!busy} onClick={declineSel}>
+                      ✕ Reject
+                    </button>
+                  </div>
+                )}
+                {brandable.length > 0 && (
+                  <div className="wcr-act__g">
+                    <span className="wcr-act__l">📤 Sent to brand <b>{brandable.length}</b></span>
+                    <button type="button" className="wcr-act__b wcr-act__b--yes" disabled={!!busy} onClick={brandYesSel}>
+                      ✓ Brand approved
+                    </button>
+                    <button type="button" className="wcr-act__b wcr-act__b--no" disabled={!!busy} onClick={brandNoSel}>
+                      ✕ Brand rejected
+                    </button>
+                  </div>
+                )}
+                {!sendable.length && !brandable.length && <span className="wcr-act__hint">Pick creators on “On hold” or “Sent to brand” to approve or reject.</span>}
+              </>
             )}
-            {brandable.length > 0 && (
-              <div className="wcr-act__g">
-                <span className="wcr-act__l">Sent to brand · {brandable.length}</span>
-                <button type="button" className="wcr-act__b wcr-act__b--yes" disabled={!!busy} onClick={brandYesSel}>
-                  {busy === "byes" ? "Approving…" : `✅ Brand approved (${brandable.length})`}
-                </button>
-                <button type="button" className="wcr-act__b wcr-act__b--no" disabled={!!busy} onClick={brandNoSel}>
-                  {busy === "bno" ? "Rejecting…" : `✖ Brand rejected (${brandable.length})`}
-                </button>
-              </div>
-            )}
-            {!sendable.length && !brandable.length && <span className="wcr-act__hint">Approve / reject works for creators on On hold or Sent to brand.</span>}
-            <button type="button" className="wcr-act__x" disabled={!!busy} onClick={() => setSel([])}>
-              Clear
+            <button type="button" className="wcr-act__x" disabled={!!busy} onClick={() => setSel([])} aria-label="Clear selection">
+              ✕
             </button>
           </div>
         )}
 
-        <div className="wcr-rows">
+        <div className={`wcr-rows${sel.length ? " wcr-rows--pad" : ""}`}>
           {rows.length > 0 && <CreatorHead />}
           {rows.map((x) => (
             <CreatorRow
@@ -1000,18 +1007,27 @@ export default function WorkspaceCreators() {
         .wcr-sel:hover { border-color: #c9c4f7 !important; }
         .wcr-sel.is-set { border-color: #8b7ff5 !important; background-color: #f1efff; color: #4b3fd6; }
         .wcr-txt--no { color: #d23c3c; }
-        .wcr-act { position: sticky; bottom: 14px; z-index: 30; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin: 14px 0; padding: 12px 16px; border-radius: 16px; background: #1d1b33; color: #fff; box-shadow: 0 12px 32px rgba(20, 16, 60, .28); }
-        .wcr-act__n { font-size: 14px; display: flex; align-items: center; gap: 10px; }
-        .wcr-act__n b { font-size: 18px; }
-        .wcr-act__prog { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: rgba(255, 255, 255, .14); }
-        .wcr-act__g { display: flex; align-items: center; gap: 8px; padding-left: 16px; border-left: 1px solid rgba(255, 255, 255, .18); }
-        .wcr-act__l { font-size: 12px; font-weight: 700; opacity: .7; }
-        .wcr-act__b { height: 36px; padding: 0 14px; border: 0; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
-        .wcr-act__b:disabled { opacity: .55; cursor: default; }
-        .wcr-act__b--yes { background: #22b07d; color: #fff; }
-        .wcr-act__b--no { background: #fff; color: #d23c3c; }
-        .wcr-act__hint { font-size: 13px; opacity: .75; }
-        .wcr-act__x { margin-left: auto; border: 0; background: none; color: #fff; font-weight: 700; opacity: .8; cursor: pointer; }
+        .wcr-rows--pad { padding-bottom: 96px; }
+        .wcr-tip { font-size: 13px; font-weight: 600; color: #8a86a6; }
+        .wcr-act { position: fixed; left: calc(50% + 122px); bottom: 24px; transform: translateX(-50%); z-index: 60; display: flex; flex-wrap: nowrap; align-items: center; gap: 14px; margin: 0; max-width: calc(100vw - 300px); padding: 10px 10px 10px 18px; border-radius: 18px; background: #17152b; color: #fff; box-shadow: 0 18px 44px rgba(20, 16, 60, .35); animation: wcrUp .18s ease-out; }
+        @keyframes wcrUp { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        .wcr-act__n { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+        .wcr-act__num { min-width: 30px; height: 30px; padding: 0 8px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; background: #6657e9; font-size: 14px; font-weight: 800; }
+        .wcr-act__g { display: flex; align-items: center; gap: 8px; padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, .14); white-space: nowrap; }
+        .wcr-act__l { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .7); margin-right: 2px; }
+        .wcr-act__l b { color: #fff; }
+        .wcr-act__b { height: 36px; padding: 0 16px; border: 0; border-radius: 11px; font-size: 13px; font-weight: 800; cursor: pointer; transition: transform .08s, filter .15s; }
+        .wcr-act__b:hover:not(:disabled) { filter: brightness(1.08); }
+        .wcr-act__b:active:not(:disabled) { transform: scale(.97); }
+        .wcr-act__b:disabled { opacity: .5; cursor: default; }
+        .wcr-act__b--yes { background: #1fae78; color: #fff; }
+        .wcr-act__b--no { background: rgba(255, 255, 255, .1); color: #ff8a8a; box-shadow: inset 0 0 0 1px rgba(255, 138, 138, .45); }
+        .wcr-act__hint { font-size: 13px; color: rgba(255, 255, 255, .7); padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, .14); }
+        .wcr-act__run { display: flex; align-items: center; gap: 12px; padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, .14); font-size: 13px; font-weight: 700; white-space: nowrap; }
+        .wcr-act__bar { width: 160px; height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .15); overflow: hidden; }
+        .wcr-act__bar i { display: block; height: 100%; background: #1fae78; transition: width .2s; }
+        .wcr-act__x { width: 32px; height: 32px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .08); color: #fff; font-size: 13px; cursor: pointer; }
+        @media (max-width: 900px) { .wcr-act { left: 50%; max-width: calc(100vw - 24px); flex-wrap: wrap; } }
         .wcr-bulk { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; margin-top: 16px; }
         .wcr-all { position: relative; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ad-ink); cursor: pointer; }
         .wcr-all input { position: absolute; opacity: 0; }
