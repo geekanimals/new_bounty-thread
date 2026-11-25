@@ -197,16 +197,21 @@ export default function WorkspaceCreators() {
   const [dTo, setDTo] = useState("");
   const [sel, setSel] = useState([]);
   const [busy, setBusy] = useState("");
+  const [bulkN, setBulkN] = useState(null); // { done, total } — bulk approve/reject chal raha ho to
   const [toast, setToast] = useToast(3200);
   const [askEl, ask] = useAsk();
 
   // button tab tak "Saving…" jab tak list ka naya data (step) aa na jaaye; baaki numbers peeche se
+  // pehle list (people + tracker) — baaki chhote numbers list aane ke baad, taaki ek saath 6 bhaari calls na jaayein
   const reload = () => {
-    prog.reload(true);
-    mstats.reload(true);
-    extras.reload(true);
-    unread.reload(true);
-    return Promise.all([bt.reload(true), people.reload(true)]);
+    const main = Promise.all([bt.reload(true), people.reload(true)]);
+    main.finally(() => {
+      prog.reload(true);
+      mstats.reload(true);
+      extras.reload(true);
+      unread.reload(true);
+    });
+    return main;
   };
   const all = useMemo(() => {
     const ex = extras.data || {};
@@ -390,20 +395,13 @@ export default function WorkspaceCreators() {
     });
     if (!v) return;
     setBusy("brand");
-    let ok = 0;
-    const bad = [];
-    for (const x of sendable) {
+    const { ok, bad } = await runBulk(sendable, async (x) => {
       if (x.x.stage === "applied") {
         const a = await rpc("admin", "api.screen_participation", { p_participation: x.pid, p_eligible: true, p_reason: null });
-        if (a.error) {
-          bad.push(`${x.handle || x.name}: ${errText(a.error)}`);
-          continue;
-        }
+        if (a.error) return a.error;
       }
-      const b = await rpc("admin", "api.advance_participation", { p_participation: x.pid, p_to: "sent_to_brand", p_reason: "added to the brand's list" });
-      if (b.error) bad.push(`${x.handle || x.name}: ${errText(b.error)}`);
-      else ok++;
-    }
+      return (await rpc("admin", "api.advance_participation", { p_participation: x.pid, p_to: "sent_to_brand", p_reason: "added to the brand's list" })).error;
+    });
     setBusy("");
     setToast(`📤 ${ok} sent to the brand${bad.length ? ` · ${bad.length} not sent — ${bad[0]}` : ""}`);
     setSel([]);
@@ -505,15 +503,62 @@ export default function WorkspaceCreators() {
     const v = await rejectAsk(ask, { title: `Reject ${declinable.length} creator${declinable.length > 1 ? "s" : ""} — why don't they fit the brief?`, count: declinable.length, campaign: camp?.name });
     if (!v) return;
     setBusy("decl");
-    let ok = 0;
-    const bad = [];
-    for (const x of declinable) {
-      const { error } = await rpc("admin", "api.screen_participation", { p_participation: x.pid, p_eligible: false, p_reason: v.note || v.code });
-      if (error) bad.push(`${x.handle || x.name}: ${errText(error)}`);
-      else ok++;
-    }
+    const { ok, bad } = await runBulk(declinable, async (x) => (await rpc("admin", "api.screen_participation", { p_participation: x.pid, p_eligible: false, p_reason: v.note || v.code })).error);
     setBusy("");
     setToast(`✓ ${ok} declined — the message went to each of them${bad.length ? ` · ${bad.length} couldn't be declined (${bad[0]})` : ""}`);
+    setSel([]);
+    reload();
+  };
+
+  /* bulk: 3-3 creators ek saath (server par load kam, phir bhi tez) + "12 / 40" progress */
+  const runBulk = async (list, one) => {
+    let ok = 0;
+    const bad = [];
+    let done = 0;
+    setBulkN({ done: 0, total: list.length });
+    const queue = [...list];
+    const worker = async () => {
+      while (queue.length) {
+        const x = queue.shift();
+        const err = await one(x);
+        if (err) bad.push(`${x.handle || x.name}: ${errText(err)}`);
+        else ok++;
+        done++;
+        setBulkN({ done, total: list.length });
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    setBulkN(null);
+    return { ok, bad };
+  };
+
+  /* Sent to brand → brand ne haan / naa bola (brand ki taraf se, brand ko record dikhta hai) */
+  const brandable = sel.map((rid) => all.find((x) => x.id === rid)).filter((x) => x && x.kind === "p" && x.x?.stage === "sent_to_brand");
+  const brandYesSel = async () => {
+    if (!brandable.length) return setToast("Tick creators who are on Sent to brand first.");
+    const v = await ask({
+      title: `Approve ${brandable.length} creator${brandable.length > 1 ? "s" : ""} on the brand's behalf?`,
+      text: "Use this only when the brand told you yes (WhatsApp, call, email). The brand will see “Approved by Geek on your behalf”, and each creator gets their next step.",
+      ok: `✅ Approve ${brandable.length} for the brand`,
+      fields: [{ k: "note", label: "How did the brand say yes? (optional)" }],
+    });
+    if (!v) return;
+    const note = String(v.note || "").trim();
+    setBusy("byes");
+    const { ok, bad } = await runBulk(brandable, async (x) => (await rpc("admin", "api.brand_decide_participation", { p_participation: x.pid, p_confirm: true, p_reason: `Approved by Geek on the brand's behalf${note ? " · " + note : ""}` })).error);
+    setBusy("");
+    setToast(`✅ ${ok} approved for the brand${bad.length ? ` · ${bad.length} not done — ${bad[0]}` : ""}`);
+    setSel([]);
+    reload();
+  };
+  const brandNoSel = async () => {
+    if (!brandable.length) return setToast("Tick creators who are on Sent to brand first.");
+    const v = await rejectAsk(ask, { title: `The brand passed on ${brandable.length} creator${brandable.length > 1 ? "s" : ""} — tell them why`, count: brandable.length, campaign: camp?.name });
+    if (!v) return;
+    setBusy("bno");
+    const { ok, bad } = await runBulk(brandable, async (x) => (await rpc("admin", "api.brand_decide_participation", { p_participation: x.pid, p_confirm: false, p_reason: v.note })).error);
+    setBusy("");
+    setToast(`✖ ${ok} rejected for the brand — the message went to each of them${bad.length ? ` · ${bad.length} not done — ${bad[0]}` : ""}`);
     setSel([]);
     reload();
   };
@@ -727,8 +772,8 @@ export default function WorkspaceCreators() {
           <button type="button" className="ga-btn ga-btn--primary wcr-brand" disabled={!sendable.length || busy === "brand"} onClick={sendToBrand} title="Only the creators you send here are shown to the brand">
             {busy === "brand" ? "Sending…" : `📤 Send to brand (${sendable.length})`}
           </button>
-          <button type="button" className="wcr-txt" disabled={!declinable.length || busy === "decl"} onClick={declineSel}>
-            ✖ Decline selected ({declinable.length})
+          <button type="button" className="wcr-txt wcr-txt--no" disabled={!declinable.length || busy === "decl"} onClick={declineSel}>
+            ✖ Reject selected ({declinable.length})
           </button>
           <button type="button" className="wcr-txt" disabled={!notReg.length || busy === "re"} onClick={resendAll}>
             {busy === "re" ? "Sending…" : `↻ Resend invite to not-registered (${notReg.length})`}
@@ -775,6 +820,41 @@ export default function WorkspaceCreators() {
               reload();
             }}
           />
+        )}
+
+        {sel.length > 0 && (
+          <div className="wcr-act" role="region" aria-label="Selected creators">
+            <div className="wcr-act__n">
+              <b>{sel.length}</b> selected
+              {bulkN && <span className="wcr-act__prog">Working… {bulkN.done} / {bulkN.total}</span>}
+            </div>
+            {sendable.length > 0 && (
+              <div className="wcr-act__g">
+                <span className="wcr-act__l">On hold · {sendable.length}</span>
+                <button type="button" className="wcr-act__b wcr-act__b--yes" disabled={!!busy} onClick={sendToBrand}>
+                  {busy === "brand" ? "Sending…" : `✅ Approve — send to brand (${sendable.length})`}
+                </button>
+                <button type="button" className="wcr-act__b wcr-act__b--no" disabled={!!busy} onClick={declineSel}>
+                  {busy === "decl" ? "Rejecting…" : `✖ Reject (${declinable.length})`}
+                </button>
+              </div>
+            )}
+            {brandable.length > 0 && (
+              <div className="wcr-act__g">
+                <span className="wcr-act__l">Sent to brand · {brandable.length}</span>
+                <button type="button" className="wcr-act__b wcr-act__b--yes" disabled={!!busy} onClick={brandYesSel}>
+                  {busy === "byes" ? "Approving…" : `✅ Brand approved (${brandable.length})`}
+                </button>
+                <button type="button" className="wcr-act__b wcr-act__b--no" disabled={!!busy} onClick={brandNoSel}>
+                  {busy === "bno" ? "Rejecting…" : `✖ Brand rejected (${brandable.length})`}
+                </button>
+              </div>
+            )}
+            {!sendable.length && !brandable.length && <span className="wcr-act__hint">Approve / reject works for creators on On hold or Sent to brand.</span>}
+            <button type="button" className="wcr-act__x" disabled={!!busy} onClick={() => setSel([])}>
+              Clear
+            </button>
+          </div>
         )}
 
         <div className="wcr-rows">
@@ -919,6 +999,19 @@ export default function WorkspaceCreators() {
           background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236b7390' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 13px center; transition: border-color .15s, background-color .15s; }
         .wcr-sel:hover { border-color: #c9c4f7 !important; }
         .wcr-sel.is-set { border-color: #8b7ff5 !important; background-color: #f1efff; color: #4b3fd6; }
+        .wcr-txt--no { color: #d23c3c; }
+        .wcr-act { position: sticky; bottom: 14px; z-index: 30; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin: 14px 0; padding: 12px 16px; border-radius: 16px; background: #1d1b33; color: #fff; box-shadow: 0 12px 32px rgba(20, 16, 60, .28); }
+        .wcr-act__n { font-size: 14px; display: flex; align-items: center; gap: 10px; }
+        .wcr-act__n b { font-size: 18px; }
+        .wcr-act__prog { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: rgba(255, 255, 255, .14); }
+        .wcr-act__g { display: flex; align-items: center; gap: 8px; padding-left: 16px; border-left: 1px solid rgba(255, 255, 255, .18); }
+        .wcr-act__l { font-size: 12px; font-weight: 700; opacity: .7; }
+        .wcr-act__b { height: 36px; padding: 0 14px; border: 0; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
+        .wcr-act__b:disabled { opacity: .55; cursor: default; }
+        .wcr-act__b--yes { background: #22b07d; color: #fff; }
+        .wcr-act__b--no { background: #fff; color: #d23c3c; }
+        .wcr-act__hint { font-size: 13px; opacity: .75; }
+        .wcr-act__x { margin-left: auto; border: 0; background: none; color: #fff; font-weight: 700; opacity: .8; cursor: pointer; }
         .wcr-bulk { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; margin-top: 16px; }
         .wcr-all { position: relative; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ad-ink); cursor: pointer; }
         .wcr-all input { position: absolute; opacity: 0; }
