@@ -500,7 +500,8 @@ export default function BulkUploadCheck() {
       done: true,
       result: d,
       notes,
-      uploaded: [...rows.map((x) => ({ name: x.name, handle: x.handle, status: dispStatus(kind, x.status) })), ...flagIdx.map((i) => ({ name: rows0[i].name, handle: rows0[i].handle, status: up.rows[i].status }))],
+      // naye flag wale creators sirf ek baar (flag ke saath) gine — unka base step (Courier delivered) dobara nahi
+      uploaded: [...rows.slice(0, rows.length - newFlagRows.length).map((x) => ({ name: x.name, handle: x.handle, status: dispStatus(kind, x.status) })), ...flagIdx.map((i) => ({ name: rows0[i].name, handle: rows0[i].handle, status: up.rows[i].status }))],
       skipped: notUp,
     });
     setBusy(false);
