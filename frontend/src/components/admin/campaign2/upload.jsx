@@ -125,7 +125,7 @@ export const SPECIAL_ST = {
   advance_paid: ["advance_paid", "Advance paid", "Records an advance you already paid outside (no money is sent from here)", "Payment received", "UTR (Paid amount optional — blank = the advance due)"],
   fully_paid: ["fully_paid", "Fully paid", "Records the full / remaining payment you already made (no money is sent from here)", "Payment received", "UTR (Paid amount optional — blank = everything left)"],
   video_overdue: ["video_overdue", "Video overdue", "Marks the video as late (e.g. 3 days after the parcel arrived) — shows in Video overdue until the video comes in", "Video overdue (3 reminders, on the app)", "Reason (optional)"],
-  delivery_issue: ["delivery_issue", "Delivery issue", "Flags a logistics problem — stays in Delivery issues until resolved", "Sorry — replacement on the way", "Reason (broken / wrong product / courier lost / not delivered)"],
+  delivery_issue: ["delivery_issue", "Delivery issue", "Flags a logistics problem — stays in Delivery issues until resolved (a replacement message goes only when you press Replacement there)", "no message", "Reason (broken / wrong product / courier lost / not delivered)"],
 };
 export const SPECIAL_KEYS = ["backout", "delivery_issue", "video_overdue", "rejected", "changes_requested", "visit_booked", "visited", "visit_missed", "advance_paid", "fully_paid"];
 export const isSpecial = (k) => SPECIAL_KEYS.includes(k);

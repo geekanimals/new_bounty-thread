@@ -52,6 +52,16 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
     if (v.type === "other" && !String(v.note || "").trim()) return setMsg("⚠ Write what went wrong.");
     await run("add", "api.delivery_issue_add", { p_participation: only?.pid || null, p_invite: only?.pid ? null : only?.iid || null, p_type: v.type, p_note: String(v.note || "").trim() || null }, "Delivery issue added ✓ — it stays in Delivery issues until resolved");
   };
+  // 🔁 replacement dena hai (admin ka faisla) → creator ko "sorry, replacement arranging" — issue daalne par koi message nahi jata
+  const plan = async (r) => {
+    const v = await ask({
+      title: `🔁 Replacement for ${who(r)}?`,
+      text: "The creator gets a WhatsApp: sorry for the problem — a replacement is being arranged. Add the courier + tracking when the new parcel goes out.",
+      ok: "Yes — replacement",
+    });
+    if (!v) return;
+    await run("pl:" + r.id, "api.delivery_issue_plan_exchange", { p_id: r.id }, "🔁 Replacement on — the creator is told; add the tracking when it ships");
+  };
   // 🔁 toota / galat mila → naya product bhejo (exchange): naye parcel ka courier + tracking
   const exchange = async (r) => {
     const v = await ask({
@@ -85,14 +95,14 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
         {!only && d.open > 0 && <span className="di-chip is-bad">{d.open} open</span>}
         {!only && d.exchanging > 0 && <span className="di-chip is-info">{d.exchanging} exchange on the way</span>}
       </div>
-      {!only && <p className="di-sub">Damaged / wrong product, lost courier, not delivered — send an exchange from here; it stays until the new product is delivered or you mark it resolved.</p>}
+      {!only && <p className="di-sub">Damaged / wrong product, lost courier, not delivered. Adding an issue sends no message. Press “Replacement” only for creators who get a new product — then they are told, and again when you add the tracking.</p>}
       {rows.length > 0 && (
         <ul className="di-list">
           {rows.map((r) => (
             <li key={r.id} className={`di-row ${r.status === "resolved" ? "is-done" : ""}`}>
               <div className="di-top">
                 {!only && <b>{who(r)}</b>}
-                <span className={`di-chip ${r.status === "open" ? "is-bad" : r.status === "exchange_sent" ? "is-info" : "is-ok"}`}>{r.status === "open" ? `⚠ ${r.label}` : r.status === "exchange_sent" ? `🔁 Exchange on the way — ${r.label}` : `✓ ${r.label} — resolved`}</span>
+                <span className={`di-chip ${r.status === "open" ? "is-bad" : r.status === "exchange_sent" || r.status === "exchange_planned" ? "is-info" : "is-ok"}`}>{r.status === "open" ? `⚠ ${r.label}` : r.status === "exchange_planned" ? `🔁 Replacement planned — ${r.label}` : r.status === "exchange_sent" ? `🔁 Exchange on the way — ${r.label}` : `✓ ${r.label} — resolved`}</span>
               </div>
               {r.note && <p className="di-line">{r.note}</p>}
               <p className="di-mut">
@@ -111,8 +121,13 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
               {r.status !== "resolved" && (
                 <div className="di-acts">
                   {r.status === "open" && (
-                    <button type="button" className="ga-btn ga-btn--primary di-btn" disabled={!!busy} onClick={() => exchange(r)}>
-                      {busy === "ex:" + r.id ? "…" : r.issue_type === "courier_lost" || r.issue_type === "not_delivered" ? "🔁 Send the product again" : "🔁 Exchange — send new product"}
+                    <button type="button" className="ga-btn ga-btn--primary di-btn" disabled={!!busy} onClick={() => plan(r)}>
+                      {busy === "pl:" + r.id ? "…" : "🔁 Replacement — tell the creator"}
+                    </button>
+                  )}
+                  {(r.status === "open" || r.status === "exchange_planned") && (
+                    <button type="button" className={`ga-btn di-btn ${r.status === "exchange_planned" ? "ga-btn--primary" : "ga-btn--ghost"}`} disabled={!!busy} onClick={() => exchange(r)}>
+                      {busy === "ex:" + r.id ? "…" : r.issue_type === "courier_lost" || r.issue_type === "not_delivered" ? "📦 Sent again — add tracking" : "📦 New product sent — add tracking"}
                     </button>
                   )}
                   {r.status === "exchange_sent" && (
