@@ -10,6 +10,7 @@ import { useCampaign, useToast } from "@/components/admin/campaign/live";
 import { CreatorRow, CreatorHead, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, matchState, autoReject } from "@/components/admin/campaign/journey";
 import Backouts from "@/components/admin/campaign/Backouts";
 import DeliveryIssues from "@/components/admin/campaign/DeliveryIssues";
+import { autoOverdue } from "@/components/admin/campaign/VideoOverdue";
 import { downloadFile, loadScript, XLSX_SRC, sheetPhone } from "@/components/admin/campaign2/kit";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 import WaPanel from "@/components/admin/campaign/WaPanel";
@@ -108,12 +109,24 @@ export default function WorkspaceCreators() {
   const diOf = useMemo(() => {
     const m = {};
     ((dis.data && dis.data.rows) || []).forEach((r) => {
-      if (r.status !== "open") return;
+      if (r.status === "resolved") return;
       if (r.participation_id) m["p-" + r.participation_id] = r;
       if (r.invite_id) m["i-" + r.invite_id] = r;
     });
     return m;
   }, [dis.data]);
+  // ⏰ video overdue — team ne mark kiya (sheet / creator page) ya apne aap (delivery ke 3+ din / due date nikli)
+  // 🐾 brief details + 📦 delivered date (Excel / CSV mein)
+  const cex = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  const vos = useRpc("admin", "api.campaign_video_overdue", { p_campaign: id }, { skip: !on, refreshMs: 60000 });
+  const voOf = useMemo(() => {
+    const m = {};
+    (Array.isArray(vos.data) ? vos.data : []).forEach((r) => {
+      if (r.participation_id) m["p-" + r.participation_id] = r;
+      if (r.invite_id) m["i-" + r.invite_id] = r;
+    });
+    return m;
+  }, [vos.data]);
   // sheet upload / profile / contact — email, city, followers jo tracker mein nahi aate
   const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const kind = camp?.campaign_type || "barter";
@@ -128,15 +141,23 @@ export default function WorkspaceCreators() {
     return m;
   }, [visits.data]);
   // journey ke aakhir mein: 🚪 Backout / return (product received mark hone tak) + ⚠ Delivery issue (resolve hone tak)
-  const BX = useMemo(
-    () => [
-      ...boxesFor(kind, V),
+  const BX = useMemo(() => {
+    const base = [...boxesFor(kind, V)]; // copy — BOXES constant ko mutate nahi karna
+    const nv = base.find((b) => b.l === "No video yet");
+    const late = (c) => !!nv && nv.f(c) && (!!voOf[c.id] || autoOverdue(c));
+    const i = base.indexOf(nv);
+    if (nv) base.splice(i + 1, 0, { t: "bad", l: "Video overdue", s: "3+ days after delivery / due date passed / marked", f: late });
+    return [
+      ...base,
       { t: "bad", l: kind === "barter" || kind === "barter_paid" ? "Backout / return" : "Backout", s: kind === "barter" || kind === "barter_paid" ? "until the product is received back" : "asked to back out", f: (c) => !!boOf[c.id] },
       // delivery issue — sirf product wale campaign (paid mein product hi nahi)
-      ...(kind === "barter" || kind === "barter_paid" ? [{ t: "bad", l: "Delivery issue", s: "wrong product, courier lost … until resolved", f: (c) => !!diOf[c.id] }] : []),
-    ],
-    [kind, V, boOf, diOf]
-  );
+      ...(kind === "barter" || kind === "barter_paid" ? [{ t: "bad", l: "Delivery issue", s: "damaged / wrong product, courier lost … until resolved", f: (c) => !!diOf[c.id] }] : []),
+    ];
+  }, [kind, V, boOf, diOf, voOf]);
+  const lateOf = (c) => {
+    const b = BX.find((x) => x.l === "Video overdue");
+    return b && b.f(c) ? voOf[c.id] || { auto: true } : null;
+  };
   // Payment wale campaign (Paid / Barter + Paid / paid visit) — har creator ka UPI (ya bank) contact mein, copy ke saath
   const payCamp = kind === "paid" || kind === "barter_paid" || (kind === "visit" && ((camp?.contract_terms || {}).visit || {}).mode !== "experience");
   const pays = useRpc("admin", "api.campaign_payments", { p_campaign: id }, { skip: !on || !payCamp, refreshMs: 300000 });
@@ -305,7 +326,21 @@ export default function WorkspaceCreators() {
   // ⬇ list jaisi filter hai waisi hi — Excel / CSV
   const sheetRows = () => {
     const prod = kind === "barter" || kind === "barter_paid";
-    const head = ["Name", "Instagram", "WhatsApp", "Email", "City", "Followers", "Step", "Brief match", "What doesn't match / missing", "Next", prod ? "Backout / return" : "Backout", ...(prod ? ["Delivery issue"] : []), "Rating (avg)"];
+    const head = ["Name", "Instagram", "WhatsApp", "Email", "City", "Followers", "Step", "Brief match", "What doesn't match / missing", "Next", prod ? "Backout / return" : "Backout", ...(prod ? ["Delivery issue"] : []), "Video overdue", "Rating (avg)"];
+    const xd = cex.data || {};
+    const cr = xd.criteria || {};
+    const xr = xd.rows || {};
+    const xk = (x) => (x.kind === "p" ? "p:" + x.pid : "i:" + x.iid);
+    const pv = (e, k) => ((e && e.pets) || []).map((p) => (p && p[k]) || "").join(", ");
+    const XC = [
+      ...(prod ? [["Delivered on", (e) => (e && e.delivered_at ? new Date(e.delivered_at).toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata" }) : "")]] : []),
+      ...(cr.gender ? [["Gender", (e) => (e && e.gender) || ""]] : []),
+      ...(cr.age ? [["Age", (e) => (e && (e.age || e.dob)) || ""]] : []),
+      ...(cr.marital ? [["Marital status", (e) => (e && e.marital) || ""]] : []),
+      ...(cr.categories ? [["Categories", (e) => ((e && e.categories) || []).join(", ")]] : []),
+      ...(cr.pet ? [["Pet name", (e) => pv(e, "name")], ["Pet type", (e) => pv(e, "type")], ["Pet breed", (e) => pv(e, "breed")], ["Pet age", (e) => pv(e, "age")]] : []),
+    ];
+    head.push(...XC.map((c) => c[0]));
     const boTxt = (b) => (!b ? "" : `${b.status === "requested" ? "Backout asked" : b.status === "shipped" ? "Return on the way" : "Return pending"} · ${b.reason_note || b.reason_label || ""}`);
     return [
       head,
@@ -314,7 +349,10 @@ export default function WorkspaceCreators() {
         const ms = matchState(m);
         const di = diOf[x.id];
         const rt = (rsum.data || {})[x.id];
-        return [x.name, x.handle, sheetPhone(x.x?.phone || x.i?.phone || ""), x.x?.email || x.x?.creator?.email || x.i?.email || "", x.city === "—" ? "" : x.city, x.followersN || "", `${x.no ? `${x.no}/13 · ` : ""}${x.stepNote || ""}`, ms ? ms.label.replace(/^\S+\s/, "") : "Not checked", ms && ms.k !== "ok" ? autoReject(m).text.replace(/^This campaign needs /, "") : "", x.next || "", boTxt(boOf[x.id]), ...(prod ? [di ? `${di.label}${di.note ? " — " + di.note : ""}` : ""] : []), rt && rt.count ? `${rt.avg} (${rt.count})` : ""];
+        return [x.name, x.handle, sheetPhone(x.x?.phone || x.i?.phone || ""), x.x?.email || x.x?.creator?.email || x.i?.email || "", x.city === "—" ? "" : x.city, x.followersN || "", `${x.no ? `${x.no}/13 · ` : ""}${x.stepNote || ""}`, ms ? ms.label.replace(/^\S+\s/, "") : "Not checked", ms && ms.k !== "ok" ? autoReject(m).text.replace(/^This campaign needs /, "") : "", x.next || "", boTxt(boOf[x.id]), ...(prod ? [di ? `${di.label}${di.note ? " — " + di.note : ""}` : ""] : []), (() => {
+          const lo = lateOf(x);
+          return lo ? (lo.auto ? "Yes (3+ days / due date passed)" : `Yes — marked${lo.note ? ": " + lo.note : ""}`) : "";
+        })(), rt && rt.count ? `${rt.avg} (${rt.count})` : "", ...XC.map(([, fn]) => String(fn(xr[xk(x)]) ?? ""))];
       }),
     ];
   };
@@ -747,6 +785,7 @@ export default function WorkspaceCreators() {
               rating={(rsum.data || {})[x.id] || null}
               backout={boOf[x.id] || null}
               issue={diOf[x.id] || null}
+              overdue={lateOf(x)}
               href={`/vault/campaigns/${c.id}/creators/${x.id}`}
               checked={sel.includes(x.id)}
               onCheck={() => toggle(x.id)}

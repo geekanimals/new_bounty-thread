@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import { PageHead, Stats } from "@/components/admin/ui";
 import Drawer from "@/components/admin/queue/Drawer";
-import { useRpc, sbFor } from "@/lib/supabase";
+import { useRpc, sbFor, rpc } from "@/lib/supabase";
 import { SHIP_STATUSES, SHIP_STEPS, SHIP_STATUS } from "@/components/admin/queue/queueData";
 import { act, errText, useToast, who, ago, fmtDate } from "@/components/admin/queue/live";
 import { safeUrl } from "@/lib/supabasePublic";
@@ -56,12 +56,22 @@ export default function LogisticsView({ openId }) {
   const oid = openId ? decodeURIComponent(openId) : "";
   const open = oid ? all.find((s) => s.shipment_id === oid) || all.find((s) => s.participation_id === oid) : null;
 
+  // 📦 delivered — date pucho (khaali / aaj = aaj ki date)
+  const [delOn, setDelOn] = useState("");
   const markDelivered = async (s) => {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    const on = delOn || today;
+    if (on > today) return toast("The delivered date can’t be in the future.", true);
     setBusy(true);
     const { error: e } = await act.markDelivered(s.participation_id);
+    if (!e && on !== today) {
+      const r2 = await rpc("admin", "api.set_delivered_on", { p_participation: s.participation_id, p_invite: null, p_on: on });
+      if (r2.error) toast(`Marked delivered, but the date wasn’t saved: ${errText(r2.error)}`, true);
+    }
     setBusy(false);
     if (e) return toast(errText(e), true);
-    toast(`${who(s.creator)} · ${s.product || "product"} → Received`);
+    setDelOn("");
+    toast(`${who(s.creator)} · ${s.product || "product"} → Received on ${new Date(on + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}`);
     reload(true);
   };
   const saveCourier = async (e) => {
@@ -311,9 +321,15 @@ export default function LogisticsView({ openId }) {
             </button>
           )}
           {open.status === "shipped" && (
-            <button type="button" className="ga-btn ga-btn--primary lg-update" disabled={busy} onClick={() => markDelivered(open)}>
-              {busy ? "…" : "📦 Courier delivered"}
-            </button>
+            <>
+              <label className="lg-delon" title="The day it arrived — leave empty for today">
+                <span>Delivered on</span>
+                <input type="date" className="ga-input" value={delOn} max={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })} onChange={(e) => setDelOn(e.target.value)} />
+              </label>
+              <button type="button" className="ga-btn ga-btn--primary lg-update" disabled={busy} onClick={() => markDelivered(open)}>
+                {busy ? "…" : delOn ? "📦 Courier delivered (that day)" : "📦 Courier delivered (today)"}
+              </button>
+            </>
           )}
           {open.campaign_id && (
             <Link href={`/vault/campaigns/${open.campaign_id}/fulfilment`} className="ga-btn ga-btn--ghost lg-update lg-camp">
@@ -353,6 +369,8 @@ export default function LogisticsView({ openId }) {
       {toastNode}
 
       <style>{`
+        .lg-delon { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ad-muted); }
+        .lg-delon .ga-input { height: 36px; padding: 0 8px; width: auto; }
         .lg { padding: 22px 22px 22px; }
         .lg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .lg-import { height: 40px; padding: 0 20px 0 15px; border-color: var(--ad-line-2); }

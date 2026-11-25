@@ -14,7 +14,7 @@ import { useCampaign, campKind } from "@/components/admin/campaign/live";
 // [key, label, heading regex] — purane BK_FIELDS jaisa (order zaroori hai: pehle wala column le leta hai)
 export const BK_FIELDS = [
   ["name", "Name", /^(full ?name|name|creator( name)?|influencer( name)?)$/i],
-  ["fee", "Fee (₹)", /^(?!.*(advance|%|day|term|note|mode|method|status|upi|account|ifsc|bank|follower|product)).*(fee|amount|commercials?|price|rate|charges?|budget|deal value|payment)/i],
+  ["fee", "Fee (₹)", /^(?!.*(advance|%|day|term|note|mode|method|status|upi|account|ifsc|bank|follower|product|paid|utr)).*(fee|amount|commercials?|price|rate|charges?|budget|deal value|payment)/i],
   ["advance_pct", "Advance %", /advance/i],
   ["pay_days", "Pay days", /^(?!.*(content|video|post ?due)).*(pay(ment)? ?(days|after|due)|days? (to|for|till) pay)/i],
   ["pay_terms", "Terms", /(pay(ment)? ?terms|^terms$|payment ?note)/i],
@@ -29,9 +29,26 @@ export const BK_FIELDS = [
   ["email", "Email", /(e-?mail|mail id)/i],
   ["city", "City", /(city|location|place|town)/i],
   ["followers", "Followers", /(follower|followers|reach|fans)/i],
-  ["status", "Status", /^(?!.*(mail|address|track|reason)).*(status|stage|phase|step|approv|selected|confirm|final|shortlist|tick|✓)/i],
+  // brief (eligibility) ke columns — status se pehle, taaki "Marital status" Status na ban jaye
+  ["gender", "Gender", /^(gender|sex)$/i],
+  ["age", "Age", /^(age|age \(years\)|date of birth|dob|birthday|birth ?date)$/i],
+  ["marital", "Marital status", /marital|married/i],
+  ["categories", "Categories", /(categor|niche|genre)/i],
+  ["pet_name", "Pet name", /^pets?( ?\d)? ?names?$|^pets?$/i],
+  ["pet_type", "Pet type", /^pets?( ?\d)? ?(type|kind|animal)s?$/i],
+  ["pet_breed", "Pet breed", /^(pets?( ?\d)? ?)?breeds?$/i],
+  ["pet_age", "Pet age", /^pets?( ?\d)? ?ages?$/i],
+  ["delivered_on", "Delivered on", /(delivered ?(on|date)|deliver(y|ed)? ?date|date ?(of )?deliver)/i],
+  ["status", "Status", /^(?!.*(mail|address|track|reason|marital)).*(status|stage|phase|step|approv|selected|confirm|final|shortlist|tick|✓)/i],
   // Backout / Delivery issue rows: kyun (backout reason / kya issue hua)
   ["reason", "Reason", /^(?!.*(status|stage|step)).*(reason|issue|problem|remark|why|comment)/i],
+  // Visit campaign: Visit booked ke saath
+  ["visit_on", "Visit date", /visit ?(date|on|day)|date of visit/i],
+  ["slot", "Slot", /^(slot|time ?slot|visit ?(time|slot))$/i],
+  // Advance paid / Fully paid (sirf record — paisa sheet se nahi jaata)
+  ["paid_amount", "Paid amount", /(paid ?amount|amount ?paid|paid ?\(?₹|payment ?done ?amount)/i],
+  ["utr", "UTR", /(utr|transaction ?(id|no|ref)|txn|payment ?ref)/i],
+  ["paid_on", "Paid on", /(paid ?(on|date)|payment ?date|date ?(of )?pay(ment)?)/i],
   ["address", "Address", /^(?!.*(e-?mail|mail id)).*(address|addr\b)/i],
   ["state", "State", /^(state|province)\b/i],
   ["pincode", "PIN code", /(pin ?code|^pin\b|zip|postal|post ?code)/i],
@@ -40,12 +57,43 @@ export const BK_FIELDS = [
   ["coupon", "Coupon code", /^(?!.*(barter|track|awb|pin|zip|postal)).*(coupon|promo ?code|discount ?code|voucher|creator ?code|^code$)/i],
 ];
 // Figma ke match grid ka order
-export const GRID_ORDER = ["name", "handle", "phone", "email", "city", "followers", "status", "reason", "address", "state", "pincode", "courier", "tracking", "video_link", "post_link", "coupon", "fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
+export const GRID_ORDER = ["name", "handle", "phone", "email", "city", "followers", "gender", "age", "marital", "categories", "pet_name", "pet_type", "pet_breed", "pet_age", "status", "reason", "delivered_on", "visit_on", "slot", "paid_amount", "utr", "paid_on", "address", "state", "pincode", "courier", "tracking", "video_link", "post_link", "coupon", "fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
 const PAY_KEYS = ["fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
 const SHIP_COLS = ["address", "state", "pincode", "courier", "tracking"];
 // Physical visit: koi product nahi — paid jaisa (fee / UPI columns, address / courier nahi)
 const noShip = (kind) => kind === "paid" || kind === "visit";
-export const fieldsFor = (kind) => BK_FIELDS.filter(([f]) => !(kind === "barter" && PAY_KEYS.includes(f)) && !(noShip(kind) && SHIP_COLS.includes(f)));
+const VISIT_KEYS = ["visit_on", "slot"];
+const PAID_KEYS = ["paid_amount", "utr", "paid_on"];
+export const fieldsFor = (kind) => BK_FIELDS.filter(([f]) => !(kind === "barter" && (PAY_KEYS.includes(f) || PAID_KEYS.includes(f))) && !(noShip(kind) && [...SHIP_COLS, "delivered_on"].includes(f)) && !(kind !== "visit" && VISIT_KEYS.includes(f)));
+/* brief ke criteria (api.campaign_creator_extras.criteria) → kaun se columns chahiye (required) */
+export const CRIT_COLS = [
+  ["gender", "gender", "Gender"],
+  ["age", "age", "Age"],
+  ["marital", "marital", "Marital status"],
+  ["categories", "categories", "Categories"],
+  ["pet", "pet_name", "Pet name"],
+  ["pet", "pet_type", "Pet type"],
+  ["pet", "pet_breed", "Pet breed"],
+  ["pet", "pet_age", "Pet age"],
+];
+export const critFields = (crit) => CRIT_COLS.filter(([c]) => crit && crit[c]).map(([, f, l]) => [f, l]);
+// ek cell mein kai values (kai pets): "Bruno, Kitty" · "Dog; Cat" · new line
+const splitMany = (v) => String(v || "").split(/\s*[,;\n|]\s*/).map((x) => x.trim()).filter(Boolean);
+export function profileOf(get) {
+  const names = splitMany(get("pet_name")), types = splitMany(get("pet_type")), breeds = splitMany(get("pet_breed")), ages = splitMany(get("pet_age"));
+  const n = Math.max(names.length, types.length, breeds.length, ages.length);
+  const pets = Array.from({ length: n }, (_, i) => ({ name: names[i] || "", type: types[i] || (types.length === 1 ? types[0] : ""), breed: breeds[i] || "", age: ages[i] || "" })).filter((p) => p.name || p.type);
+  const age = String(get("age") || "").trim();
+  const p = {
+    gender: String(get("gender") || "").trim() || undefined,
+    ...(/[/-]|\d{4}/.test(age) ? { dob: age } : age ? { age } : {}),
+    marital: String(get("marital") || "").trim() || undefined,
+    categories: splitMany(get("categories")).length ? splitMany(get("categories")) : undefined,
+    pets: pets.length ? pets : undefined,
+  };
+  Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
+  return Object.keys(p).length ? p : null;
+}
 
 // [key, label, what happens, message] — purane BK_STATUSES
 const BASE_ST = [
@@ -69,11 +117,26 @@ const SHIP_ST = ["address_confirmed", "courier_sent", "courier_delivered"];
 export const SPECIAL_ST = {
   backout: ["backout", "Backout", "Creates a backout request — it waits for your approval in Backouts", "no message", "Reason (why they back out)"],
   backout_return: ["backout", "Backout / return product", "Creates a backout request — approve it with the return address in Backouts & returns", "no message", "Reason (why they back out)"],
-  delivery_issue: ["delivery_issue", "Delivery issue", "Flags a logistics problem — stays in Delivery issues until resolved", "no message", "Reason (wrong product / courier lost / damaged / not delivered)"],
+  rejected: ["rejected", "Rejected / Not a fit", "Takes them off the campaign (screening / brand said no) — they get the “not selected” message", "Not selected (with your reason)", "Reason (why)"],
+  changes_requested: ["changes_requested", "Changes requested", "Client wants changes in the submitted video — the creator is asked to re-submit", "Changes requested (with your note)", "Reason (what to change)"],
+  visit_booked: ["visit_booked", "Visit booked", "Sets their visit date (+ slot)", "Visit booked", "Visit date (Slot optional)"],
+  visited: ["visited", "Visited", "Came to the place → the video brief goes out, video deadline starts", "Video brief", ""],
+  visit_missed: ["visit_missed", "Missed visit", "Didn’t come — book a new date later", "no message", ""],
+  advance_paid: ["advance_paid", "Advance paid", "Records an advance you already paid outside (no money is sent from here)", "Payment received", "UTR (Paid amount optional — blank = the advance due)"],
+  fully_paid: ["fully_paid", "Fully paid", "Records the full / remaining payment you already made (no money is sent from here)", "Payment received", "UTR (Paid amount optional — blank = everything left)"],
+  video_overdue: ["video_overdue", "Video overdue", "Marks the video as late (e.g. 3 days after the parcel arrived) — shows in Video overdue until the video comes in", "no message", "Reason (optional)"],
+  delivery_issue: ["delivery_issue", "Delivery issue", "Flags a logistics problem — stays in Delivery issues until resolved", "no message", "Reason (broken / wrong product / courier lost / not delivered)"],
 };
-export const SPECIAL_KEYS = ["backout", "delivery_issue"];
+export const SPECIAL_KEYS = ["backout", "delivery_issue", "video_overdue", "rejected", "changes_requested", "visit_booked", "visited", "visit_missed", "advance_paid", "fully_paid"];
 export const isSpecial = (k) => SPECIAL_KEYS.includes(k);
-const specialFor = (kind) => (noShip(kind) ? [SPECIAL_ST.backout] : [SPECIAL_ST.backout_return, SPECIAL_ST.delivery_issue]);
+// campaign type ke hisaab se extra statuses (journey steps ke baad)
+const specialFor = (kind) => {
+  const S = SPECIAL_ST;
+  const pay = kind === "barter" ? [] : [S.advance_paid, S.fully_paid];
+  if (kind === "visit") return [S.visit_booked, S.visited, S.visit_missed, S.video_overdue, S.changes_requested, ...pay, S.rejected, S.backout];
+  if (kind === "paid") return [S.video_overdue, S.changes_requested, ...pay, S.rejected, S.backout];
+  return [S.video_overdue, S.changes_requested, ...pay, S.rejected, S.backout_return, S.delivery_issue];
+};
 export function statusesFor(kind) {
   return [...journeyStatusesFor(kind), ...specialFor(kind)];
 }
@@ -93,8 +156,9 @@ function journeyStatusesFor(kind) {
   return BASE_ST;
 }
 export const stRank = (k) => Math.max(0, BASE_ST.findIndex((x) => x[0] === k)) + 1;
-export const stLabel = (k) => (k === "backout" ? "Backout" : k === "delivery_issue" ? "Delivery issue" : (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[1]);
-export const stMsg = (k) => (isSpecial(k) ? "no message" : (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[3]);
+const spOf = (k) => (k === "backout" ? SPECIAL_ST.backout : Object.values(SPECIAL_ST).find((x) => x[0] === k));
+export const stLabel = (k) => (isSpecial(k) ? spOf(k)[1] : (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[1]);
+export const stMsg = (k) => (isSpecial(k) ? spOf(k)[3] : (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[3]);
 export const KIND_LABEL = { barter: "🎁 Barter campaign", barter_paid: "🎁💰 Barter + Paid campaign", paid: "💰 Paid campaign", visit: "📍 Physical visit campaign" };
 export const bkKindOf = (c) => {
   const k = c ? campKind(c) : "barter";
@@ -126,7 +190,15 @@ export function parseStatus(v) {
     client_approved: ["client approved", "video approved", "content approved"],
     posted: ["posted", "live", "published", "reel posted", "done", "completed", "complete", "posted / done", "posted/done", "posted done"],
     backout: ["backout", "back out", "backed out", "back-out", "withdraw", "withdrawn", "withdrew", "left", "left campaign", "dropped out", "return", "return product", "returning", "returning product", "product return", "backout / return product", "backout/return", "backout / return"],
-    delivery_issue: ["delivery issue", "logistics issue", "issue", "wrong product", "wrong product delivered", "courier lost", "lost", "parcel lost", "damaged", "product damaged", "not delivered", "stuck in transit", "rto"],
+    rejected: ["rejected", "reject", "not a fit", "not fit", "not selected", "declined", "brand declined", "brand rejected", "no", "n", "rejected / not a fit"],
+    changes_requested: ["changes requested", "changes", "change requested", "changes asked", "revision", "revision requested", "redo", "re-shoot", "reshoot", "edit required"],
+    visit_booked: ["visit booked", "booked", "visit scheduled", "scheduled", "visit fixed"],
+    visited: ["visited", "visit done", "came", "attended"],
+    visit_missed: ["missed visit", "visit missed", "missed", "no show", "no-show", "did not come", "didn't come"],
+    advance_paid: ["advance paid", "advance done", "advance"],
+    fully_paid: ["fully paid", "paid", "payment done", "full payment", "full paid", "paid in full", "payment complete"],
+    video_overdue: ["video overdue", "overdue", "video late", "late", "late video", "no video", "video pending", "pending video", "video not received", "video not sent", "video due"],
+    delivery_issue: ["delivery issue", "logistics issue", "issue", "exchange", "exchange product", "product exchange", "replacement", "replace", "broken", "wrong size", "wrong product", "wrong product delivered", "courier lost", "lost", "parcel lost", "damaged", "product damaged", "not delivered", "stuck in transit", "rto"],
   };
   for (const k in M) if (M[k].includes(t)) return k;
   return null;
@@ -280,10 +352,11 @@ export function rowData(up, r, kind) {
   const sp = isSpecial(st);
   return {
     // backout / delivery issue: server ko journey step nahi — "flag" alag se (api.bulk_flag_rows)
-    ...(sp ? { flag: st, reason: g0("reason"), raw: up.map.status != null ? String(r.cells[up.map.status] || "").trim() : "" } : {}),
+    ...(sp ? { flag: st, reason: g0("reason"), raw: up.map.status != null ? String(r.cells[up.map.status] || "").trim() : "", visit_on: g0("visit_on"), slot: g0("slot"), amount: g0("paid_amount"), utr: g0("utr"), paid_on: g0("paid_on") } : {}),
     name: g("name"), handle: g("handle"), phone: isPhoneLike(g("phone")) ? g("phone") : "", email: g("email"), city: g("city"), followers: g("followers"),
     status: sp ? "registered" : serverStatus(kind, st), approved: !sp && stRank(st) >= 4,
     address: g("address"), state: g("state"), pincode: g("pincode"), courier: g("courier"), tracking: g("tracking"),
+    profile: profileOf(g0), delivered_on: g0("delivered_on"),
     post_link: g("post_link"), video_link: g("video_link"), coupon: g0("coupon").toUpperCase().replace(/\s+/g, ""),
     fee: g("fee"), advance_pct: g("advance_pct"), pay_days: g("pay_days"), pay_terms: g("pay_terms"), upi: g("upi"), account_no: g("account_no"), ifsc: g("ifsc"), account_name: g("account_name"),
   };
@@ -311,7 +384,13 @@ export function siteRank(ex) {
   return Math.max(a ? stRank(a) : 0, b && BASE_ST.some((x) => x[0] === b) ? stRank(b) : 0);
 }
 export function rowNeeds(up, r, d, ex, kind) {
-  if (isSpecial(r.status)) return String(d.reason || "").trim() ? [] : [{ step: stLabel(r.status), cols: [up.map.reason == null ? "Reason (no “Reason” column)" : "Reason"] }];
+  if (isSpecial(r.status)) {
+    // har extra status ko kya chahiye
+    const need = { rejected: ["reason", "Reason"], changes_requested: ["reason", "Reason"], backout: ["reason", "Reason"], delivery_issue: ["reason", "Reason"], visit_booked: ["visit_on", "Visit date"], advance_paid: ["utr", "UTR"], fully_paid: ["utr", "UTR"] }[r.status];
+    if (!need) return [];
+    const v = need[0] === "reason" ? d.reason : need[0] === "visit_on" ? d.visit_on : d.utr;
+    return String(v || "").trim() ? [] : [{ step: stLabel(r.status), cols: [up.map[need[0] === "visit_on" ? "visit_on" : need[0]] == null ? `${need[1]} (no “${need[1]}” column)` : need[1]] }];
+  }
   const rank = stRank(serverStatus(kind, r.status || "registered")),
     sr = siteRank(ex),
     out = [];
@@ -340,6 +419,13 @@ export function rowHard(up, r, ex, kind) {
   if (r.status === "delivery_issue" && noShip(kind)) return "This campaign has no product — Delivery issue doesn’t apply";
   if (!ex) return `“${stLabel(r.status)}” is only for creators already on this campaign — add them first`;
   if (r.status === "delivery_issue" && siteRank(ex) < stRank("courier_sent")) return "Delivery issue needs the product shipped first (Courier sent or later)";
+  if (["visit_booked", "visited", "visit_missed"].includes(r.status) && kind !== "visit") return "Visit statuses are only for physical visit campaigns";
+  if (["advance_paid", "fully_paid"].includes(r.status) && kind === "barter") return "This campaign has no payment";
+  if (["advance_paid", "fully_paid", "changes_requested"].includes(r.status) && !ex.stage) return `“${stLabel(r.status)}” is for creators on the Geek app — this one is only on the sheet`;
+  if (r.status === "changes_requested" && FROM_STAGE[ex.stage] !== "video_submitted") return "Changes can be asked only after the video is submitted";
+  if (r.status === "rejected" && siteRank(ex) >= stRank("posted")) return "The post is already live — can’t reject now";
+  if (r.status === "video_overdue" && (siteRank(ex) < stRank(noShip(kind) ? "contract_signed" : "courier_delivered") || siteRank(ex) >= stRank("video_submitted")))
+    return "Video overdue is only for creators who got the product / brief and haven’t sent the video yet";
   return null;
 }
 // row upload kyun NAHI hogi (null = jayegi)

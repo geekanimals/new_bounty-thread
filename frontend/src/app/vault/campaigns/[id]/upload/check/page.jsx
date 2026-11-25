@@ -7,7 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Note, useToast, inr } from "@/components/admin/campaign2/kit";
 import { rpc, invoke, errText } from "@/lib/supabase";
-import { UploadCard, MsgOff, loadUpload, saveUpload, rowData, rowBlock, rowHard, isSpecial, isPhoneLike, sheetLine, statusesFor, stRank, stLabel, stMsg, dispStatus, useUploadKind } from "@/components/admin/campaign2/upload";
+import { UploadCard, MsgOff, loadUpload, saveUpload, rowData, rowBlock, rowHard, isSpecial, critFields, isPhoneLike, sheetLine, statusesFor, stRank, stLabel, stMsg, dispStatus, useUploadKind } from "@/components/admin/campaign2/upload";
 
 /*
  * Bulk upload · step 3 — purane bkCheck / bulkHtml / bkUpload jaisa:
@@ -66,15 +66,22 @@ function mergeRepeats(all, pv) {
   });
 }
 // sheet aur Geek OS mein alag details → purane jaisa har row mein chuno: "Keep Geek OS" (default) ya "Use the sheet" (bulk_apply_choice)
-const DIFF = [["addr", ["address", "city", "state", "pincode"]], ["ship", ["courier", "tracking"]], ["video", ["video_link"]]];
-const DIFF_LABEL = { addr: "🏠 Address", ship: "🚚 Courier & tracking", video: "🎬 Video link" };
+// "ig": same WhatsApp / email, Instagram badla — default naya handle (sheet) save hota hai
+const DIFF = [["ig", ["handle"]], ["addr", ["address", "city", "state", "pincode"]], ["ship", ["courier", "tracking"]], ["video", ["video_link"]]];
+const DIFF_LABEL = { ig: "📸 Instagram (changed handle — same number / email)", addr: "🏠 Address", ship: "🚚 Courier & tracking", video: "🎬 Video link" };
+const hNorm = (v) => String(v || "").trim().toLowerCase().replace(/^.*instagram\.com\/([^/?#]+).*$/, "$1").replace(/^@/, "");
+const pickOf = (pk, g) => (pk || {})[g] || (g === "ig" ? "sheet" : "site");
 /** is row mein kaun se groups Geek OS se alag hain → [{ g, site, sheet }] */
 function diffsOf(d, ex, kind) {
   const v = (ex && ex.vals) || {};
   const out = [];
   DIFF.forEach(([g, ks]) => {
-    if ((kind === "paid" || kind === "visit") && g !== "video") return;
+    if ((kind === "paid" || kind === "visit") && !["video", "ig"].includes(g)) return;
     const site = (k) => (k === "video_link" ? v.video : v[k]);
+    if (g === "ig") {
+      if (hNorm(d.handle) && v.handle && hNorm(d.handle) !== hNorm(v.handle)) out.push({ g, site: "@" + hNorm(v.handle), sheet: "@" + hNorm(d.handle) });
+      return;
+    }
     if (ks.some((k) => String(d[k] || "").trim() && site(k) && norm(d[k]) !== norm(site(k)) && !(k === "pincode" && norm(site(k)) && norm(d.address).includes(norm(site(k))))))
       out.push({ g, site: ks.map(site).filter(Boolean).join(" · "), sheet: ks.map((k) => d[k]).filter(Boolean).join(" · ") });
   });
@@ -85,8 +92,16 @@ function keepSite(d, ex, kind, pick = {}) {
   const v = (ex && ex.vals) || {};
   let n = 0;
   DIFF.forEach(([g, ks]) => {
-    if ((kind === "paid" || kind === "visit") && g !== "video") return;
-    if (pick[g] === "sheet") return;
+    if ((kind === "paid" || kind === "visit") && !["video", "ig"].includes(g)) return;
+    if (g === "ig") {
+      // "Keep Geek OS" → purana handle hi bhejo (naya handle row mein na jaye)
+      if (pickOf(pick, g) === "site" && v.handle && hNorm(d.handle) !== hNorm(v.handle)) {
+        d.handle = v.handle;
+        n++;
+      }
+      return;
+    }
+    if (pickOf(pick, g) === "sheet") return;
     const site = (k) => (k === "video_link" ? v.video : v[k]);
     if (ks.some((k) => String(d[k] || "").trim() && site(k) && norm(d[k]) !== norm(site(k)) && !(k === "pincode" && norm(site(k)) && norm(d.address).includes(norm(site(k)))))) {
       ks.forEach((k) => (d[k] = ""));
@@ -213,6 +228,11 @@ export default function BulkUploadCheck() {
     else if (p.phone_bad) out.push({ t: "warn", f: "phone", m: `WhatsApp number “${d.phone}” looks wrong` });
     const re = rawOf(r, "email");
     if ((re && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(re)) || p.email_bad) out.push({ t: "warn", f: "email", m: `Email “${re.slice(0, 40)}” looks wrong` });
+    // brief (eligibility) ke columns — required: khaali ho to saaf dikhao (row phir bhi jaati hai, message ke saath)
+    if (!isSpecial(r.status)) {
+      const miss = critFields(up.crit).filter(([f]) => !String(rawOf(r, f) || "").trim()).map(([, l]) => (up.map[critFields(up.crit).find((x) => x[1] === l)[0]] == null ? `${l} (no column)` : l));
+      if (miss.length) out.push({ t: "warn", f: "crit", m: `Required by the brief, missing: ${miss.join(", ")}` });
+    }
     if (!d.name) out.push({ t: "warn", f: "name", m: "No name" });
     if (!d.handle) out.push({ t: "warn", f: "handle", m: "No Instagram handle" });
     return out;
@@ -237,10 +257,10 @@ export default function BulkUploadCheck() {
       anyIdx.forEach((i) => (n[i] = allAnyway ? undefined : "anyway"));
       return n;
     });
-  const FIX = [["name", "Name"], ["handle", "Instagram"], ["phone", "WhatsApp"], ["email", "Email"], ["city", "City"], ["address", "Address"], ["state", "State"], ["pincode", "PIN code"], ["courier", "Courier"], ["tracking", "Tracking ID"], ["video_link", "Video link"], ["post_link", "Post link"], ["reason", "Reason"]];
+  const FIX = [["name", "Name"], ["handle", "Instagram"], ["phone", "WhatsApp"], ["email", "Email"], ["city", "City"], ["address", "Address"], ["state", "State"], ["pincode", "PIN code"], ["courier", "Courier"], ["tracking", "Tracking ID"], ["video_link", "Video link"], ["post_link", "Post link"], ["reason", "Reason"], ["visit_on", "Visit date"], ["slot", "Slot"], ["utr", "UTR"], ["paid_amount", "Paid amount"], ["paid_on", "Paid on"], ["gender", "Gender"], ["age", "Age"], ["marital", "Marital status"], ["categories", "Categories"], ["pet_name", "Pet name"], ["pet_type", "Pet type"], ["pet_breed", "Pet breed"], ["pet_age", "Pet age"], ["delivered_on", "Delivered on"]];
   const fixFields = (i) => {
     const b = String(block[i] || "") + issues[i].map((x) => x.f || "").join(" ");
-    return FIX.filter(([k, l]) => ["name", "handle", "phone", "email", "city"].includes(k) || b.toLowerCase().includes(l.toLowerCase()) || (k === "pincode" && /pin/i.test(b)) || (k === "tracking" && /tracking/i.test(b)));
+    return FIX.filter(([k, l]) => ["name", "handle", "phone", "email", "city"].includes(k) || (b.includes("crit") && critFields(up.crit).some((x) => x[0] === k)) || b.toLowerCase().includes(l.toLowerCase()) || (k === "pincode" && /pin/i.test(b)) || (k === "tracking" && /tracking/i.test(b)));
   };
   const openFix = (i) => {
     const v = {};
@@ -286,12 +306,23 @@ export default function BulkUploadCheck() {
     if (!p) return { main: "…" };
     if (isSpecial(st)) {
       const rsn = String(data[i].reason || "").trim();
+      const dd = data[i];
+      if (st === "video_overdue") return { main: `⏰ Marked video overdue${rsn ? ` — “${rsn.slice(0, 60)}”` : ""} · shows in Video overdue until the video comes in`, sends: "✉️ no message" };
+      if (st === "rejected") return { main: `✗ Rejected / not a fit${rsn ? ` — “${rsn.slice(0, 60)}”` : ""} · ${p.on_platform || (ex[i] && ex[i].stage) ? "taken off the campaign" : "removed from the sheet"}`, sends: "✉️ sends: Not selected (with your reason)" };
+      if (st === "changes_requested") return { main: `✏️ Changes requested on the video${rsn ? ` — “${rsn.slice(0, 60)}”` : ""}`, sends: "✉️ sends: Changes requested (with your note)" };
+      if (st === "visit_booked") return { main: `📅 Visit booked for ${dd.visit_on || "—"}${dd.slot ? ` · ${dd.slot}` : ""}`, sends: "✉️ sends: Visit booked" };
+      if (st === "visited") return { main: "✅ Visited — the video brief goes out, the video deadline starts today", sends: "✉️ sends: Video brief" };
+      if (st === "visit_missed") return { main: "Missed the visit — book a new date later", sends: "✉️ no message" };
+      if (st === "advance_paid" || st === "fully_paid")
+        return { main: `💰 ${st === "fully_paid" ? "Fully paid" : "Advance paid"} — ${dd.amount ? "₹" + dd.amount : st === "fully_paid" ? "everything left" : "the advance due"} · UTR ${dd.utr || "—"}${dd.paid_on ? ` · ${dd.paid_on}` : ""} · only recorded, no money is sent`, sends: "✉️ sends: Payment received" };
       return st === "delivery_issue"
         ? { main: `⚠ Delivery issue on this creator${rsn ? ` — “${rsn.slice(0, 60)}”` : ""} · they stay on their step · shows in Delivery issues until resolved`, sends: "✉️ no message" }
         : { main: `🚪 Backout request${rsn ? ` — “${rsn.slice(0, 60)}”` : ""} · waits for your approval in ${kind === "paid" || kind === "visit" ? "Backouts" : "Backouts & returns"}`, sends: "✉️ no message now (the creator is told when you approve / decline)" };
     }
     if (p.multi) return { main: `📸 Same ${p.multi.by} as row ${sheetLine(up, p.multi.row)} — @${p.multi.handle} is added to that creator as another Instagram`, good: true };
     if (p.duplicate) return { main: `Same Instagram / number as row ${sheetLine(up, p._dupOf != null ? p._dupOf : 0)} — merged into that row` };
+    const igd = diffsOf(data[i], ex[i], kind).find((x) => x.g === "ig");
+    if (p.already && igd && pickOf(picks[i], "ig") === "sheet") return { main: `Already in — same WhatsApp / email, new Instagram ${igd.sheet} → saved on this creator (old ${igd.site} kept in their record)`, good: true };
     if (p.already) return { main: `Already in${p.live_stage ? ` · ${String(p.live_stage).replace(/_/g, " ")}` : ""} — nothing new in this row · skipped` };
     const main = p.on_platform ? (p.stage ? `Already in · ${String(p.stage).replace(/_/g, " ")} → ${stLabel(st)}` : `On Geek OS${p.who ? ` · ${p.who}` : ""} — added now → ${stLabel(st)}`) : `New — joins on ${stLabel(st)} after sign-up`;
     const m0 = stMsg(st);
@@ -312,7 +343,7 @@ export default function BulkUploadCheck() {
     rows0.forEach((d, i) => {
       const pk = picks[i] || {};
       diffsOf(d, ex[i], kind).forEach(({ g }) => {
-        if (pk[g] !== "sheet") return;
+        if (pickOf(pk, g) !== "sheet") return;
         const o = { group: g, phone: d.phone, email: d.email, handle: d.handle };
         (DIFF.find((x) => x[0] === g) || [, []])[1].forEach((k) => (o[k] = d[k]));
         useSheet.push(o);
@@ -320,7 +351,7 @@ export default function BulkUploadCheck() {
     });
     rows0.forEach((d, i) => (kept += keepSite(d, ex[i], kind, picks[i])));
     mergeRepeats(rows0, P);
-    const why = up.rows.map((r, i) => (choice[i] === "skip" && !block[i] ? "Skipped by you" : block[i] && !include(i) ? block[i] : P[i] && P[i].already && !rows0[i]._merged ? "Already in this campaign — nothing new in the row" : null));
+    const why = up.rows.map((r, i) => (choice[i] === "skip" && !block[i] ? "Skipped by you" : block[i] && !include(i) ? block[i] : P[i] && P[i].already && !rows0[i]._merged ? (diffsOf(data[i], ex[i], kind).some((x) => x.g === "ig") && pickOf(picks[i], "ig") === "sheet" ? "Already in — only the new Instagram handle was saved" : "Already in this campaign — nothing new in the row") : null));
     up.rows.forEach((r, i) => {
       if (!why[i] && P[i] && P[i].duplicate) why[i] = P[i].multi ? `Same ${P[i].multi.by} as row ${sheetLine(up, P[i].multi.row)} — @${P[i].multi.handle} added to that creator as another Instagram` : `Repeat of row ${sheetLine(up, P[i]._dupOf != null ? P[i]._dupOf : 0)} — same person, merged into that row`;
     });
@@ -351,25 +382,56 @@ export default function BulkUploadCheck() {
         return false;
       }
       const f = fr.data || {};
-      flagNote = [f.backouts ? `🚪 ${f.backouts} backout request${f.backouts > 1 ? "s" : ""} created — approve them in Backouts` : "", f.issues ? `⚠ ${f.issues} delivery issue${f.issues > 1 ? "s" : ""} added` : "", (f.errors || []).length ? `Not marked: ${(f.errors || []).slice(0, 10).map((x) => `Row ${x.row}: ${x.error}`).join(" · ")}` : ""].filter(Boolean).join(" · ");
+      flagNote = [f.backouts ? `🚪 ${f.backouts} backout request${f.backouts > 1 ? "s" : ""} created — approve them in Backouts` : "", f.issues ? `⚠ ${f.issues} delivery issue${f.issues > 1 ? "s" : ""} added` : "", f.overdue ? `⏰ ${f.overdue} marked video overdue` : "", ...Object.entries(f.counts || {}).filter(([k]) => !["backout", "delivery_issue", "video_overdue"].includes(k)).map(([k, v]) => `${v} × ${stLabel(k)}`), (f.errors || []).length ? `Not marked: ${(f.errors || []).slice(0, 10).map((x) => `Row ${x.row}: ${x.error}`).join(" · ")}` : ""].filter(Boolean).join(" · ");
       (f.errors || []).forEach((x) => {
         const fr0 = flagRows.find((y) => y.row === x.row) || {};
         notUp.push({ row: x.row, name: (rows0[flagIdx[flagRows.indexOf(fr0)]] || {}).name || "", handle: x.handle, phone: fr0.phone || "", email: fr0.email || "", status: fr0.flag || "backout", reason: x.error });
       });
       return true;
     };
+    // brief details (gender / age / pets …) + Delivered on → account + sheet (api.bulk_sheet_extras), upload ke baad
+    const extraRows = rows0
+      .map((d, i) => ({ d, i }))
+      // "already in" rows bhi — sheet se pets / delivered date bharne ke liye dobara upload
+      .filter(({ d, i }) => (include(i) || (P[i] && P[i].already)) && !(P[i] && P[i].duplicate) && (d.profile || String(d.delivered_on || "").trim()))
+      .map(({ d, i }) => ({ row: sheetLine(up, i), handle: d.handle, phone: d.phone, email: d.email, profile: d.profile, delivered_on: String(d.delivered_on || "").trim() || null }));
+    let extraNote = "";
+    const doExtras = async () => {
+      if (!extraRows.length) return;
+      const xr = await rpc("admin", "api.bulk_sheet_extras", { p_campaign: id, p_rows: extraRows });
+      if (xr.error) return (extraNote = "Brief details / delivered dates not saved: " + errText(xr.error));
+      const x = xr.data || {};
+      extraNote = [x.profiles ? `🐾 Brief details saved for ${x.profiles} creator${x.profiles > 1 ? "s" : ""}` : "", x.delivered ? `📦 Delivered date set for ${x.delivered}` : "", (x.errors || []).length ? `Not saved: ${(x.errors || []).slice(0, 8).map((e) => `Row ${e.row}: ${e.error}`).join(" · ")}` : ""].filter(Boolean).join(" · ");
+    };
     if (!rows.length && flagRows.length) {
       setBusy(true);
       setErr("");
+      // Fee / UPI columns pehle (Advance paid / Fully paid ke liye fee chahiye)
+      const pr = rows0.map((d, i) => ({ ...d, i: String(i + 2) })).filter((d) => d.fee || d.upi || d.account_no);
+      if (pr.length && kind !== "barter") {
+        const st = await rpc("admin", "api.bulk_stage_payments", { p_campaign: id, p_rows: pr });
+        if (st.error) {
+          setBusy(false);
+          return setErr("Payment columns: " + errText(st.error));
+        }
+      }
       const ok = await doFlags();
       if (useSheet.length) await rpc("admin", "api.bulk_apply_choice", { p_campaign: id, p_rows: useSheet });
+      await doExtras();
       setBusy(false);
       if (!ok) return;
-      saveUpload(id, { src: up.src, done: true, result: {}, notes: [flagNote], uploaded: flagIdx.map((i) => ({ name: rows0[i].name, handle: rows0[i].handle, status: up.rows[i].status })), skipped: notUp });
+      saveUpload(id, { src: up.src, done: true, result: {}, notes: [flagNote, extraNote].filter(Boolean), uploaded: flagIdx.map((i) => ({ name: rows0[i].name, handle: rows0[i].handle, status: up.rows[i].status })), skipped: notUp });
       return router.push(`${base}/done`);
     }
-    if (!rows.length && useSheet.length) {
+    if (!rows.length && extraRows.length) {
       setBusy(true);
+      setErr("");
+      if (useSheet.length) await rpc("admin", "api.bulk_apply_choice", { p_campaign: id, p_rows: useSheet });
+      await doExtras();
+      setBusy(false);
+      return show(extraNote || "✓ Saved");
+    }
+    if (!rows.length && useSheet.length) {
       const ap = await rpc("admin", "api.bulk_apply_choice", { p_campaign: id, p_rows: useSheet });
       setBusy(false);
       if (ap.error) return setErr(errText(ap.error));
@@ -406,6 +468,8 @@ export default function BulkUploadCheck() {
       return m;
     }, {});
     if (flagRows.length && (await doFlags()) && flagNote) notes.push(flagNote);
+    await doExtras();
+    if (extraNote) notes.push(extraNote);
     if (quiet.length) notes.push(`🔕 ${quiet.length} creator${quiet.length > 1 ? "s" : ""} added without any message (WhatsApp / email) — as you chose`);
     if (notUp.length && d.batch_id) await rpc("admin", "api.bulk_log_skipped", { p_campaign: id, p_batch: d.batch_id, p_rows: notUp });
     const codes = rows.filter((x) => x.coupon && x.handle).map((x) => ({ handle: String(x.handle).replace(/^@/, ""), code: x.coupon }));
@@ -618,7 +682,7 @@ export default function BulkUploadCheck() {
                           {w.sends && <small>{w.sends}</small>}
                           {w.ig && <small>{w.ig}</small>}
                           {diffsOf(d, ex[i], kind).map(({ g, site, sheet }) => {
-                            const cur = (picks[i] || {})[g] || "site";
+                            const cur = pickOf(picks[i], g);
                             const setP = (v) => setPicks((pp) => ({ ...pp, [i]: { ...(pp[i] || {}), [g]: v } }));
                             return (
                               <span key={g} className="uc-diff">

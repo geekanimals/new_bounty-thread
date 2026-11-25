@@ -22,15 +22,21 @@ const TPL_COLS = [
   ["Email", "Their email", "asha@example.com", "one of these 3"],
   ["City", "City", "Mumbai", "optional"],
   ["Status", "The exact step name (see Statuses). Blank = Applied. Backout / Delivery issue for creators already on the campaign", "Address confirmed", "optional"],
-  ["Reason", "Only for Backout / Delivery issue — why they back out, or what went wrong (wrong product, courier lost, damaged, not delivered)", "Courier lost at the hub", "for Backout / Delivery issue"],
+  ["Visit date", "For Visit booked — the day they come (2026-12-05 or 05/12/2026)", "05/12/2026", "for Visit booked", "visit"],
+  ["Slot", "Visit time / slot", "4 pm", "optional", "visit"],
+  ["Reason", "For Rejected / Changes requested / Backout / Delivery issue (optional for Video overdue) — why, what to change, or what went wrong (broken / damaged, wrong product or size, courier lost, not delivered)", "Courier lost at the hub", "for Backout / Delivery issue (optional for Video overdue)"],
   ["Address", "Delivery address — for Address confirmed / Courier sent / Courier delivered", "Flat 4B, Lake View, Koregaon Park", "for those 3", "ship"],
   ["State", "State of the address", "Maharashtra", "for those 3", "ship"],
   ["PIN code", "6-digit PIN", "411001", "for those 3", "ship"],
   ["Courier", "Courier name — for Courier sent / delivered", "DTDC", "for those 2", "ship"],
   ["Tracking", "Tracking ID or link", "D12345678", "for those 2", "ship"],
+  ["Delivered on", "For Courier delivered — the day it arrived (blank = today)", "22/11/2026", "optional", "ship"],
   ["Video link", "Drive / video link — for Video submitted / Client approved", "https://drive.google.com/…", "for those 2"],
   ["Post link", "Link of every post — for Posted / Done", "https://www.instagram.com/reel/…", "for Posted"],
   ["Fee (₹)", "This creator's total fee — goes into their contract only", "15000", "optional", "pay"],
+  ["Paid amount", "For Advance paid / Fully paid — what you already paid (blank = the advance due / everything left)", "7500", "optional", "pay"],
+  ["UTR", "For Advance paid / Fully paid — UTR / transaction reference of the payment you made", "UTR123456789", "for Advance / Fully paid", "pay"],
+  ["Paid on", "Date you paid", "24/11/2026", "optional", "pay"],
   ["Advance %", "Paid once they sign", "50", "optional", "pay"],
   ["Pay days", "The rest — days after every post is live", "7", "optional", "pay"],
   ["Terms", "Anything else agreed", "includes 1 story repost", "optional", "pay"],
@@ -45,14 +51,43 @@ const TPL_EX = [
   { Name: "Meera Shah", Instagram: "meera.styles", WhatsApp: "9000011111", City: "Pune", Status: "Address confirmed", Address: "Flat 4B, Lake View, Koregaon Park", State: "Maharashtra", "PIN code": "411001", "Fee (₹)": "8000", "Advance %": "0", "Pay days": "5", "Account no": "50100123456789", IFSC: "HDFC0001234", "Account holder": "Meera Shah" },
   { Name: "Kabir Sen", Instagram: "@kabir.cooks", WhatsApp: "9830012345", Email: "kabir@example.com", City: "Kolkata", Status: "Courier sent", Address: "12 Park St", State: "West Bengal", "PIN code": "700016", Courier: "DTDC", Tracking: "D12345678" },
   { Name: "Nisha Jain", Instagram: "nisha.home", WhatsApp: "9123456780", City: "Jaipur", Status: "Video submitted", "Video link": "https://drive.google.com/file/d/example" },
+  { Name: "Ishaan Mehra", Instagram: "@ishaan.fit", WhatsApp: "9899012345", City: "Gurugram", Status: "Courier delivered", Address: "B-12, DLF Phase 2", State: "Haryana", "PIN code": "122002", Courier: "Delhivery", Tracking: "DL445566", "Delivered on": "22/11/2026", ship: true },
+  { Name: "Riya Kapoor", Instagram: "@riya.reviews", WhatsApp: "9871203456", City: "Noida", Status: "Rejected", Reason: "Followers below the brand’s minimum" },
+  { Name: "Dev Patel", Instagram: "dev.unboxes", WhatsApp: "9824012345", City: "Ahmedabad", Status: "Changes requested", Reason: "Show the product name clearly in the first 3 seconds" },
+  { Name: "Sana Khan", Instagram: "@sana.eats", WhatsApp: "9930012345", City: "Mumbai", Status: "Visit booked", "Visit date": "05/12/2026", Slot: "4 pm", only: ["visit"] },
+  { Name: "Arjun Rao", Instagram: "arjun.travels", WhatsApp: "9845012345", City: "Bengaluru", Status: "Visited", only: ["visit"] },
+  { Name: "Tara Bose", Instagram: "@tara.dines", WhatsApp: "9831098765", City: "Kolkata", Status: "Missed visit", only: ["visit"] },
+  { Name: "Vikram Singh", Instagram: "@vikram.tech", WhatsApp: "9811198765", City: "Delhi", Status: "Advance paid", "Fee (₹)": "10000", "Paid amount": "5000", UTR: "UTR998877665", "Paid on": "20/11/2026", only: ["paid", "barter_paid", "visit"] },
+  { Name: "Neha Gupta", Instagram: "neha.makeup", WhatsApp: "9876501234", City: "Indore", Status: "Fully paid", UTR: "UTR112233445", "Paid on": "24/11/2026", only: ["paid", "barter_paid", "visit"] },
+  { Name: "Aman Verma", Instagram: "@aman.vlogs", WhatsApp: "9812345670", City: "Lucknow", Status: "Video overdue", Reason: "Parcel delivered 3 days ago, no video yet" },
   { Name: "Karan Gill", Instagram: "@karan.fits", WhatsApp: "9988776655", City: "Chandigarh", Status: "Backout", Reason: "No time to shoot this month" },
   { Name: "Priya Nair", Instagram: "priya.glow", WhatsApp: "9445566778", City: "Kochi", Status: "Delivery issue", Reason: "Wrong product delivered — got the 100 ml bottle", ship: true },
 ];
-const tplCols = (kind) => TPL_COLS.filter((c) => !(c[4] === "pay" && kind === "barter") && !(c[4] === "ship" && kind === "paid"));
-const tplRows = (kind) => {
-  const cols = tplCols(kind);
+// physical visit bhi paid jaisa — product nahi, to address / courier columns nahi
+/* brief ke criteria → required columns (City ke baad) — jo criteria campaign mein nahi, uska column nahi */
+const CRIT_TPL = [
+  ["gender", "Gender", "Female / Male — the brief needs it", ["Female", "Male", "Female"]],
+  ["age", "Age", "Age in years (or date of birth 14/02/1998) — the brief has an age range", ["27", "31", "24"]],
+  ["marital", "Marital status", "Single / Married — the brief needs it", ["Married", "Single", "Married"]],
+  ["categories", "Categories", "What they make content on, comma-separated", ["Lifestyle, Food", "Fitness", "Beauty, Fashion"]],
+  ["pet", "Pet name", "Every pet’s name — more than one pet: Bruno, Kitty", ["Bruno, Kitty", "Simba", "Coco"]],
+  ["pet", "Pet type", "Dog / Cat / Bird … — same order as the names", ["Dog, Cat", "Dog", "Cat"]],
+  ["pet", "Pet breed", "Breed of each pet — same order", ["Labrador, Persian", "Golden Retriever", "Indie"]],
+  ["pet", "Pet age", "Age of each pet (3, 6 months …) — same order", ["3, 1", "2", "8 months"]],
+];
+const critTpl = (crit) => CRIT_TPL.filter(([c]) => crit && crit[c]);
+const tplCols0 = (kind) => TPL_COLS.filter((c) => !(c[4] === "pay" && kind === "barter") && !(c[4] === "ship" && (kind === "paid" || kind === "visit")) && !(c[4] === "visit" && kind !== "visit"));
+const tplCols = (kind, crit) => {
+  const base = tplCols0(kind);
+  const at = base.findIndex((c) => c[0] === "City") + 1;
+  const extra = critTpl(crit).map(([c, l, what, ex]) => [l, what, ex[0], `required — brief: ${c === "pet" ? (crit.pet === "any" ? "has a pet" : crit.pet) : c === "categories" ? "categories" : crit[c]}`, "crit"]);
+  return [...base.slice(0, at), ...extra, ...base.slice(at)];
+};
+const tplRows = (kind, crit) => {
+  const cols = tplCols(kind, crit);
+  const cv = Object.fromEntries(critTpl(crit).map(([, l, , ex]) => [l, ex]));
   // paid / visit: product nahi → Delivery issue ki example row nahi
-  return [cols.map((c) => c[0]), ...TPL_EX.filter((r) => !(r.ship && (kind === "paid" || kind === "visit"))).map((r) => cols.map((c) => (kind === "paid" && ["Address confirmed", "Courier sent"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
+  return [cols.map((c) => c[0]), ...TPL_EX.filter((r) => !(r.ship && (kind === "paid" || kind === "visit")) && !(r.only && !r.only.includes(kind))).map((r, ri) => cols.map((c) => (cv[c[0]] ? (ri < 6 ? cv[c[0]][ri % cv[c[0]].length] : "") : (kind === "paid" || kind === "visit") && ["Address confirmed", "Courier sent", "Courier delivered"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
 };
 
 const PAY_COLS = [["Fee (₹)", "fee"], ["Advance %", "advance_pct"], ["Pay days", "pay_days"], ["Terms", "pay_terms"], ["UPI ID", "upi"], ["Account no", "account_no"], ["IFSC", "ifsc"], ["Account holder", "account_name"]];
@@ -78,16 +113,31 @@ export function readTicked(id) {
 const BO_TXT = { requested: "Backout asked — waiting for decision", approved: "Return pending — product to come back", shipped: "Return on the way" };
 async function flagInfo(id, kind) {
   const prod = !(kind === "paid" || kind === "visit");
-  const [b, d] = await Promise.all([rpc("admin", "api.campaign_backouts", { p_campaign: id }), prod ? rpc("admin", "api.campaign_delivery_issues", { p_campaign: id }) : Promise.resolve({})]);
+  const [b, d, o, x] = await Promise.all([rpc("admin", "api.campaign_backouts", { p_campaign: id }), prod ? rpc("admin", "api.campaign_delivery_issues", { p_campaign: id }) : Promise.resolve({}), rpc("admin", "api.campaign_video_overdue", { p_campaign: id }), rpc("admin", "api.campaign_creator_extras", { p_campaign: id })]);
   const m = {};
   const put = (r, k, v) => [r.participation_id && "p:" + r.participation_id, r.invite_id && "i:" + r.invite_id].filter(Boolean).forEach((key) => (m[key] = { ...(m[key] || {}), [k]: v }));
   ((b.data && b.data.rows) || []).forEach((r) => {
     const t = r.kind === "withdraw" && r.status === "approved" ? "" : BO_TXT[r.status];
     if (t) put(r, "bo", `${t}${r.return_by && r.status === "approved" ? ` · by ${r.return_by}` : ""} · ${r.reason_note || r.reason_label}`);
   });
-  ((d.data && d.data.rows) || []).filter((r) => r.status === "open").forEach((r) => put(r, "di", `${r.label}${r.note ? " — " + r.note : ""}`));
-  const head = prod ? ["Backout / return", "Delivery issue"] : ["Backout"];
-  return { head, cells: (key) => (prod ? [(m[key] || {}).bo || "", (m[key] || {}).di || ""] : [(m[key] || {}).bo || ""]) };
+  ((d.data && d.data.rows) || []).filter((r) => r.status !== "resolved").forEach((r) => put(r, "di", `${r.status === "exchange_sent" ? "Exchange on the way · " : ""}${r.label}${r.note ? " — " + r.note : ""}`));
+  (Array.isArray(o.data) ? o.data : []).forEach((r) => put(r, "vo", `Marked overdue${r.note ? " — " + r.note : ""}`));
+  // brief ke columns (sirf jo criteria campaign mein hai) + Delivered on — wahi naam jo template mein, wapas upload ho sake
+  const xd = x.data || {};
+  const crit = xd.criteria || {};
+  const xr = xd.rows || {};
+  const pets = (e, k) => ((e && e.pets) || []).map((p) => (p && p[k]) || "").join(", ");
+  const dd = (v) => (v ? new Date(v).toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata" }) : "");
+  const XC = [
+    ...(prod ? [["Delivered on", (e) => dd(e && e.delivered_at)]] : []),
+    ...(crit.gender ? [["Gender", (e) => (e && e.gender) || ""]] : []),
+    ...(crit.age ? [["Age", (e) => (e && (e.age || e.dob)) || ""]] : []),
+    ...(crit.marital ? [["Marital status", (e) => (e && e.marital) || ""]] : []),
+    ...(crit.categories ? [["Categories", (e) => ((e && e.categories) || []).join(", ")]] : []),
+    ...(crit.pet ? [["Pet name", (e) => pets(e, "name")], ["Pet type", (e) => pets(e, "type")], ["Pet breed", (e) => pets(e, "breed")], ["Pet age", (e) => pets(e, "age")]] : []),
+  ];
+  const head = [...XC.map((c) => c[0]), ...(prod ? ["Backout / return", "Delivery issue"] : ["Backout"]), "Video overdue"];
+  return { head, cells: (key) => [...XC.map(([, fn]) => String(fn(xr[key]) ?? "")), ...(prod ? [(m[key] || {}).bo || "", (m[key] || {}).di || ""] : [(m[key] || {}).bo || ""]), (m[key] || {}).vo || ""] };
 }
 
 export async function downloadSheetRows(id, keys, kind, fmt = "xlsx", data = null) {
@@ -100,7 +150,7 @@ export async function downloadSheetRows(id, keys, kind, fmt = "xlsx", data = nul
   const want = new Set((keys || []).map((k) => String(k).replace(/^([pi])-/, "$1:")));
   const list = ((d && d.rows) || []).filter((r) => want.has(r.key));
   if (!list.length) return 0;
-  const cols = [...SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
+  const cols = [...SH_COLS.filter(([h]) => !((kind === "paid" || kind === "visit") && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
   const fi = await flagInfo(id, kind).catch(() => null);
   const aoa = [[...cols.map((c) => c[0]), ...(fi ? fi.head : [])], ...list.map((r) => [...cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : k === "whatsapp" ? sheetPhone(r[k]) : r[k] == null ? "" : String(r[k]))), ...(fi ? fi.cells(r.key) : [])])];
   const nm = `${String((d && d.campaign) || "campaign").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "campaign"}-selected`;
@@ -116,6 +166,9 @@ export default function UploadStart({ id, mode = "upload" }) {
   const kind = useUploadKind(id);
   const skip = !id || id === "sample";
   const sheet = useRpc("admin", "api.campaign_sheet_rows", { p_campaign: id }, { skip });
+  // brief ke criteria (gender / age / pets …) → template ke required columns + har creator ke saved details
+  const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip });
+  const crit = (extras.data && extras.data.criteria) || null;
   const [tickN] = useState(() => (typeof window === "undefined" ? 0 : readTicked(id).length));
   const link = useRpc("admin", "api.campaign_sheet_link_get", { p_campaign: id }, { skip });
   const hist = useRpc("admin", "api.campaign_upload_history", { p_campaign: id }, { skip: skip || mode !== "history" });
@@ -138,6 +191,7 @@ export default function UploadStart({ id, mode = "upload" }) {
   const start = (src, aoa) => {
     try {
       const up = buildUpload(aoa, src, kind);
+      up.crit = crit; // check step: brief ke required columns
       if (!up.rows.length) return show("That sheet has no creator rows.");
       saveUpload(id, up);
       router.push(`${base}/match`);
@@ -173,7 +227,7 @@ export default function UploadStart({ id, mode = "upload" }) {
   const download = async (fmt) => {
     const list = rows.filter((r) => (step === "" ? true : step === "out" ? /^Out/.test(r.status || "") : r.status_key === step && !/^Out/.test(r.status || "")));
     if (!list.length) return show("No creators to download for that choice.");
-    const cols = [...SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
+    const cols = [...SH_COLS.filter(([h]) => !((kind === "paid" || kind === "visit") && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
     const fi = await flagInfo(id, kind).catch(() => null);
     const aoa = [[...cols.map((c) => c[0]), ...(fi ? fi.head : [])], ...list.map((r) => [...cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : k === "whatsapp" ? sheetPhone(r[k]) : r[k] == null ? "" : String(r[k]))), ...(fi ? fi.cells(r.key) : [])])];
     const lab = step ? (opts.find((o) => o[0] === step) || [])[1] || step : "";
@@ -189,15 +243,15 @@ export default function UploadStart({ id, mode = "upload" }) {
   const tplName = `bulk-template-${kind}`;
   const tplDownload = async (fmt) => {
     try {
-      if (fmt === "csv") downloadFile(tplName + ".csv", tplRows(kind));
-      else await downloadXlsx(tplName + ".xlsx", tplRows(kind), "Creators");
-      show(`⬇ ${KIND_LABEL[kind]} template downloaded — ${tplRows(kind).length - 1} example rows, replace them with your creators`);
+      if (fmt === "csv") downloadFile(tplName + ".csv", tplRows(kind, crit));
+      else await downloadXlsx(tplName + ".xlsx", tplRows(kind, crit), "Creators");
+      show(`⬇ ${KIND_LABEL[kind]} template downloaded — ${tplRows(kind, crit).length - 1} example rows, replace them with your creators`);
     } catch (er) {
       show(errText(er));
     }
   };
   const tplCopy = async () => {
-    const tsv = tplRows(kind)
+    const tsv = tplRows(kind, crit)
       .map((r) => r.join("\t"))
       .join("\n");
     try {
@@ -406,7 +460,7 @@ export default function UploadStart({ id, mode = "upload" }) {
             <p className="us-gsub">{KIND_LABEL[kind]} template · one creator per row · keep the first row as column names</p>
             <h3>📝 Step by step</h3>
             <p className="us-gtxt">
-              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it is flagged, and one “Upload all anyway” button sends every such row without a message. 6. To mark a creator already on the campaign, write Status “Backout”{kind === "paid" || kind === "visit" ? "" : " or “Delivery issue”"} and why in the Reason column — they stay on their step and show in {kind === "paid" || kind === "visit" ? "Backouts" : "Backouts & returns / Delivery issues"}.
+              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it is flagged, and one “Upload all anyway” button sends every such row without a message. 6. For creators already on the campaign the ★ statuses work too: {kind === "visit" ? "Visit booked (with Visit date), Visited, Missed visit, " : ""}Video overdue, Changes requested (Reason = what to change), {kind === "barter" ? "" : "Advance paid / Fully paid (UTR — only recorded, no money is sent), "}Rejected (Reason), Backout{kind === "paid" || kind === "visit" ? "" : ", Delivery issue"} (Reason). The template’s example rows show each one. 7. The brief’s criteria get their own required columns (only the ones this campaign asks for{crit ? `: ${[crit.gender && "Gender", crit.age && "Age", crit.marital && "Marital status", crit.categories && "Categories", crit.pet && "Pet name / type / breed / age"].filter(Boolean).join(", ") || "none"}` : ""}) — more than one pet goes comma-separated in the same cell (Bruno, Kitty), and everything is saved on the creator’s account.{kind === "paid" || kind === "visit" ? "" : " 8. Delivered on = the day the parcel arrived (blank = today)."}
               {kind !== "barter" ? " 6. Fee, Advance %, Pay days, UPI / Account no + IFSC columns set each creator’s payment as they land." : ""}
             </p>
             <div className="us-gbtns">
@@ -457,7 +511,7 @@ export default function UploadStart({ id, mode = "upload" }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {tplCols(kind).map((c) => (
+                  {tplCols(kind, crit).map((c) => (
                     <tr key={c[0]}>
                       <td>
                         <b>{c[0]}</b>
@@ -476,13 +530,13 @@ export default function UploadStart({ id, mode = "upload" }) {
               <table className="c2-t us-gt us-ex">
                 <thead>
                   <tr>
-                    {tplRows(kind)[0].map((h) => (
+                    {tplRows(kind, crit)[0].map((h) => (
                       <th key={h}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {tplRows(kind)
+                  {tplRows(kind, crit)
                     .slice(1)
                     .map((r, i) => (
                       <tr key={i}>

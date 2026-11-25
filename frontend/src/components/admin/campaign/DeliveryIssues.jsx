@@ -24,7 +24,8 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
   const all = Array.isArray(d.rows) ? d.rows : [];
   const mine = only ? all.filter((r) => (only.pid && r.participation_id === only.pid) || (only.iid && r.invite_id === only.iid)) : all;
   const pastN = mine.filter((r) => r.status === "resolved").length;
-  const rows = showPast ? mine : mine.filter((r) => r.status === "open");
+  // khula = open + exchange_sent (naya product raste mein) — resolve hone tak dikhta hai
+  const rows = showPast ? mine : mine.filter((r) => r.status !== "resolved");
   const types = (d.types || []).map((t) => [t.code, t.label]);
   const who = (r) => (r.handle ? "@" + String(r.handle).replace(/^@/, "") : r.full_name || "creator");
 
@@ -44,15 +45,30 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
       ok: "⚠ Report issue",
       fields: [
         { k: "type", label: "What went wrong?", options: types.length ? types : [["other", "Other"]], required: true },
-        { k: "note", label: "Details", area: true, placeholder: "e.g. Got the 100 ml bottle instead of 50 ml · AWB 1234 lost at hub" },
+        { k: "note", label: "Details", area: true, placeholder: "e.g. Bottle arrived broken · got size L instead of M · AWB 1234 lost at hub" },
       ],
     });
     if (!v) return;
     if (v.type === "other" && !String(v.note || "").trim()) return setMsg("⚠ Write what went wrong.");
     await run("add", "api.delivery_issue_add", { p_participation: only?.pid || null, p_invite: only?.pid ? null : only?.iid || null, p_type: v.type, p_note: String(v.note || "").trim() || null }, "Delivery issue added ✓ — it stays in Delivery issues until resolved");
   };
+  // 🔁 toota / galat mila → naya product bhejo (exchange): naye parcel ka courier + tracking
+  const exchange = async (r) => {
+    const v = await ask({
+      title: `🔁 Exchange — send a new product to ${who(r)}`,
+      text: "The issue stays open until you mark the new product delivered.",
+      ok: "Save — new product sent",
+      fields: [
+        { k: "courier", label: "Courier (new parcel)", required: true, value: r.exchange_courier || "" },
+        { k: "tracking", label: "Tracking number", value: r.exchange_tracking || "" },
+      ],
+    });
+    if (!v) return;
+    await run("ex:" + r.id, "api.delivery_issue_exchange", { p_id: r.id, p_courier: v.courier.trim(), p_tracking: String(v.tracking || "").trim() || null }, "🔁 Exchange sent — mark it once the new product is delivered");
+  };
   const resolve = async (r) => {
-    const v = await ask({ title: `Resolve — ${r.label}`, text: who(r), ok: "✓ Mark resolved", fields: [{ k: "res", label: "How was it fixed? (optional)", placeholder: "e.g. Right product re-shipped, AWB 5678" }] });
+    const ex = r.status === "exchange_sent";
+    const v = await ask({ title: ex ? `New product delivered to ${who(r)}?` : `Resolve — ${r.label}`, text: ex ? "This closes the issue." : who(r), ok: ex ? "✓ New product delivered" : "✓ Mark resolved", fields: [{ k: "res", label: ex ? "Note (optional)" : "How was it fixed? (optional)", placeholder: ex ? "e.g. Delivered, creator confirmed" : "e.g. Courier found it and delivered" }] });
     if (!v) return;
     await run("rs:" + r.id, "api.delivery_issue_resolve", { p_id: r.id, p_resolution: String(v.res || "").trim() || null }, "✓ Issue resolved");
   };
@@ -67,15 +83,16 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
       <div className="di-head">
         <h2 className="ga-h2">⚠ Delivery issues</h2>
         {!only && d.open > 0 && <span className="di-chip is-bad">{d.open} open</span>}
+        {!only && d.exchanging > 0 && <span className="di-chip is-info">{d.exchanging} exchange on the way</span>}
       </div>
-      {!only && <p className="di-sub">Wrong product, lost courier, damage — stays here until someone marks it resolved.</p>}
+      {!only && <p className="di-sub">Damaged / wrong product, lost courier, not delivered — send an exchange from here; it stays until the new product is delivered or you mark it resolved.</p>}
       {rows.length > 0 && (
         <ul className="di-list">
           {rows.map((r) => (
             <li key={r.id} className={`di-row ${r.status === "resolved" ? "is-done" : ""}`}>
               <div className="di-top">
                 {!only && <b>{who(r)}</b>}
-                <span className={`di-chip ${r.status === "open" ? "is-bad" : "is-ok"}`}>{r.status === "open" ? `⚠ ${r.label}` : `✓ ${r.label} — resolved`}</span>
+                <span className={`di-chip ${r.status === "open" ? "is-bad" : r.status === "exchange_sent" ? "is-info" : "is-ok"}`}>{r.status === "open" ? `⚠ ${r.label}` : r.status === "exchange_sent" ? `🔁 Exchange on the way — ${r.label}` : `✓ ${r.label} — resolved`}</span>
               </div>
               {r.note && <p className="di-line">{r.note}</p>}
               <p className="di-mut">
@@ -83,11 +100,30 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
                 {r.created_by_name ? ` by ${r.created_by_name}` : ""}
                 {r.status === "resolved" ? ` · resolved ${dt(r.resolved_at)}${r.resolved_by_name ? ` by ${r.resolved_by_name}` : ""}` : ""}
               </p>
+              {r.exchange_courier && (
+                <p className="di-line">
+                  <b>New product sent:</b> {r.exchange_courier}
+                  {r.exchange_tracking ? ` · ${r.exchange_tracking}` : ""}
+                  {r.exchange_sent_at ? ` · ${dt(r.exchange_sent_at)}` : ""}
+                </p>
+              )}
               {r.resolution && <p className="di-line"><b>Fix:</b> {r.resolution}</p>}
-              {r.status === "open" && (
-                <button type="button" className="ga-btn ga-btn--ghost di-btn" disabled={!!busy} onClick={() => resolve(r)}>
-                  {busy === "rs:" + r.id ? "…" : "✓ Mark resolved"}
-                </button>
+              {r.status !== "resolved" && (
+                <div className="di-acts">
+                  {r.status === "open" && (
+                    <button type="button" className="ga-btn ga-btn--primary di-btn" disabled={!!busy} onClick={() => exchange(r)}>
+                      {busy === "ex:" + r.id ? "…" : r.issue_type === "courier_lost" || r.issue_type === "not_delivered" ? "🔁 Send the product again" : "🔁 Exchange — send new product"}
+                    </button>
+                  )}
+                  {r.status === "exchange_sent" && (
+                    <button type="button" className="ga-btn ga-btn--ghost di-btn" disabled={!!busy} onClick={() => exchange(r)}>
+                      ✎ Edit tracking
+                    </button>
+                  )}
+                  <button type="button" className={`ga-btn di-btn ${r.status === "exchange_sent" ? "ga-btn--primary" : "ga-btn--ghost"}`} disabled={!!busy} onClick={() => resolve(r)}>
+                    {busy === "rs:" + r.id ? "…" : r.status === "exchange_sent" ? "✓ New product delivered" : "✓ Mark resolved"}
+                  </button>
+                </div>
               )}
             </li>
           ))}
@@ -115,6 +151,8 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
         .di-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--ad-soft-2, #f2f3f7); font-size: 11.5px; font-weight: 700; }
         .di-chip.is-bad { background: #fdecec; color: #b42335; }
         .di-chip.is-ok { background: #e3f6ea; color: #1d7a45; }
+        .di-chip.is-info { background: #e7f0ff; color: #2650a8; }
+        .di-acts { display: flex; gap: 8px; flex-wrap: wrap; }
         .di-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
         .di-row { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--ad-line-2); background: #fff; }
         .di-row.is-done { background: #fafbfc; }

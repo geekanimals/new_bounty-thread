@@ -636,8 +636,23 @@ export async function runAction(key, row, ctx) {
     }
     case "bpcontract":
       return call("api.bp_send_contract", { p_participation: P }, `📜 Contract sent to ${who}`);
-    case "bpdeliv":
-      return call("api.bp_mark_delivered", { p_participation: P }, `📦 Marked delivered — video brief sent to ${who}`);
+    case "bpdeliv": {
+      // kis din pahuncha — khaali = aaj (video ki deadline isi din se ginti hai)
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      const v = await ask({ title: `📦 Courier delivered to ${who}`, text: "Leave the date as it is if it arrived today. The video deadline counts from this day.", ok: "📦 Mark delivered", fields: [{ k: "on", label: "Delivered on", type: "date", value: today }] });
+      if (!v) return;
+      const on = String(v.on || "").trim();
+      if (on && on > today) return say("The delivered date can’t be in the future.");
+      const { error } = await rpc("admin", "api.bp_mark_delivered", { p_participation: P });
+      if (error) return say(errText(error));
+      if (on && on !== today) {
+        const r2 = await rpc("admin", "api.set_delivered_on", { p_participation: P, p_invite: null, p_on: on });
+        if (r2.error) say(`Marked delivered, but the date wasn’t saved: ${errText(r2.error)}`);
+      }
+      say(`📦 Delivered on ${fmtDate(on || today, true)} — video brief sent to ${who}`);
+      if (reload) await reload();
+      return true;
+    }
     case "bpapprove": {
       const v = await ask({
         title: `Approve ${who}’s video on the brand's behalf?`,
@@ -896,7 +911,7 @@ function journeyDates(c) {
   ];
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null, issue = null }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null, issue = null, overdue = null }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const no = c.no ?? 0;
@@ -937,9 +952,14 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
               {backout.status === "requested" ? "🚪 Backout asked" : backout.status === "shipped" ? "🚚 Product coming back" : "📦 Return pending"}
             </span>
           )}
+          {overdue && (
+            <span className="ga-badge jr-bo" title={overdue.note || (overdue.auto ? "Product delivered 3+ days ago / due date passed — no video" : "Marked video overdue")}>
+              ⏰ Video overdue
+            </span>
+          )}
           {issue && (
             <span className="ga-badge jr-bo" title={issue.note || issue.label}>
-              ⚠ {issue.label}
+              {issue.status === "exchange_sent" ? "🔁 Exchange on the way" : `⚠ ${issue.label}`}
             </span>
           )}
           {rating && rating.count > 0 && (

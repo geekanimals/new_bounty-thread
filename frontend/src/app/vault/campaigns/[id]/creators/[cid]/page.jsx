@@ -12,6 +12,8 @@ import PartPanel from "@/components/admin/campaign/PartPanel";
 import Backouts from "@/components/admin/campaign/Backouts";
 import RateCard from "@/components/shared/RateCard";
 import DeliveryIssues from "@/components/admin/campaign/DeliveryIssues";
+import VideoOverdue from "@/components/admin/campaign/VideoOverdue";
+import CreatorExtras from "@/components/admin/campaign/CreatorExtras";
 import { DRIPS, fillParts } from "@/components/admin/msg/snaptoDrips";
 
 // drip ruk gaya to kyon — creator ne kaam kar diya (delivery page jaisa)
@@ -249,12 +251,16 @@ export default function WorkspaceCreator() {
     const fields = [];
     const ship = camp?.campaign_type !== "paid";
     if (ship && r >= 7 && r <= 9) fields.push({ k: "courier", label: "Courier", required: true, value: x.x?.shipment?.courier || x.i?.courier || "" }, { k: "tracking", label: "Tracking number or link", required: true, value: x.x?.shipment?.tracking_ref || x.i?.tracking || "" });
+    // 📦 Courier delivered → kis din (khaali / aaj = aaj)
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    if (ship && st === "courier_delivered") fields.push({ k: "on", label: "Delivered on", type: "date", value: today });
     if (r >= 10 && r <= 11) fields.push({ k: "video", label: "Video link", type: "url", required: true, value: video || "" });
     if (r >= 12) fields.push({ k: "posts", label: "Instagram post links (one per line)", area: true, required: true });
     fields.push({ k: "notify", label: "Message the creator about this step?", options: [["yes", "Yes — send the step message"], ["no", "No — just move them"]], value: "yes", required: true });
     const v = await askFn({ title: `Put ${x.name} on “${lbl}”`, ok: "Move", fields });
     if (!v) return;
     if (v.video && !/^https?:\/\//i.test(v.video)) return setToast("The video link must start with https://");
+    if (v.on && v.on > today) return setToast("The delivered date can’t be in the future.");
     const posts = String(v.posts || "").split(/\s+/).filter(Boolean);
     if (posts.some((p) => !/instagram\.com\/(reel|reels|p|tv|stories)\//i.test(p))) return setToast("Paste Instagram post links (instagram.com/reel/…, /p/… or /stories/…).");
     const payload = { notify: v.notify === "yes" };
@@ -269,7 +275,11 @@ export default function WorkspaceCreator() {
     const { error } = x.kind === "p" ? await rpc("admin", "api.team_set_step", { p_participation: x.pid, p_status: st, p_payload: payload }) : await rpc("admin", "api.invite_set_step", { p_invite: x.iid, p_status: st, p_payload: payload });
     setBusy("");
     if (error) return setToast(errText(error));
-    setToast(`✓ Moved to ${lbl}`);
+    if (v.on && v.on !== today) {
+      const r2 = await rpc("admin", "api.set_delivered_on", { p_participation: x.kind === "p" ? x.pid : null, p_invite: x.kind === "p" ? null : x.iid, p_on: v.on });
+      if (r2.error) return setToast(`Moved, but the delivered date wasn’t saved: ${errText(r2.error)}`);
+    }
+    setToast(st === "courier_delivered" ? `✓ Delivered on ${new Date((v.on || today) + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}` : `✓ Moved to ${lbl}`);
     reload();
   };
 
@@ -419,6 +429,19 @@ export default function WorkspaceCreator() {
         />
 
         <Backouts campaignId={id} only={x.kind === "p" ? { pid: x.pid } : { iid: x.iid }} row={x} onChanged={reload} />
+        {/* 🐾 brief details (gender / age / pets …) + 📦 delivered date */}
+        <CreatorExtras campaignId={id} row={x} />
+        {/* ⏰ video ka intezaar (product / brief mila, video nahi) — overdue mark / clear */}
+        <VideoOverdue
+          campaignId={id}
+          row={x}
+          waiting={
+            !x.failed &&
+            (x.kind === "p"
+              ? ["content_created", "changes_requested"].includes(x.x?.stage) || (x.x?.stage === "product_sent" && x.x?.shipment?.status === "delivered")
+              : ["courier_delivered", "courier_received", "video_brief_sent"].includes(x.i?.status) || (["paid", "visit"].includes(camp?.campaign_type) && x.i?.status === "contract_signed"))
+          }
+        />
         {/* ⚠ delivery issue — sirf product wale campaign, aur product nikalne ke baad */}
         {["barter", "barter_paid"].includes(camp?.campaign_type || "barter") && (
           <DeliveryIssues
