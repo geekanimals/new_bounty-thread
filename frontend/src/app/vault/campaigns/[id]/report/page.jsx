@@ -134,7 +134,13 @@ export default function CampaignReport() {
       { value: num(t.creators_live), label: "Creators live" },
       { value: num(of("reel").length), label: "Reels", note: of("story").length ? `${of("story").length} stories` : "" },
       { value: num(reelV.v), label: "Reel views", note: reelV.n ? `from ${reelV.n} reels` : "" },
-      { value: num(storyV.v), label: "Story views", note: storyV.n ? `from ${storyV.n} stories` : "" },
+      // story na ho (brief mein nahi / koi aayi nahi) to uski jagah reel reach
+      of("story").length || needs.story > 0
+        ? { value: num(storyV.v), label: "Story views", note: storyV.n ? `from ${storyV.n} stories` : "" }
+        : (() => {
+            const rr = sumOf(of("reel"), "reach");
+            return { value: num(rr.v), label: "Reel reach", note: rr.n ? `from ${rr.n} reels` : "" };
+          })(),
       { value: eFol ? ((100 * eNum) / eFol).toFixed(1) + "%" : "—", label: "Engagement on followers" },
     ];
   } else if (kind !== "story") {
@@ -250,30 +256,38 @@ export default function CampaignReport() {
   };
   const canEdit = (r, p) => !!(r.participation_id || (r.invite_id && p && (p.permalink || p.id)));
 
-  // ---- CSV: har post, saare numbers ----
+  // ---- CSV: har type alag hissa (Reels · Stories · Posts) — apne total aur apne columns ke saath, kabhi mila ke nahi ----
   const download = () => {
     const c = a.campaign || {};
-    const KEYS = [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["reposts", "Reposts"], ["shares", "Shares"], ["saves", "Saves"], ["avg_watch_s", "Avg watch time (s)"], ["skip_rate_pct", "Skip rate %"], ["follows", "Follows"], ["interactions", "Interactions"], ["profile_visits", "Profile activity"], ["replies", "Replies"], ["link_clicks", "Link clicks"], ["sticker_taps", "Sticker taps"], ["followers_pct", "Viewed by followers %"], ["forward", "Forward taps"], ["back", "Back taps"], ["next_story", "Next story"], ["exited", "Exited"]];
-    const head = ["Instagram", "Name", "Profile link", "On Geek OS", "Followers", "Deliverable", "Post link", "Posted on", ...KEYS.map((x) => x[1]), "Insights screenshot", "Numbers from", "Status"];
-    const lines = [];
-    rows.forEach((r) => {
-      const cr = r.creator || {},
-        h = handleOf(r);
-      const cnt = {};
-      [...(r.posts || [])]
-        .sort((x, y) => String(x.posted_at || "").localeCompare(String(y.posted_at || "")))
-        .forEach((p) => {
-          const kd = kindOf(p);
-          cnt[kd] = (cnt[kd] || 0) + 1;
-          const s = p.stats || {};
-          lines.push([h ? "@" + h : "", cr.name || "", h ? `https://instagram.com/${h}` : "", r.on_sheet || cr.followers == null ? "Not yet" : "Yes", cr.followers ?? "", `${KIND_LABEL[kd]} ${cnt[kd]}`, p.permalink || "", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : "", ...KEYS.map(([k]) => s[k] ?? ""), s.screenshot_url || p.screenshot_url || "", s.source === "public" ? "public profile" : s.source === "screenshot" ? "screenshot" : s.source === "manual" ? "typed in" : s.source ? "Instagram insights" : "", r.stage]);
+    const out = [[`${c.name || "Campaign"} — report`], [c.brand || ""], [], ["Creators live", t.creators_live ?? ""]];
+    const SECT = { reel: "REELS", story: "STORIES", feed: "POSTS" };
+    ["reel", "story", "feed"].forEach((kd) => {
+      const list = [];
+      rows.forEach((r) => {
+        let n = 0;
+        [...(r.posts || [])]
+          .filter((p) => kindOf(p) === kd)
+          .sort((x, y) => String(x.posted_at || "").localeCompare(String(y.posted_at || "")))
+          .forEach((p) => list.push({ r, p, n: ++n }));
+      });
+      if (!list.length) return;
+      const cols = COLS[kd];
+      const tot = cols
+        .filter(([k]) => !/_pct$|avg_watch_s/.test(k))
+        .map(([k, l]) => {
+          const sm = sumOf(list.map((x) => x.p.stats || {}), k);
+          return [`${l} (total)`, sm.v ?? "", sm.n ? `from ${sm.n} of ${list.length}` : ""];
         });
+      out.push([], [`${SECT[kd]} — ${list.length}`], ...tot, []);
+      out.push(["Instagram", "Name", "Profile link", "On Geek OS", "Followers", "Deliverable", "Post link", "Posted on", ...cols.map(([, l]) => l), "Insights screenshot", "Numbers from", "Status"]);
+      list.forEach(({ r, p, n }) => {
+        const cr = r.creator || {},
+          h = handleOf(r),
+          st = p.stats || {};
+        out.push([h ? "@" + h : "", cr.name || "", h ? `https://instagram.com/${h}` : "", r.on_sheet || cr.followers == null ? "Not yet" : "Yes", cr.followers ?? "", `${KIND_LABEL[kd]} ${n}`, p.permalink || "", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : "", ...cols.map(([k]) => st[k] ?? ""), st.screenshot_url || p.screenshot_url || "", st.source === "public" ? "public profile" : st.source === "screenshot" ? "screenshot" : st.source === "manual" ? "typed in" : st.source ? "Instagram insights" : "", r.stage]);
+      });
     });
-    const tot = [["views", "Views"], ["reach", "Reach"], ["likes", "Likes"], ["comments", "Comments"], ["shares", "Shares"], ["saves", "Saves"]].map(([k, l]) => {
-      const s = sumOf(rows.map((r) => r.totals), k);
-      return [l, s.v ?? "", `from ${s.n} of ${N} creators`];
-    });
-    downloadFile(`${(c.name || "campaign").replace(/[^\w-]+/g, "_")}_report.csv`, [[`${c.name || "Campaign"} — report`], [c.brand || ""], [], ["Creators live", t.creators_live ?? ""], ["Posts", t.posts ?? ""], ...tot, [], head, ...lines]);
+    downloadFile(`${(c.name || "campaign").replace(/[^\w-]+/g, "_")}_report.csv`, out);
     show("Campaign report downloaded");
   };
 

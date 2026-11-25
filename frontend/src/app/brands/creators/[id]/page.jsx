@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import BrandShell from "@/components/brands/BrandShell";
 import { BrLoading, BrError, BrAvatar } from "@/components/brands/BrandStates";
+import RateCard from "@/components/shared/RateCard";
 import { useBrand, canAct, reloadPortal, parseCreatorId, useCreatorCard, setFavorite, approveCreator, short as fmt, igUrl, getCreatorEligibility } from "@/services/brand";
 import { ArrowLeft, Check, Bookmark, Instagram, Play, Eye, ShieldCheck } from "@/components/ui/Icons";
 
@@ -253,6 +254,8 @@ export default function CreatorProfile() {
           </div>
         </div>
       </article>
+
+      <RateCard door="brand" pid={pid} iid={inv} title="⭐ Rate this creator" />
 
       {toast && (
         <div className="br-toast" role="status">

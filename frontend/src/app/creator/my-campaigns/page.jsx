@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import BountyShell from "@/components/creator/BountyShell";
 import { RumiTip } from "@/components/creator/OnboardShell";
-import { useSession, useJoinGate, useMyCampaigns, useCovers, coverOf, typeKey, compLine, stepOf, groupOf, noteOf, dateOf, needsAction, DECLINED, errText } from "@/services/creator";
+import { useSession, useJoinGate, useMyCampaigns, useCovers, coverOf, typeKey, compLine, stepOf, groupOf, noteOf, dateOf, needsAction, DECLINED, errText, isBackedOut } from "@/services/creator";
 import { stepsFor, TYPE_LABEL, getSidekick } from "@/components/creator/data";
 import { ArrowRight } from "@/components/ui/Icons";
 import { currentPath } from "@/components/creator/TrackerSteps";
@@ -127,7 +127,7 @@ export default function MyCampaigns() {
             const idx = m.stage === "completed" ? steps.length - 1 : steps.findIndex((x) => x.key === step);
             const label = (steps[idx] || {}).label;
             const pill = declined
-              ? ["Not selected", "red"]
+              ? [isBackedOut(m) ? "Left campaign" : "Not selected", "red"]
               : g === "done"
               ? ["Completed", "green"]
               : revision

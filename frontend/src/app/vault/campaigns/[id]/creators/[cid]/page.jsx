@@ -9,6 +9,8 @@ import { rpc, invoke, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast, INVITE_STEPS, inviteStepRank } from "@/components/admin/campaign/live";
 import { CreatorRow, buildRows, runAction, useAsk } from "@/components/admin/campaign/journey";
 import PartPanel from "@/components/admin/campaign/PartPanel";
+import Backouts from "@/components/admin/campaign/Backouts";
+import RateCard from "@/components/shared/RateCard";
 import { DRIPS, fillParts } from "@/components/admin/msg/snaptoDrips";
 
 // drip ruk gaya to kyon — creator ne kaam kar diya (delivery page jaisa)
@@ -51,6 +53,7 @@ export default function WorkspaceCreator() {
   const drips = useRpc("admin", "api.creator_drip_log", isP ? { p_participation: rid, p_invite: null } : { p_participation: null, p_invite: rid }, { skip: !on, refreshMs: 60000 });
   const pauses = useRpc("admin", "api.admin_msg_pauses", {}, { skip: !on });
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on || !isP });
+  const rsum = useRpc("admin", "api.campaign_rating_summary", { p_campaign: id }, { skip: !on });
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   // 24 h window ke liye "abhi ka time" — har minute taaza
@@ -397,6 +400,7 @@ export default function WorkspaceCreator() {
             }, 60);
           }}
           match={isP ? (bmatch.data || {})[rid] : null}
+          rating={(rsum.data || {})[cid] || null}
           onReject={
             isP && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage)
               ? async () => {
@@ -412,6 +416,9 @@ export default function WorkspaceCreator() {
               : null
           }
         />
+
+        <Backouts campaignId={id} only={x.kind === "p" ? { pid: x.pid } : { iid: x.iid }} row={x} onChanged={reload} />
+        <RateCard door="admin" pid={x.kind === "p" ? x.pid : null} iid={x.kind === "p" ? null : x.iid} />
 
         <div className={`wcc-grid ${chatOpen ? "" : "wcc-grid--closed"} ${!chatOpen && ppEl ? "has-pp" : ""}`}>
           {!chatOpen && ppEl}

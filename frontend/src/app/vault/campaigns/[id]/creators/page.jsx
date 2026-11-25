@@ -8,6 +8,7 @@ import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
 import { CreatorRow, CreatorHead, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, matchState, autoReject } from "@/components/admin/campaign/journey";
+import Backouts from "@/components/admin/campaign/Backouts";
 import { downloadFile, loadScript, XLSX_SRC, sheetPhone } from "@/components/admin/campaign2/kit";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 import WaPanel from "@/components/admin/campaign/WaPanel";
@@ -88,6 +89,8 @@ export default function WorkspaceCreators() {
   // naye creator replies (Snapto webhook → wa_messages) — har minute taaza; chat kholte hi sab ke liye "read"
   const unread = useRpc("admin", "api.campaign_unread", { p_campaign: id }, { skip: !on, refreshMs: 60000 });
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  // ⭐ har creator ki purani ratings ka average (sab campaigns) — list mein badge
+  const rsum = useRpc("admin", "api.campaign_rating_summary", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   // sheet upload / profile / contact — email, city, followers jo tracker mein nahi aate
   const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const kind = camp?.campaign_type || "barter";
@@ -524,6 +527,8 @@ export default function WorkspaceCreators() {
         </div>
       </section>
 
+      <Backouts campaignId={id} onChanged={reload} />
+
       {kind === "visit" && (
         <p className="wcr-visitlink">
           📍 Dates, slots and Visited / Missed are on <Link href={`/vault/campaigns/${id}/fulfilment`}>Fulfilment › Visits</Link>
@@ -702,6 +707,7 @@ export default function WorkspaceCreators() {
             <CreatorRow
               key={x.id}
               c={x}
+              rating={(rsum.data || {})[x.id] || null}
               href={`/vault/campaigns/${c.id}/creators/${x.id}`}
               checked={sel.includes(x.id)}
               onCheck={() => toggle(x.id)}

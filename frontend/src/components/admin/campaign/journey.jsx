@@ -322,7 +322,7 @@ let _reasons = null;
 export async function rejectionReasons() {
   if (_reasons) return _reasons;
   const { data } = await rpc("admin", "api.rejection_reasons");
-  _reasons = Array.isArray(data) && data.length ? data : [{ code: "other", label: "Other" }];
+  _reasons = Array.isArray(data) && data.length ? data.filter((r) => r.code !== "backed_out") : [{ code: "other", label: "Other" }];
   return _reasons;
 }
 
@@ -896,7 +896,7 @@ function journeyDates(c) {
   ];
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0 }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const no = c.no ?? 0;
@@ -932,6 +932,11 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
               {t}
             </span>
           ))}
+          {rating && rating.count > 0 && (
+            <span className="ga-badge jr-rate" title={`Average rating from ${rating.count} rating${rating.count > 1 ? "s" : ""} (Geek team + brands, all campaigns)`}>
+              ⭐ {rating.avg} <small>({rating.count})</small>
+            </span>
+          )}
           {ms && (
             <button type="button" className={`ga-badge ga-badge--${ms.tone} jr-match`} onClick={() => setShowMatch((v) => !v)} title="See how they match the brief">
               {ms.label}
@@ -1089,6 +1094,8 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
 }
 
 const JR_CSS = `
+  .jr-rate { background: #fff6dc; color: #8a5d14; font-weight: 700; }
+  .jr-rate small { font-weight: 600; opacity: .75; }
   .jr { display: grid; grid-template-columns: 18px 40px minmax(170px, 1.25fr) minmax(170px, 1.05fr) minmax(210px, 1.35fr) minmax(150px, .95fr) 236px; column-gap: 14px; row-gap: 8px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; transition: border-color .15s; }
   .jr.jr--nocheck { grid-template-columns: 40px minmax(170px, 1.25fr) minmax(170px, 1.05fr) minmax(210px, 1.35fr) minmax(150px, .95fr) 236px; }
   .jr:hover { border-color: #cfd2ee; }

@@ -268,3 +268,11 @@ export async function uploadReviewProof(campaignId, kind, file) {
   }
   return api("submit_review_proof", { p_campaign: campaignId, p_kind: kind, p_path: up.path });
 }
+
+/* ---------- Backout / return product (api.my_backout, backout_request, backout_cancel, backout_mark_shipped) ---------- */
+export const myBackout = (participation) => api("my_backout", { p_participation: participation });
+export const requestBackout = (participation, code, note) => api("backout_request", { p_participation: participation, p_reason_code: code, p_note: note || null });
+export const cancelBackout = (id) => api("backout_cancel", { p_id: id });
+export const shipBackout = (id, courier, tracking, url) => api("backout_mark_shipped", { p_id: id, p_courier: courier, p_tracking: tracking, p_url: url || null });
+/** participation backout se hata (reason "Backed out — …") — "Not selected" nahi, "Left" dikhana hai */
+export const isBackedOut = (m) => /^Backed out/.test(String((m && m.reason) || ""));

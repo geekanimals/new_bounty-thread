@@ -7,7 +7,9 @@ import BountyShell from "@/components/creator/BountyShell";
 import TrackerFrame, { useTracker, TrackerWait, currentPath } from "@/components/creator/TrackerSteps";
 import PayBox from "@/components/creator/PayBox";
 import ReviewProofs from "@/components/creator/ReviewProofs";
-import { noteOf, fdate, DECLINED, codeFill, safeLink, compLine, respondToInvite } from "@/services/creator";
+import { useBackout, BackoutCard, BackoutAsk } from "@/components/creator/BackoutBox";
+import { MyRatings } from "@/components/shared/RateCard";
+import { noteOf, fdate, DECLINED, codeFill, safeLink, compLine, respondToInvite, isBackedOut } from "@/services/creator";
 
 /** brief ki ek line (khaali ho to kuch nahi) */
 function Line({ label, v }) {
@@ -31,6 +33,8 @@ export default function CampaignOverview() {
   const [err, setErr] = useState("");
   const [passing, setPassing] = useState(false);
   const [reason, setReason] = useState("");
+  // backout / return product — hook hamesha chale (participation aate hi load)
+  const bo = useBackout(t.m ? t.m.participation_id : null);
 
   if (!t.m)
     return (
@@ -43,6 +47,9 @@ export default function CampaignOverview() {
   const P = m.participation_id;
   const label = (t.steps.find((x) => x.key === step) || {}).label;
   const declined = DECLINED.includes(m.stage);
+  const boReq = bo.data && bo.data.request;
+  const boOn = !!boReq && ["requested", "approved", "shipped", "returned"].includes(boReq.status);
+  const left = declined && isBackedOut(m);
   const b = m.video_brief || null;
   const tags = [].concat(m.hashtags || [], (m.mentions || []).map((x) => (String(x).charAt(0) === "@" ? x : "@" + x)));
 
@@ -59,6 +66,18 @@ export default function CampaignOverview() {
   };
 
   const card = () => {
+    if (boOn) return <BackoutCard bo={bo} onChange={() => (bo.reload(), t.reload())} />;
+    if (left)
+      return (
+        <>
+          <span className="ts-ic">👋</span>
+          <h2>You have left this campaign</h2>
+          <p>You are no longer on this campaign. It doesn’t affect your other campaigns.</p>
+          <Link href="/creator/discover" className="bx-btn bx-btn--dark">
+            Find other campaigns →
+          </Link>
+        </>
+      );
     if (m.blocked_at)
       return (
         <>
@@ -172,9 +191,13 @@ export default function CampaignOverview() {
       <TrackerFrame t={t} overview>
         {card()}
 
-        {!declined && <PayBox t={t} />}
+        {!declined && !boOn && <MyRatings pid={P} />}
+
+        {!declined && !boOn && <PayBox t={t} />}
 
         {!declined && !["invited", "applied", "eligible", "sent_to_brand"].includes(m.stage) && <ReviewProofs campaignId={m.campaign_id} />}
+
+        {!declined && !boOn && <BackoutAsk P={P} bo={bo} onChange={() => bo.reload()} />}
 
         {b && (
           <details className="ov-fold" open={["content_created", "changes_requested"].includes(m.stage)}>
