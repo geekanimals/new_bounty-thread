@@ -71,7 +71,7 @@ export default function CampaignOverview() {
       return (
         <>
           <span className="ts-ic">👋</span>
-          <h2>You have left this campaign</h2>
+          <h2>You have backed out of this campaign</h2>
           <p>You are no longer on this campaign. It doesn’t affect your other campaigns.</p>
           <Link href="/creator/discover" className="bx-btn bx-btn--dark">
             Find other campaigns →

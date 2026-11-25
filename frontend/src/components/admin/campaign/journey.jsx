@@ -896,7 +896,7 @@ function journeyDates(c) {
   ];
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const no = c.no ?? 0;
@@ -932,6 +932,11 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
               {t}
             </span>
           ))}
+          {backout && (
+            <span className={`ga-badge jr-bo jr-bo--${backout.status}`} title={backout.reason_label || "Backout"}>
+              {backout.status === "requested" ? "🚪 Backout asked" : backout.status === "shipped" ? "🚚 Product coming back" : "📦 Return pending"}
+            </span>
+          )}
           {rating && rating.count > 0 && (
             <span className="ga-badge jr-rate" title={`Average rating from ${rating.count} rating${rating.count > 1 ? "s" : ""} (Geek team + brands, all campaigns)`}>
               ⭐ {rating.avg} <small>({rating.count})</small>
@@ -1094,6 +1099,8 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
 }
 
 const JR_CSS = `
+  .jr-bo { background: #fdecec; color: #b42335; font-weight: 700; }
+  .jr-bo--shipped, .jr-bo--approved { background: #e7f0ff; color: #2650a8; }
   .jr-rate { background: #fff6dc; color: #8a5d14; font-weight: 700; }
   .jr-rate small { font-weight: 600; opacity: .75; }
   .jr { display: grid; grid-template-columns: 18px 40px minmax(170px, 1.25fr) minmax(170px, 1.05fr) minmax(210px, 1.35fr) minmax(150px, .95fr) 236px; column-gap: 14px; row-gap: 8px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--ad-line); background: #fff; transition: border-color .15s; }

@@ -14,7 +14,7 @@ import { fmtDate } from "@/components/admin/campaign/live";
  */
 const ST = {
   requested: ["⏳ Waiting for decision", "is-warn"],
-  approved: ["📦 Product to come back", "is-info"],
+  approved: ["📦 Waiting for the product — still on campaign", "is-info"],
   shipped: ["🚚 Return on the way", "is-info"],
   returned: ["✅ Product returned", "is-ok"],
   declined: ["Declined — still on campaign", ""],
@@ -35,11 +35,19 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
   const [msg, setMsg] = useState("");
   const d = bo.data || {};
   const all = Array.isArray(d.rows) ? d.rows : [];
-  const rows = only ? all.filter((r) => (only.pid && r.participation_id === only.pid) || (only.iid && r.invite_id === only.iid)) : all;
+  const mineRows = only ? all.filter((r) => (only.pid && r.participation_id === only.pid) || (only.iid && r.invite_id === only.iid)) : all;
+  // campaign board: chalu wale hamesha; khatam (returned / backed out / declined) "Show past" ke peeche
+  const isDone = (r) => r.status === "returned" || r.status === "declined" || (r.kind === "withdraw" && r.status === "approved");
+  const [showPast, setShowPast] = useState(false);
+  const pastN = only ? 0 : mineRows.filter(isDone).length;
+  const rows = only || showPast ? mineRows : mineRows.filter((r) => !isDone(r));
   const c = d.counts || {};
   const reasons = (d.reasons || []).map((r) => [r.code, r.label]);
   const openReq = rows.find((r) => r.status === "requested");
   const who = (r) => (r.handle ? "@" + r.handle : r.full_name || "creator");
+  // barter / barter+paid → "Backouts & returns"; paid / visit → sirf "Backout"
+  const product = ["barter", "barter_paid"].includes(d.campaign_kind || "barter");
+  const stOf = (r) => (r.kind === "withdraw" && r.status === "approved" ? ["✓ Backed out — removed from campaign", "is-ok"] : r.status === "returned" ? ["✅ Product returned — removed from campaign", "is-ok"] : ST[r.status] || [r.status, ""]);
 
   const run = async (key, fn, args, ok) => {
     setBusy(key);
@@ -73,9 +81,9 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
   const approve = async (r) => {
     const ret = r.kind === "return";
     const v = await ask({
-      title: ret ? `Approve ${who(r)} — product comes back` : `Approve ${who(r)} leaving`,
+      title: ret ? `Approve ${who(r)}’s backout — product comes back` : `Approve ${who(r)}’s backout`,
       text: ret
-        ? `${who(r)} will be removed from the campaign right away and asked to send the product back. Write anything about courier charges in the note — the system message never mentions cost.`
+        ? `${who(r)} gets the return address now and stays on the campaign until you mark the product received — then they’re removed automatically. Write anything about courier charges in the note — the system message never mentions cost.`
         : `${who(r)} will be removed from the campaign right away.`,
       ok: ret ? "✅ Approve & send address" : "✅ Approve & remove",
       danger: !ret,
@@ -91,7 +99,7 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
         ? (x) => (
             <>
               <b>Creator gets (app + email)</b>
-              Your request to leave the campaign has been approved. Please send the product back by{" "}
+              Your backout request has been approved. Please send the product back by{" "}
               {fmtDate(new Date(Date.now() + 86400000 * (Number(x.days) || 7)), true)} to: {x.addr || "…"}
               {x.note ? ` — Note from the team: ${x.note}` : ""}
             </>
@@ -103,7 +111,7 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
       "ap:" + r.id,
       "api.backout_decide",
       { p_id: r.id, p_approve: true, p_address: ret ? String(v.addr || "").trim() : null, p_note: String(v.note || "").trim() || null, p_days: Number(v.days) || 7, p_save_default: ret && v.save === "yes" },
-      ret ? `✅ Approved — ${who(r)} removed and told where to send the product` : `✅ Approved — ${who(r)} removed from the campaign`
+      ret ? `✅ Approved — ${who(r)} told where to send the product. They leave the campaign once you mark it received.` : `✅ Approved — ${who(r)} removed from the campaign`
     );
   };
   const decline = async (r) => {
@@ -125,9 +133,9 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
     await run("sh:" + r.id, "api.backout_mark_shipped", { p_id: r.id, p_courier: v.courier.trim(), p_tracking: v.tracking.trim(), p_url: String(v.url || "").trim() || null }, "🚚 Return shipment saved");
   };
   const returned = async (r) => {
-    const v = await ask({ title: `Product received back from ${who(r)}?`, ok: "📦 Mark returned", fields: [{ k: "note", label: "Condition / note (team only, optional)", placeholder: "e.g. Box sealed, all items ok" }] });
+    const v = await ask({ title: `Product received back from ${who(r)}?`, text: `${who(r)} will be removed from the campaign now.`, ok: "📦 Mark received", fields: [{ k: "note", label: "Condition / note (team only, optional)", placeholder: "e.g. Box sealed, all items ok" }] });
     if (!v) return;
-    await run("rt:" + r.id, "api.backout_mark_returned", { p_id: r.id, p_note: String(v.note || "").trim() || null }, "📦 Marked returned — creator thanked");
+    await run("rt:" + r.id, "api.backout_mark_returned", { p_id: r.id, p_note: String(v.note || "").trim() || null }, `📦 Product received — ${who(r)} removed from the campaign`);
   };
   const editAddr = async () => {
     const v = await ask({ title: "Default return address", text: "Pre-filled every time you approve a return on this campaign. You can still change it per creator.", ok: "Save", fields: [{ k: "addr", label: "Address", area: true, value: d.return_address || "", placeholder: "Name, full address, pin code, phone" }] });
@@ -137,17 +145,21 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
 
   if (!on || bo.error) return null;
   // ek creator ke page par: kuch nahi hai aur request ban bhi nahi sakti (post live / bahar) → kuch mat dikhao
-  const canCreate = only && row && !openReq && !rows.some((r) => ["approved", "shipped"].includes(r.status)) && !row.failed;
-  if (only && !rows.length && !canCreate) return null;
+  // post live / done → backout nahi (sirf Delete); server bhi rokta hai
+  const posted = !!row && (!!row.posted || (row.kind === "p" ? ["published", "completed"].includes(row.x?.stage) || (row.x?.posts || []).length > 0 : row.i?.status === "posted" || (row.i?.post_links || []).length > 0));
+  const canCreate = only && row && !posted && !openReq && !rows.some((r) => ["approved", "shipped"].includes(r.status)) && !row.failed;
+  if (only && !mineRows.length && !canCreate) return null;
 
   return (
     <section className={`ga-card bk ${only ? "bk--one" : ""}`}>
       <div className="bk-head">
         <div>
-          <h2 className="ga-h2">🚪 {only ? "Backout / return" : "Backouts & returns"}</h2>
+          <h2 className="ga-h2">🚪 {product ? (only ? "Backout / return" : "Backouts & returns") : only ? "Backout" : "Backouts"}</h2>
           {!only && (
             <p className="bk-sub">
-              Creators who asked to leave before posting. Approving removes them from the campaign; barter products come back to the address you give.
+              {product
+                ? "Creators who asked to back out before posting. If the product went out, they stay here (and on the campaign) until you mark it received — then they’re removed. Otherwise approving removes them."
+                : "Creators who asked to back out before posting. Approving removes them from the campaign."}
             </p>
           )}
         </div>
@@ -162,7 +174,7 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
         )}
       </div>
 
-      {!only && (
+      {!only && product && (
         <p className="bk-addr">
           <span>Default return address:</span> {d.return_address ? <b>{d.return_address}</b> : <i>not set</i>}{" "}
           <button type="button" className="bk-txt" disabled={busy === "addr"} onClick={editAddr}>
@@ -171,18 +183,19 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
         </p>
       )}
 
-      {!rows.length && !only && <p className="bk-none">No backout requests on this campaign.</p>}
+      {!mineRows.length && !only && <p className="bk-none">No backout requests on this campaign.</p>}
+      {!rows.length && !only && pastN > 0 && <p className="bk-none">Nothing open right now.</p>}
 
       {rows.length > 0 && (
         <ul className="bk-list">
           {rows.map((r) => {
-            const [stl, stc] = ST[r.status] || [r.status, ""];
+            const [stl, stc] = stOf(r);
             return (
               <li key={r.id} className="bk-row">
                 <div className="bk-top">
                   <b>{who(r)}</b>
                   {r.full_name && r.handle ? <span className="bk-mut"> · {r.full_name}</span> : null}
-                  <span className={`bk-chip ${r.kind === "return" ? "is-info" : ""}`}>{r.kind === "return" ? "Return product" : "Withdraw"}</span>
+                  <span className={`bk-chip ${r.kind === "return" ? "is-info" : ""}`}>{r.kind === "return" ? "Backout · return product" : "Backout"}</span>
                   <span className={`bk-chip ${stc}`}>{stl}</span>
                   {r.overdue && <span className="bk-chip is-bad">Overdue since {dt(r.return_by)}</span>}
                 </div>
@@ -196,12 +209,13 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
                   {r.decided_at ? ` · ${r.status === "declined" ? "declined" : "approved"} ${dt(r.decided_at)}${r.decided_by_name ? ` by ${r.decided_by_name}` : ""}` : ""}
                 </p>
                 <p className="bk-mut">
+                  {!r.phone && !r.email ? "No phone or email saved" : null}
                   {r.phone ? (
                     <a href={`https://wa.me/${String(r.phone).replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">
                       💬 {r.phone}
                     </a>
                   ) : null}
-                  {r.email ? <> · ✉ {r.email}</> : null}
+                  {r.email ? <>{r.phone ? " · " : ""}✉ {r.email}</> : null}
                   {!r.has_app ? " · not on the app — tell them on WhatsApp" : ""}
                 </p>
                 {r.return_address && (
@@ -256,6 +270,12 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
         </ul>
       )}
 
+      {pastN > 0 && (
+        <button type="button" className="bk-txt bk-past" onClick={() => setShowPast((v) => !v)}>
+          {showPast ? "Hide finished" : `Show finished (${pastN})`}
+        </button>
+      )}
+
       {canCreate && (
         <div className="bk-new">
           <button type="button" className="ga-btn ga-btn--ghost" disabled={!!busy} onClick={create}>
@@ -281,6 +301,7 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
         .bk-addr { margin-top: 10px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
         .bk-addr span { color: var(--ad-muted); }
         .bk-txt { border: 0; background: none; padding: 0; font-weight: 700; color: var(--ad-primary); cursor: pointer; }
+        .bk-past { margin-top: 10px; font-size: 12.5px; }
         .bk-none { margin-top: 10px; font-size: 13px; color: var(--ad-muted); }
         .bk-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
         .bk-row { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--ad-line-2); background: #fff; }

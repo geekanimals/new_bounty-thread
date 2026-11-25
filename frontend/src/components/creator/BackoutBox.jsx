@@ -50,9 +50,9 @@ export function BackoutCard({ bo, onChange }) {
     return (
       <div className="bo">
         <span className="ts-ic">⏳</span>
-        <h2>Request sent</h2>
+        <h2>Backout request sent</h2>
         <p>
-          You asked to leave this campaign — <b>{r.reason_note || r.reason_label}</b>. Our team will get in touch with you shortly.
+          You asked to back out of this campaign — <b>{r.reason_note || r.reason_label}</b>. Our team will get in touch with you shortly.
         </p>
         <button type="button" className="bx-btn bx-btn--ghost" disabled={busy} onClick={cancel}>
           {busy ? "…" : "Cancel request — I'll continue"}
@@ -66,8 +66,8 @@ export function BackoutCard({ bo, onChange }) {
     return (
       <div className="bo">
         <span className="ts-ic">👋</span>
-        <h2>You have left this campaign</h2>
-        <p>Your request was approved{r.decided_at ? ` on ${fdate(r.decided_at)}` : ""}. Thank you for letting us know.</p>
+        <h2>You have backed out of this campaign</h2>
+        <p>Your backout request was approved{r.decided_at ? ` on ${fdate(r.decided_at)}` : ""}. Thank you for letting us know.</p>
         {r.admin_note && <p className="bo-note">Note from the team: {r.admin_note}</p>}
         <Link href="/creator/discover" className="bx-btn bx-btn--dark">
           Find other campaigns →
@@ -81,7 +81,7 @@ export function BackoutCard({ bo, onChange }) {
       <div className="bo">
         <span className="ts-ic">✅</span>
         <h2>Product received back</h2>
-        <p>We received the product{r.returned_at ? ` on ${fdate(r.returned_at)}` : ""}. Your return is complete — thank you.</p>
+        <p>We received the product{r.returned_at ? ` on ${fdate(r.returned_at)}` : ""}. Your return is complete and you have been removed from the campaign — thank you.</p>
         <Link href="/creator/discover" className="bx-btn bx-btn--dark">
           Find other campaigns →
         </Link>
@@ -95,8 +95,8 @@ export function BackoutCard({ bo, onChange }) {
       <h2>{r.status === "shipped" ? "Return on the way" : "Please return the product"}</h2>
       {r.status === "approved" ? (
         <p>
-          Your request to leave was approved and you are no longer on this campaign. Please send the product back by <b>{fdate(r.return_by)}</b>
-          {r.overdue ? " — this is now overdue" : ""}.
+          Your backout request was approved. Please send the product back by <b>{fdate(r.return_by)}</b>
+          {r.overdue ? " — this is now overdue" : ""}. You’ll be removed from the campaign once we receive it.
         </p>
       ) : (
         <p>
@@ -168,7 +168,7 @@ export function BackoutAsk({ P, bo, onChange }) {
         </button>
       ) : (
         <div className="bo-askbox">
-          <h3>Leave this campaign</h3>
+          <h3>Back out of this campaign</h3>
           <p>
             {d.kind === "return"
               ? "Tell us why. Our team will talk to you, and once it’s approved you’ll need to send the product back."
@@ -187,7 +187,7 @@ export function BackoutAsk({ P, bo, onChange }) {
           <textarea id="bo-n" className="bx-input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="bo-btns">
             <button type="button" className="bx-btn bx-btn--dark" disabled={busy} onClick={send}>
-              {busy ? "Sending…" : "Send request"}
+              {busy ? "Sending…" : "Send backout request"}
             </button>
             <button type="button" className="bx-btn bx-btn--ghost" onClick={() => (setOpen(false), setErr(""))}>
               Cancel

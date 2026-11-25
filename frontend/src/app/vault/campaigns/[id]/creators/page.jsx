@@ -91,6 +91,17 @@ export default function WorkspaceCreators() {
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   // ⭐ har creator ki purani ratings ka average (sab campaigns) — list mein badge
   const rsum = useRpc("admin", "api.campaign_rating_summary", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
+  // 🚪 khula backout / product wapas aa raha — row par badge (Backouts box wahi data, cache se)
+  const bos = useRpc("admin", "api.campaign_backouts", { p_campaign: id }, { skip: !on, refreshMs: 60000 });
+  const boOf = useMemo(() => {
+    const m = {};
+    ((bos.data && bos.data.rows) || []).forEach((r) => {
+      if (!["requested", "approved", "shipped"].includes(r.status) || (r.kind === "withdraw" && r.status === "approved")) return;
+      if (r.participation_id) m["p-" + r.participation_id] = r;
+      if (r.invite_id) m["i-" + r.invite_id] = r;
+    });
+    return m;
+  }, [bos.data]);
   // sheet upload / profile / contact — email, city, followers jo tracker mein nahi aate
   const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const kind = camp?.campaign_type || "barter";
@@ -527,7 +538,7 @@ export default function WorkspaceCreators() {
         </div>
       </section>
 
-      <Backouts campaignId={id} onChanged={reload} />
+      <Backouts campaignId={id} onChanged={() => (bos.reload(true), reload())} />
 
       {kind === "visit" && (
         <p className="wcr-visitlink">
@@ -708,6 +719,7 @@ export default function WorkspaceCreators() {
               key={x.id}
               c={x}
               rating={(rsum.data || {})[x.id] || null}
+              backout={boOf[x.id] || null}
               href={`/vault/campaigns/${c.id}/creators/${x.id}`}
               checked={sel.includes(x.id)}
               onCheck={() => toggle(x.id)}

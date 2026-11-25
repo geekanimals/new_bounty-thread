@@ -127,7 +127,7 @@ export default function MyCampaigns() {
             const idx = m.stage === "completed" ? steps.length - 1 : steps.findIndex((x) => x.key === step);
             const label = (steps[idx] || {}).label;
             const pill = declined
-              ? [isBackedOut(m) ? "Left campaign" : "Not selected", "red"]
+              ? [isBackedOut(m) ? "Backed out" : "Not selected", "red"]
               : g === "done"
               ? ["Completed", "green"]
               : revision
