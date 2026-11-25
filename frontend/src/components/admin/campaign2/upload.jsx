@@ -29,7 +29,9 @@ export const BK_FIELDS = [
   ["email", "Email", /(e-?mail|mail id)/i],
   ["city", "City", /(city|location|place|town)/i],
   ["followers", "Followers", /(follower|followers|reach|fans)/i],
-  ["status", "Status", /^(?!.*(mail|address|track)).*(status|stage|phase|step|approv|selected|confirm|final|shortlist|tick|✓)/i],
+  ["status", "Status", /^(?!.*(mail|address|track|reason)).*(status|stage|phase|step|approv|selected|confirm|final|shortlist|tick|✓)/i],
+  // Backout / Delivery issue rows: kyun (backout reason / kya issue hua)
+  ["reason", "Reason", /^(?!.*(status|stage|step)).*(reason|issue|problem|remark|why|comment)/i],
   ["address", "Address", /^(?!.*(e-?mail|mail id)).*(address|addr\b)/i],
   ["state", "State", /^(state|province)\b/i],
   ["pincode", "PIN code", /(pin ?code|^pin\b|zip|postal|post ?code)/i],
@@ -38,7 +40,7 @@ export const BK_FIELDS = [
   ["coupon", "Coupon code", /^(?!.*(barter|track|awb|pin|zip|postal)).*(coupon|promo ?code|discount ?code|voucher|creator ?code|^code$)/i],
 ];
 // Figma ke match grid ka order
-export const GRID_ORDER = ["name", "handle", "phone", "email", "city", "followers", "status", "address", "state", "pincode", "courier", "tracking", "video_link", "post_link", "coupon", "fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
+export const GRID_ORDER = ["name", "handle", "phone", "email", "city", "followers", "status", "reason", "address", "state", "pincode", "courier", "tracking", "video_link", "post_link", "coupon", "fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
 const PAY_KEYS = ["fee", "advance_pct", "pay_days", "pay_terms", "upi", "account_no", "ifsc", "account_name"];
 const SHIP_COLS = ["address", "state", "pincode", "courier", "tracking"];
 // Physical visit: koi product nahi — paid jaisa (fee / UPI columns, address / courier nahi)
@@ -62,7 +64,20 @@ const BASE_ST = [
   ["posted", "Posted / Done", "Post is live · insights start", "Campaign complete", "Post link"],
 ];
 const SHIP_ST = ["address_confirmed", "courier_sent", "courier_delivered"];
+/* Backout / Delivery issue — journey ka step nahi: creator jis step par hai wahin rehta hai.
+ * Sirf campaign mein pehle se maujood creator par; upload hote hi request / issue ban jaata hai (koi message nahi). */
+export const SPECIAL_ST = {
+  backout: ["backout", "Backout", "Creates a backout request — it waits for your approval in Backouts", "no message", "Reason (why they back out)"],
+  backout_return: ["backout", "Backout / return product", "Creates a backout request — approve it with the return address in Backouts & returns", "no message", "Reason (why they back out)"],
+  delivery_issue: ["delivery_issue", "Delivery issue", "Flags a logistics problem — stays in Delivery issues until resolved", "no message", "Reason (wrong product / courier lost / damaged / not delivered)"],
+};
+export const SPECIAL_KEYS = ["backout", "delivery_issue"];
+export const isSpecial = (k) => SPECIAL_KEYS.includes(k);
+const specialFor = (kind) => (noShip(kind) ? [SPECIAL_ST.backout] : [SPECIAL_ST.backout_return, SPECIAL_ST.delivery_issue]);
 export function statusesFor(kind) {
+  return [...journeyStatusesFor(kind), ...specialFor(kind)];
+}
+function journeyStatusesFor(kind) {
   const fee = "Fee (or set it later on 💰 Payments)";
   if (noShip(kind))
     return BASE_ST.filter((s) => !SHIP_ST.includes(s[0])).map((s) =>
@@ -78,8 +93,8 @@ export function statusesFor(kind) {
   return BASE_ST;
 }
 export const stRank = (k) => Math.max(0, BASE_ST.findIndex((x) => x[0] === k)) + 1;
-export const stLabel = (k) => (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[1];
-export const stMsg = (k) => (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[3];
+export const stLabel = (k) => (k === "backout" ? "Backout" : k === "delivery_issue" ? "Delivery issue" : (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[1]);
+export const stMsg = (k) => (isSpecial(k) ? "no message" : (BASE_ST.find((x) => x[0] === k) || BASE_ST[0])[3]);
 export const KIND_LABEL = { barter: "🎁 Barter campaign", barter_paid: "🎁💰 Barter + Paid campaign", paid: "💰 Paid campaign", visit: "📍 Physical visit campaign" };
 export const bkKindOf = (c) => {
   const k = c ? campKind(c) : "barter";
@@ -110,6 +125,8 @@ export function parseStatus(v) {
     video_submitted: ["video submitted", "submitted", "video sent"],
     client_approved: ["client approved", "video approved", "content approved"],
     posted: ["posted", "live", "published", "reel posted", "done", "completed", "complete", "posted / done", "posted/done", "posted done"],
+    backout: ["backout", "back out", "backed out", "back-out", "withdraw", "withdrawn", "withdrew", "left", "left campaign", "dropped out", "return", "return product", "returning", "returning product", "product return", "backout / return product", "backout/return", "backout / return"],
+    delivery_issue: ["delivery issue", "logistics issue", "issue", "wrong product", "wrong product delivered", "courier lost", "lost", "parcel lost", "damaged", "product damaged", "not delivered", "stuck in transit", "rto"],
   };
   for (const k in M) if (M[k].includes(t)) return k;
   return null;
@@ -260,9 +277,12 @@ export function rowData(up, r, kind) {
   const g0 = (k) => (up.map[k] != null ? String(r.cells[up.map[k]] || "").trim() : "");
   const g = (k) => (["post_link", "video_link", "handle"].includes(k) ? fixLink(g0(k)) : g0(k));
   const st = r.status || "registered";
+  const sp = isSpecial(st);
   return {
+    // backout / delivery issue: server ko journey step nahi — "flag" alag se (api.bulk_flag_rows)
+    ...(sp ? { flag: st, reason: g0("reason"), raw: up.map.status != null ? String(r.cells[up.map.status] || "").trim() : "" } : {}),
     name: g("name"), handle: g("handle"), phone: isPhoneLike(g("phone")) ? g("phone") : "", email: g("email"), city: g("city"), followers: g("followers"),
-    status: serverStatus(kind, st), approved: stRank(st) >= 4,
+    status: sp ? "registered" : serverStatus(kind, st), approved: !sp && stRank(st) >= 4,
     address: g("address"), state: g("state"), pincode: g("pincode"), courier: g("courier"), tracking: g("tracking"),
     post_link: g("post_link"), video_link: g("video_link"), coupon: g0("coupon").toUpperCase().replace(/\s+/g, ""),
     fee: g("fee"), advance_pct: g("advance_pct"), pay_days: g("pay_days"), pay_terms: g("pay_terms"), upi: g("upi"), account_no: g("account_no"), ifsc: g("ifsc"), account_name: g("account_name"),
@@ -284,13 +304,14 @@ function hasField(k, d) {
   if (k === "post_link") return /instagram\.com\/(reel|reels|p|tv|stories)\//i.test(d.post_link || "");
   return !!String(d[k] || "").trim();
 }
-function siteRank(ex) {
+export function siteRank(ex) {
   if (!ex) return 0;
   const a = ex.stage && FROM_STAGE[ex.stage],
     b = ex.invite_status === "courier_received" ? "courier_delivered" : ex.invite_status;
   return Math.max(a ? stRank(a) : 0, b && BASE_ST.some((x) => x[0] === b) ? stRank(b) : 0);
 }
 export function rowNeeds(up, r, d, ex, kind) {
+  if (isSpecial(r.status)) return String(d.reason || "").trim() ? [] : [{ step: stLabel(r.status), cols: [up.map.reason == null ? "Reason (no “Reason” column)" : "Reason"] }];
   const rank = stRank(serverStatus(kind, r.status || "registered")),
     sr = siteRank(ex),
     out = [];
@@ -313,9 +334,19 @@ export function rowNeeds(up, r, d, ex, kind) {
   });
   return out;
 }
+// Backout / Delivery issue rows jo "upload anyway" se bhi nahi ja sakti (null = theek)
+export function rowHard(up, r, ex, kind) {
+  if (!isSpecial(r.status)) return null;
+  if (r.status === "delivery_issue" && noShip(kind)) return "This campaign has no product — Delivery issue doesn’t apply";
+  if (!ex) return `“${stLabel(r.status)}” is only for creators already on this campaign — add them first`;
+  if (r.status === "delivery_issue" && siteRank(ex) < stRank("courier_sent")) return "Delivery issue needs the product shipped first (Courier sent or later)";
+  return null;
+}
 // row upload kyun NAHI hogi (null = jayegi)
 export function rowBlock(up, r, p, ex, kind) {
   if (p && p.no_contact) return "No WhatsApp, email or Instagram";
+  const hard = rowHard(up, r, ex, kind);
+  if (hard) return hard;
   const raw = up.map.status != null ? String(r.cells[up.map.status] || "").trim() : "";
   if (raw && !parseStatus(raw) && !r.picked) return `Status “${raw.slice(0, 30)}” isn't a step we know — pick the step`;
   const nd = rowNeeds(up, r, rowData(up, r, kind), ex, kind),

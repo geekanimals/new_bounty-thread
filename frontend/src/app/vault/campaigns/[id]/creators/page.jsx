@@ -304,13 +304,17 @@ export default function WorkspaceCreators() {
 
   // ⬇ list jaisi filter hai waisi hi — Excel / CSV
   const sheetRows = () => {
-    const head = ["Name", "Instagram", "WhatsApp", "Email", "City", "Followers", "Step", "Brief match", "What doesn't match / missing", "Next"];
+    const prod = kind === "barter" || kind === "barter_paid";
+    const head = ["Name", "Instagram", "WhatsApp", "Email", "City", "Followers", "Step", "Brief match", "What doesn't match / missing", "Next", prod ? "Backout / return" : "Backout", ...(prod ? ["Delivery issue"] : []), "Rating (avg)"];
+    const boTxt = (b) => (!b ? "" : `${b.status === "requested" ? "Backout asked" : b.status === "shipped" ? "Return on the way" : "Return pending"} · ${b.reason_note || b.reason_label || ""}`);
     return [
       head,
       ...rows.map((x) => {
         const m = x.pid ? (bmatch.data || {})[x.pid] : null;
         const ms = matchState(m);
-        return [x.name, x.handle, sheetPhone(x.x?.phone || x.i?.phone || ""), x.x?.email || x.x?.creator?.email || x.i?.email || "", x.city === "—" ? "" : x.city, x.followersN || "", `${x.no ? `${x.no}/13 · ` : ""}${x.stepNote || ""}`, ms ? ms.label.replace(/^\S+\s/, "") : "Not checked", ms && ms.k !== "ok" ? autoReject(m).text.replace(/^This campaign needs /, "") : "", x.next || ""];
+        const di = diOf[x.id];
+        const rt = (rsum.data || {})[x.id];
+        return [x.name, x.handle, sheetPhone(x.x?.phone || x.i?.phone || ""), x.x?.email || x.x?.creator?.email || x.i?.email || "", x.city === "—" ? "" : x.city, x.followersN || "", `${x.no ? `${x.no}/13 · ` : ""}${x.stepNote || ""}`, ms ? ms.label.replace(/^\S+\s/, "") : "Not checked", ms && ms.k !== "ok" ? autoReject(m).text.replace(/^This campaign needs /, "") : "", x.next || "", boTxt(boOf[x.id]), ...(prod ? [di ? `${di.label}${di.note ? " — " + di.note : ""}` : ""] : []), rt && rt.count ? `${rt.avg} (${rt.count})` : ""];
       }),
     ];
   };

@@ -8,7 +8,7 @@ import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { useToast, downloadFile, downloadXlsx, TableState, when, sheetPhone } from "@/components/admin/campaign2/kit";
 import { useRpc, rpc, errText } from "@/lib/supabase";
 import UploadHistory from "@/components/admin/campaign2/UploadHistory";
-import { UploadCard, MsgOff, saveUpload, buildUpload, readUploadFile, readPasted, readSheetLink, statusesFor, useUploadKind, KIND_LABEL } from "@/components/admin/campaign2/upload";
+import { UploadCard, MsgOff, saveUpload, buildUpload, readUploadFile, readPasted, readSheetLink, statusesFor, isSpecial, useUploadKind, KIND_LABEL } from "@/components/admin/campaign2/upload";
 
 // 📄 Campaign sheet ke columns — purane SH_COLS jaisa (bulk upload wale hi columns, wapas upload ho sake)
 const SH_COLS = [["Name", "name"], ["Instagram", "instagram"], ["WhatsApp", "whatsapp"], ["Email", "email"], ["City", "city"], ["Followers", "followers"], ["Status", "status"], ["Address", "address"], ["State", "state"], ["PIN code", "pincode"], ["Courier", "courier"], ["Tracking", "tracking"], ["Video link", "video_link"], ["Post link", "post_link"]];
@@ -21,7 +21,8 @@ const TPL_COLS = [
   ["WhatsApp", "10-digit number (India) or +country code — every update goes here", "9876543210", "one of these 3"],
   ["Email", "Their email", "asha@example.com", "one of these 3"],
   ["City", "City", "Mumbai", "optional"],
-  ["Status", "The exact step name (see Statuses). Blank = Applied", "Address confirmed", "optional"],
+  ["Status", "The exact step name (see Statuses). Blank = Applied. Backout / Delivery issue for creators already on the campaign", "Address confirmed", "optional"],
+  ["Reason", "Only for Backout / Delivery issue — why they back out, or what went wrong (wrong product, courier lost, damaged, not delivered)", "Courier lost at the hub", "for Backout / Delivery issue"],
   ["Address", "Delivery address — for Address confirmed / Courier sent / Courier delivered", "Flat 4B, Lake View, Koregaon Park", "for those 3", "ship"],
   ["State", "State of the address", "Maharashtra", "for those 3", "ship"],
   ["PIN code", "6-digit PIN", "411001", "for those 3", "ship"],
@@ -44,11 +45,14 @@ const TPL_EX = [
   { Name: "Meera Shah", Instagram: "meera.styles", WhatsApp: "9000011111", City: "Pune", Status: "Address confirmed", Address: "Flat 4B, Lake View, Koregaon Park", State: "Maharashtra", "PIN code": "411001", "Fee (₹)": "8000", "Advance %": "0", "Pay days": "5", "Account no": "50100123456789", IFSC: "HDFC0001234", "Account holder": "Meera Shah" },
   { Name: "Kabir Sen", Instagram: "@kabir.cooks", WhatsApp: "9830012345", Email: "kabir@example.com", City: "Kolkata", Status: "Courier sent", Address: "12 Park St", State: "West Bengal", "PIN code": "700016", Courier: "DTDC", Tracking: "D12345678" },
   { Name: "Nisha Jain", Instagram: "nisha.home", WhatsApp: "9123456780", City: "Jaipur", Status: "Video submitted", "Video link": "https://drive.google.com/file/d/example" },
+  { Name: "Karan Gill", Instagram: "@karan.fits", WhatsApp: "9988776655", City: "Chandigarh", Status: "Backout", Reason: "No time to shoot this month" },
+  { Name: "Priya Nair", Instagram: "priya.glow", WhatsApp: "9445566778", City: "Kochi", Status: "Delivery issue", Reason: "Wrong product delivered — got the 100 ml bottle", ship: true },
 ];
 const tplCols = (kind) => TPL_COLS.filter((c) => !(c[4] === "pay" && kind === "barter") && !(c[4] === "ship" && kind === "paid"));
 const tplRows = (kind) => {
   const cols = tplCols(kind);
-  return [cols.map((c) => c[0]), ...TPL_EX.map((r) => cols.map((c) => (kind === "paid" && ["Address confirmed", "Courier sent"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
+  // paid / visit: product nahi → Delivery issue ki example row nahi
+  return [cols.map((c) => c[0]), ...TPL_EX.filter((r) => !(r.ship && (kind === "paid" || kind === "visit"))).map((r) => cols.map((c) => (kind === "paid" && ["Address confirmed", "Courier sent"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
 };
 
 const PAY_COLS = [["Fee (₹)", "fee"], ["Advance %", "advance_pct"], ["Pay days", "pay_days"], ["Terms", "pay_terms"], ["UPI ID", "upi"], ["Account no", "account_no"], ["IFSC", "ifsc"], ["Account holder", "account_name"]];
@@ -70,6 +74,22 @@ export function readTicked(id) {
     return [];
   }
 }
+/* 🚪 / ⚠ — khule backout / return aur delivery issue (campaign sheet download mein do info columns) */
+const BO_TXT = { requested: "Backout asked — waiting for decision", approved: "Return pending — product to come back", shipped: "Return on the way" };
+async function flagInfo(id, kind) {
+  const prod = !(kind === "paid" || kind === "visit");
+  const [b, d] = await Promise.all([rpc("admin", "api.campaign_backouts", { p_campaign: id }), prod ? rpc("admin", "api.campaign_delivery_issues", { p_campaign: id }) : Promise.resolve({})]);
+  const m = {};
+  const put = (r, k, v) => [r.participation_id && "p:" + r.participation_id, r.invite_id && "i:" + r.invite_id].filter(Boolean).forEach((key) => (m[key] = { ...(m[key] || {}), [k]: v }));
+  ((b.data && b.data.rows) || []).forEach((r) => {
+    const t = r.kind === "withdraw" && r.status === "approved" ? "" : BO_TXT[r.status];
+    if (t) put(r, "bo", `${t}${r.return_by && r.status === "approved" ? ` · by ${r.return_by}` : ""} · ${r.reason_note || r.reason_label}`);
+  });
+  ((d.data && d.data.rows) || []).filter((r) => r.status === "open").forEach((r) => put(r, "di", `${r.label}${r.note ? " — " + r.note : ""}`));
+  const head = prod ? ["Backout / return", "Delivery issue"] : ["Backout"];
+  return { head, cells: (key) => (prod ? [(m[key] || {}).bo || "", (m[key] || {}).di || ""] : [(m[key] || {}).bo || ""]) };
+}
+
 export async function downloadSheetRows(id, keys, kind, fmt = "xlsx", data = null) {
   let d = data;
   if (!d) {
@@ -81,7 +101,8 @@ export async function downloadSheetRows(id, keys, kind, fmt = "xlsx", data = nul
   const list = ((d && d.rows) || []).filter((r) => want.has(r.key));
   if (!list.length) return 0;
   const cols = [...SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
-  const aoa = [cols.map((c) => c[0]), ...list.map((r) => cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : k === "whatsapp" ? sheetPhone(r[k]) : r[k] == null ? "" : String(r[k]))))];
+  const fi = await flagInfo(id, kind).catch(() => null);
+  const aoa = [[...cols.map((c) => c[0]), ...(fi ? fi.head : [])], ...list.map((r) => [...cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : k === "whatsapp" ? sheetPhone(r[k]) : r[k] == null ? "" : String(r[k]))), ...(fi ? fi.cells(r.key) : [])])];
   const nm = `${String((d && d.campaign) || "campaign").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "campaign"}-selected`;
   if (fmt === "csv") downloadFile(nm + ".csv", aoa);
   else await downloadXlsx(nm + ".xlsx", aoa, "Creators");
@@ -105,11 +126,11 @@ export default function UploadStart({ id, mode = "upload" }) {
   const [busy, setBusy] = useState("");
   const base = `/vault/campaigns/${id}/upload`;
   const steps = statusesFor(kind);
-  const guide = steps.map((s, i) => [`${i + 1} ${s[1]}`, s[2], s[4] || "—", s[3] === "no message" ? "—" : `✉️ ${s[3]}`]);
+  const guide = steps.map((s, i) => [isSpecial(s[0]) ? `★ ${s[1]}` : `${i + 1} ${s[1]}`, s[2], s[4] || "—", s[3] === "no message" ? "—" : `✉️ ${s[3]}`]);
 
   const rows = (sheet.data && sheet.data.rows) || [];
   const cnt = (k) => rows.filter((r) => (k === "" ? true : k === "out" ? /^Out/.test(r.status || "") : r.status_key === k && !/^Out/.test(r.status || ""))).length;
-  const opts = [["", "All creators"], ...steps.map((s) => [s[0], s[1]]), ["out", "Out of the campaign"]];
+  const opts = [["", "All creators"], ...steps.filter((s) => !isSpecial(s[0])).map((s) => [s[0], s[1]]), ["out", "Out of the campaign"]];
   const saved = link.data || null;
   const gval = gsheet == null ? (saved && saved.sheet_url) || "" : gsheet;
 
@@ -153,7 +174,8 @@ export default function UploadStart({ id, mode = "upload" }) {
     const list = rows.filter((r) => (step === "" ? true : step === "out" ? /^Out/.test(r.status || "") : r.status_key === step && !/^Out/.test(r.status || "")));
     if (!list.length) return show("No creators to download for that choice.");
     const cols = [...SH_COLS.filter(([h]) => !(kind === "paid" && SHIP.includes(h))), ...(kind === "barter" ? [] : PAY_COLS)];
-    const aoa = [cols.map((c) => c[0]), ...list.map((r) => cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : r[k] == null ? "" : String(r[k]))))];
+    const fi = await flagInfo(id, kind).catch(() => null);
+    const aoa = [[...cols.map((c) => c[0]), ...(fi ? fi.head : [])], ...list.map((r) => [...cols.map(([, k]) => (k === "instagram" && r[k] ? "@" + String(r[k]).replace(/^@/, "") : k === "whatsapp" ? sheetPhone(r[k]) : r[k] == null ? "" : String(r[k]))), ...(fi ? fi.cells(r.key) : [])])];
     const lab = step ? (opts.find((o) => o[0] === step) || [])[1] || step : "";
     const nm = `${String(sheet.data.campaign || "campaign").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "campaign"}-creators${lab ? "-" + lab.replace(/[^\w]+/g, "-").toLowerCase() : ""}`;
     try {
@@ -169,7 +191,7 @@ export default function UploadStart({ id, mode = "upload" }) {
     try {
       if (fmt === "csv") downloadFile(tplName + ".csv", tplRows(kind));
       else await downloadXlsx(tplName + ".xlsx", tplRows(kind), "Creators");
-      show(`⬇ ${KIND_LABEL[kind]} template downloaded — 5 example rows, replace them with your creators`);
+      show(`⬇ ${KIND_LABEL[kind]} template downloaded — ${tplRows(kind).length - 1} example rows, replace them with your creators`);
     } catch (er) {
       show(errText(er));
     }
@@ -384,7 +406,7 @@ export default function UploadStart({ id, mode = "upload" }) {
             <p className="us-gsub">{KIND_LABEL[kind]} template · one creator per row · keep the first row as column names</p>
             <h3>📝 Step by step</h3>
             <p className="us-gtxt">
-              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it can’t go on that step until you add it.
+              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it is flagged, and one “Upload all anyway” button sends every such row without a message. 6. To mark a creator already on the campaign, write Status “Backout”{kind === "paid" || kind === "visit" ? "" : " or “Delivery issue”"} and why in the Reason column — they stay on their step and show in {kind === "paid" || kind === "visit" ? "Backouts" : "Backouts & returns / Delivery issues"}.
               {kind !== "barter" ? " 6. Fee, Advance %, Pay days, UPI / Account no + IFSC columns set each creator’s payment as they land." : ""}
             </p>
             <div className="us-gbtns">

@@ -7,7 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Note, useToast, inr } from "@/components/admin/campaign2/kit";
 import { rpc, invoke, errText } from "@/lib/supabase";
-import { UploadCard, MsgOff, loadUpload, saveUpload, rowData, rowBlock, isPhoneLike, sheetLine, statusesFor, stRank, stLabel, stMsg, dispStatus, useUploadKind } from "@/components/admin/campaign2/upload";
+import { UploadCard, MsgOff, loadUpload, saveUpload, rowData, rowBlock, rowHard, isSpecial, isPhoneLike, sheetLine, statusesFor, stRank, stLabel, stMsg, dispStatus, useUploadKind } from "@/components/admin/campaign2/upload";
 
 /*
  * Bulk upload · step 3 — purane bkCheck / bulkHtml / bkUpload jaisa:
@@ -217,8 +217,10 @@ export default function BulkUploadCheck() {
     if (!d.handle) out.push({ t: "warn", f: "handle", m: "No Instagram handle" });
     return out;
   });
-  const merged = (i) => P[i] && (P[i].duplicate || P[i].already);
-  const canAnyway = (i) => !(P[i] && P[i].no_contact);
+  // backout / delivery issue rows: "already in" hona hi chahiye — merge / skip nahi
+  const spc = (i) => isSpecial(up.rows[i].status);
+  const merged = (i) => !spc(i) && P[i] && (P[i].duplicate || P[i].already);
+  const canAnyway = (i) => !(P[i] && P[i].no_contact) && !rowHard(up, up.rows[i], ex[i], kind);
   const include = (i) => !merged(i) && (block[i] ? choice[i] === "anyway" && canAnyway(i) : choice[i] !== "skip");
   const silentOf = (i) => include(i) && (!!block[i] || choice[i] === "silent");
   const skipOf = (i) => !include(i);
@@ -226,7 +228,16 @@ export default function BulkUploadCheck() {
   const silentN = okIdx.filter(silentOf).length;
   const attn = up.rows.map((_, i) => i).filter((i) => !merged(i) && issues[i].length);
   const setCh = (i, v) => setChoice((c) => ({ ...c, [i]: c[i] === v ? undefined : v }));
-  const FIX = [["name", "Name"], ["handle", "Instagram"], ["phone", "WhatsApp"], ["email", "Email"], ["city", "City"], ["address", "Address"], ["state", "State"], ["pincode", "PIN code"], ["courier", "Courier"], ["tracking", "Tracking ID"], ["video_link", "Video link"], ["post_link", "Post link"]];
+  // ek hi button: jitni rows mein koi column chhoota hai, sab "upload anyway · no message" (har row ka alag button nahi)
+  const anyIdx = attn.filter((i) => block[i] && canAnyway(i));
+  const allAnyway = anyIdx.length > 0 && anyIdx.every((i) => choice[i] === "anyway");
+  const setAllAnyway = () =>
+    setChoice((c) => {
+      const n = { ...c };
+      anyIdx.forEach((i) => (n[i] = allAnyway ? undefined : "anyway"));
+      return n;
+    });
+  const FIX = [["name", "Name"], ["handle", "Instagram"], ["phone", "WhatsApp"], ["email", "Email"], ["city", "City"], ["address", "Address"], ["state", "State"], ["pincode", "PIN code"], ["courier", "Courier"], ["tracking", "Tracking ID"], ["video_link", "Video link"], ["post_link", "Post link"], ["reason", "Reason"]];
   const fixFields = (i) => {
     const b = String(block[i] || "") + issues[i].map((x) => x.f || "").join(" ");
     return FIX.filter(([k, l]) => ["name", "handle", "phone", "email", "city"].includes(k) || b.toLowerCase().includes(l.toLowerCase()) || (k === "pincode" && /pin/i.test(b)) || (k === "tracking" && /tracking/i.test(b)));
@@ -273,6 +284,12 @@ export default function BulkUploadCheck() {
       r = up.rows[i],
       st = r.status || "registered";
     if (!p) return { main: "…" };
+    if (isSpecial(st)) {
+      const rsn = String(data[i].reason || "").trim();
+      return st === "delivery_issue"
+        ? { main: `⚠ Delivery issue on this creator${rsn ? ` — “${rsn.slice(0, 60)}”` : ""} · they stay on their step · shows in Delivery issues until resolved`, sends: "✉️ no message" }
+        : { main: `🚪 Backout request${rsn ? ` — “${rsn.slice(0, 60)}”` : ""} · waits for your approval in ${kind === "paid" || kind === "visit" ? "Backouts" : "Backouts & returns"}`, sends: "✉️ no message now (the creator is told when you approve / decline)" };
+    }
     if (p.multi) return { main: `📸 Same ${p.multi.by} as row ${sheetLine(up, p.multi.row)} — @${p.multi.handle} is added to that creator as another Instagram`, good: true };
     if (p.duplicate) return { main: `Same Instagram / number as row ${sheetLine(up, p._dupOf != null ? p._dupOf : 0)} — merged into that row` };
     if (p.already) return { main: `Already in${p.live_stage ? ` · ${String(p.live_stage).replace(/_/g, " ")}` : ""} — nothing new in this row · skipped` };
@@ -307,7 +324,13 @@ export default function BulkUploadCheck() {
     up.rows.forEach((r, i) => {
       if (!why[i] && P[i] && P[i].duplicate) why[i] = P[i].multi ? `Same ${P[i].multi.by} as row ${sheetLine(up, P[i].multi.row)} — @${P[i].multi.handle} added to that creator as another Instagram` : `Repeat of row ${sheetLine(up, P[i]._dupOf != null ? P[i]._dupOf : 0)} — same person, merged into that row`;
     });
-    const keepIdx = rows0.map((d, i) => i).filter((i) => !why[i] && !(P[i] && (P[i].duplicate || (P[i].already && !rows0[i]._merged))));
+    // 🚪 / ⚠ rows → api.bulk_flag_rows (request / issue), baaki → normal import
+    const flagIdx = rows0.map((d, i) => i).filter((i) => isSpecial(up.rows[i].status) && include(i));
+    const flagRows = flagIdx.map((i) => ({ row: sheetLine(up, i), handle: rows0[i].handle, phone: rows0[i].phone, email: rows0[i].email, flag: up.rows[i].status, reason: rows0[i].reason || "", raw: rows0[i].raw || "" }));
+    up.rows.forEach((r, i) => {
+      if (isSpecial(r.status) && !include(i) && !why[i]) why[i] = block[i] || "Skipped by you";
+    });
+    const keepIdx = rows0.map((d, i) => i).filter((i) => !why[i] && !isSpecial(up.rows[i].status) && !(P[i] && (P[i].duplicate || (P[i].already && !rows0[i]._merged))));
     const rows = keepIdx.map((i) => rows0[i]);
     const loud = keepIdx.filter((i) => !silentOf(i)).map((i) => rows0[i]);
     const quiet = keepIdx.filter((i) => silentOf(i)).map((i) => rows0[i]);
@@ -318,6 +341,33 @@ export default function BulkUploadCheck() {
         return { row: sheetLine(up, i), name: x.name, handle: x.handle, phone: x.phone, email: x.email, status: r.status || "registered", reason: why[i] };
       })
       .filter(Boolean);
+    // sirf backout / delivery issue wali sheet (koi naya creator nahi)
+    let flagNote = "";
+    const doFlags = async () => {
+      if (!flagRows.length) return true;
+      const fr = await rpc("admin", "api.bulk_flag_rows", { p_campaign: id, p_rows: flagRows });
+      if (fr.error) {
+        setErr("Backout / delivery issue rows: " + errText(fr.error));
+        return false;
+      }
+      const f = fr.data || {};
+      flagNote = [f.backouts ? `🚪 ${f.backouts} backout request${f.backouts > 1 ? "s" : ""} created — approve them in Backouts` : "", f.issues ? `⚠ ${f.issues} delivery issue${f.issues > 1 ? "s" : ""} added` : "", (f.errors || []).length ? `Not marked: ${(f.errors || []).slice(0, 10).map((x) => `Row ${x.row}: ${x.error}`).join(" · ")}` : ""].filter(Boolean).join(" · ");
+      (f.errors || []).forEach((x) => {
+        const fr0 = flagRows.find((y) => y.row === x.row) || {};
+        notUp.push({ row: x.row, name: (rows0[flagIdx[flagRows.indexOf(fr0)]] || {}).name || "", handle: x.handle, phone: fr0.phone || "", email: fr0.email || "", status: fr0.flag || "backout", reason: x.error });
+      });
+      return true;
+    };
+    if (!rows.length && flagRows.length) {
+      setBusy(true);
+      setErr("");
+      const ok = await doFlags();
+      if (useSheet.length) await rpc("admin", "api.bulk_apply_choice", { p_campaign: id, p_rows: useSheet });
+      setBusy(false);
+      if (!ok) return;
+      saveUpload(id, { src: up.src, done: true, result: {}, notes: [flagNote], uploaded: flagIdx.map((i) => ({ name: rows0[i].name, handle: rows0[i].handle, status: up.rows[i].status })), skipped: notUp });
+      return router.push(`${base}/done`);
+    }
     if (!rows.length && useSheet.length) {
       setBusy(true);
       const ap = await rpc("admin", "api.bulk_apply_choice", { p_campaign: id, p_rows: useSheet });
@@ -355,6 +405,7 @@ export default function BulkUploadCheck() {
       Object.entries(x).forEach(([k, v]) => (typeof v === "number" ? (m[k] = (m[k] || 0) + v) : m[k] == null && (m[k] = v)));
       return m;
     }, {});
+    if (flagRows.length && (await doFlags()) && flagNote) notes.push(flagNote);
     if (quiet.length) notes.push(`🔕 ${quiet.length} creator${quiet.length > 1 ? "s" : ""} added without any message (WhatsApp / email) — as you chose`);
     if (notUp.length && d.batch_id) await rpc("admin", "api.bulk_log_skipped", { p_campaign: id, p_batch: d.batch_id, p_rows: notUp });
     const codes = rows.filter((x) => x.coupon && x.handle).map((x) => ({ handle: String(x.handle).replace(/^@/, ""), code: x.coupon }));
@@ -374,7 +425,7 @@ export default function BulkUploadCheck() {
       done: true,
       result: d,
       notes,
-      uploaded: rows.map((x) => ({ name: x.name, handle: x.handle, status: dispStatus(kind, x.status) })),
+      uploaded: [...rows.map((x) => ({ name: x.name, handle: x.handle, status: dispStatus(kind, x.status) })), ...flagIdx.map((i) => ({ name: rows0[i].name, handle: rows0[i].handle, status: up.rows[i].status }))],
       skipped: notUp,
     });
     setBusy(false);
@@ -414,6 +465,16 @@ export default function BulkUploadCheck() {
               ⚠️ {attn.length} row{attn.length > 1 ? "s" : ""} need{attn.length === 1 ? "s" : ""} a look
               <small>Fix the details here, skip the row, or upload it anyway without sending any message.</small>
             </h3>
+            {anyIdx.length > 0 && (
+              <div className="uc-allbar">
+                <span>
+                  {anyIdx.length} row{anyIdx.length > 1 ? "s are" : " is"} missing a needed column{allAnyway ? " — all will be uploaded anyway, with no message" : ""}.
+                </span>
+                <button type="button" className={`ga-btn ga-btn--sm ${allAnyway ? "ga-btn--ghost" : "ga-btn--primary"}`} onClick={setAllAnyway}>
+                  {allAnyway ? "↺ Undo — don’t upload them" : `⬆ Upload all ${anyIdx.length} anyway · no message`}
+                </button>
+              </div>
+            )}
             {attn.map((i) => {
               const d = data[i],
                 bad = !!block[i],
@@ -443,9 +504,9 @@ export default function BulkUploadCheck() {
                       </button>
                     )}
                     {bad ? (
-                      canAnyway(i) && (
-                        <button type="button" className={`ga-btn ga-btn--sm ${c === "anyway" ? "ga-btn--primary" : "ga-btn--ghost"}`} onClick={() => setCh(i, "anyway")}>
-                          {c === "anyway" ? "✓ Uploading anyway · no message" : "Upload anyway · no message"}
+                      canAnyway(i) && c === "anyway" && (
+                        <button type="button" className="ga-btn ga-btn--sm ga-btn--ghost" onClick={() => setCh(i, "anyway")} title="Leave this one row out">
+                          ✕ Don’t upload this one
                         </button>
                       )
                     ) : (
@@ -453,7 +514,7 @@ export default function BulkUploadCheck() {
                         {c === "silent" ? "✓ No message" : "Upload · no message"}
                       </button>
                     )}
-                    {bad && !canAnyway(i) && <small className="uc-mute">Needs a WhatsApp, email or Instagram — fix it or it is skipped.</small>}
+                    {bad && !canAnyway(i) && <small className="uc-mute">{rowHard(up, up.rows[i], ex[i], kind) ? "Can’t be uploaded this way — fix it or it is skipped." : "Needs a WhatsApp, email or Instagram — fix it or it is skipped."}</small>}
                   </div>
                   {fixing === i && (
                     <div className="uc-fix">
@@ -653,6 +714,7 @@ export default function BulkUploadCheck() {
         .uc-wn { color: #8a5a00; }
         .uc-ar__btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
         .uc-mute { font-size: 12px; color: var(--ad-muted); }
+        .uc-allbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 10px 0 12px; padding: 10px 12px; border-radius: 10px; background: #fff7e6; border: 1px solid #f5d9a8; font-size: 13px; font-weight: 600; color: #7a4f06; }
         .uc-fix { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--ad-soft-2); }
         .uc-fix label span { display: block; font-size: 11px; font-weight: 700; color: var(--ad-muted); margin-bottom: 3px; }
         .uc-fix .ga-input { height: 38px; width: 100%; }
