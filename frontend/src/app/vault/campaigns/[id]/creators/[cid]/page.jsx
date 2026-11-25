@@ -11,6 +11,7 @@ import { CreatorRow, buildRows, runAction, useAsk } from "@/components/admin/cam
 import PartPanel from "@/components/admin/campaign/PartPanel";
 import Backouts from "@/components/admin/campaign/Backouts";
 import RateCard from "@/components/shared/RateCard";
+import DeliveryIssues from "@/components/admin/campaign/DeliveryIssues";
 import { DRIPS, fillParts } from "@/components/admin/msg/snaptoDrips";
 
 // drip ruk gaya to kyon — creator ne kaam kar diya (delivery page jaisa)
@@ -418,6 +419,18 @@ export default function WorkspaceCreator() {
         />
 
         <Backouts campaignId={id} only={x.kind === "p" ? { pid: x.pid } : { iid: x.iid }} row={x} onChanged={reload} />
+        {/* ⚠ delivery issue — sirf product wale campaign, aur product nikalne ke baad */}
+        {["barter", "barter_paid"].includes(camp?.campaign_type || "barter") && (
+          <DeliveryIssues
+            campaignId={id}
+            only={x.kind === "p" ? { pid: x.pid } : { iid: x.iid }}
+            shipped={
+              x.kind === "p"
+                ? ["product_sent", "content_created", "content_submitted", "changes_requested", "content_approved", "published", "completed"].includes(x.x?.stage) || ["shipped", "delivered"].includes(x.x?.shipment?.status)
+                : ["courier_sent", "courier_delivered", "video_brief_sent", "video_submitted", "client_approved", "posted"].includes(x.i?.status)
+            }
+          />
+        )}
         <RateCard door="admin" pid={x.kind === "p" ? x.pid : null} iid={x.kind === "p" ? null : x.iid} />
 
         <div className={`wcc-grid ${chatOpen ? "" : "wcc-grid--closed"} ${!chatOpen && ppEl ? "has-pp" : ""}`}>

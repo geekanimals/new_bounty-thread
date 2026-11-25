@@ -896,7 +896,7 @@ function journeyDates(c) {
   ];
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null, issue = null }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const no = c.no ?? 0;
@@ -935,6 +935,11 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
           {backout && (
             <span className={`ga-badge jr-bo jr-bo--${backout.status}`} title={backout.reason_label || "Backout"}>
               {backout.status === "requested" ? "🚪 Backout asked" : backout.status === "shipped" ? "🚚 Product coming back" : "📦 Return pending"}
+            </span>
+          )}
+          {issue && (
+            <span className="ga-badge jr-bo" title={issue.note || issue.label}>
+              ⚠ {issue.label}
             </span>
           )}
           {rating && rating.count > 0 && (

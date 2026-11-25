@@ -9,6 +9,7 @@ import { rpc, useRpc, errText } from "@/lib/supabase";
 import { useCampaign, useToast } from "@/components/admin/campaign/live";
 import { CreatorRow, CreatorHead, buildRows, runAction, useAsk, sendWhatsApp, rejectAsk, matchState, autoReject } from "@/components/admin/campaign/journey";
 import Backouts from "@/components/admin/campaign/Backouts";
+import DeliveryIssues from "@/components/admin/campaign/DeliveryIssues";
 import { downloadFile, loadScript, XLSX_SRC, sheetPhone } from "@/components/admin/campaign2/kit";
 import { downloadSheetRows, tickedKey } from "@/components/admin/campaign2/UploadStart";
 import WaPanel from "@/components/admin/campaign/WaPanel";
@@ -102,6 +103,17 @@ export default function WorkspaceCreators() {
     });
     return m;
   }, [bos.data]);
+  // ⚠ khule delivery issues (wrong product / courier lost …) — row badge + journey box
+  const dis = useRpc("admin", "api.campaign_delivery_issues", { p_campaign: id }, { skip: !on || ["paid", "visit"].includes(camp?.campaign_type), refreshMs: 60000 });
+  const diOf = useMemo(() => {
+    const m = {};
+    ((dis.data && dis.data.rows) || []).forEach((r) => {
+      if (r.status !== "open") return;
+      if (r.participation_id) m["p-" + r.participation_id] = r;
+      if (r.invite_id) m["i-" + r.invite_id] = r;
+    });
+    return m;
+  }, [dis.data]);
   // sheet upload / profile / contact — email, city, followers jo tracker mein nahi aate
   const extras = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 300000 });
   const kind = camp?.campaign_type || "barter";
@@ -115,7 +127,16 @@ export default function WorkspaceCreators() {
     });
     return m;
   }, [visits.data]);
-  const BX = useMemo(() => boxesFor(kind, V), [kind, V]);
+  // journey ke aakhir mein: 🚪 Backout / return (product received mark hone tak) + ⚠ Delivery issue (resolve hone tak)
+  const BX = useMemo(
+    () => [
+      ...boxesFor(kind, V),
+      { t: "bad", l: kind === "barter" || kind === "barter_paid" ? "Backout / return" : "Backout", s: kind === "barter" || kind === "barter_paid" ? "until the product is received back" : "asked to back out", f: (c) => !!boOf[c.id] },
+      // delivery issue — sirf product wale campaign (paid mein product hi nahi)
+      ...(kind === "barter" || kind === "barter_paid" ? [{ t: "bad", l: "Delivery issue", s: "wrong product, courier lost … until resolved", f: (c) => !!diOf[c.id] }] : []),
+    ],
+    [kind, V, boOf, diOf]
+  );
   // Payment wale campaign (Paid / Barter + Paid / paid visit) — har creator ka UPI (ya bank) contact mein, copy ke saath
   const payCamp = kind === "paid" || kind === "barter_paid" || (kind === "visit" && ((camp?.contract_terms || {}).visit || {}).mode !== "experience");
   const pays = useRpc("admin", "api.campaign_payments", { p_campaign: id }, { skip: !on || !payCamp, refreshMs: 300000 });
@@ -539,6 +560,7 @@ export default function WorkspaceCreators() {
       </section>
 
       <Backouts campaignId={id} onChanged={() => (bos.reload(true), reload())} />
+      <DeliveryIssues campaignId={id} onChanged={() => dis.reload(true)} />
 
       {kind === "visit" && (
         <p className="wcr-visitlink">
@@ -720,6 +742,7 @@ export default function WorkspaceCreators() {
               c={x}
               rating={(rsum.data || {})[x.id] || null}
               backout={boOf[x.id] || null}
+              issue={diOf[x.id] || null}
               href={`/vault/campaigns/${c.id}/creators/${x.id}`}
               checked={sel.includes(x.id)}
               onCheck={() => toggle(x.id)}
