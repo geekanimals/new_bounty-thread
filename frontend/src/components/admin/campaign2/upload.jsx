@@ -133,8 +133,10 @@ export const isSpecial = (k) => SPECIAL_KEYS.includes(k);
 const specialFor = (kind) => {
   const S = SPECIAL_ST;
   const pay = kind === "barter" ? [] : [S.advance_paid, S.fully_paid];
-  if (kind === "visit") return [S.visit_booked, S.visited, S.visit_missed, S.video_overdue, S.changes_requested, ...pay, S.rejected, S.backout];
-  if (kind === "paid") return [S.video_overdue, S.changes_requested, ...pay, S.rejected, S.backout];
+  // paid / visit mein parcel nahi — Video overdue = video ki due date nikal gayi
+  const late = [S.video_overdue[0], S.video_overdue[1], kind === "visit" ? "Marks the video as late (e.g. 3 days after the visit, or the video due date has passed) — shows in Video overdue until the video comes in" : "Marks the video as late (the video due date has passed) — shows in Video overdue until the video comes in", S.video_overdue[3], S.video_overdue[4]];
+  if (kind === "visit") return [S.visit_booked, S.visited, S.visit_missed, late, S.changes_requested, ...pay, S.rejected, S.backout];
+  if (kind === "paid") return [late, S.changes_requested, ...pay, S.rejected, S.backout];
   return [S.video_overdue, S.changes_requested, ...pay, S.rejected, S.backout_return, S.delivery_issue];
 };
 export function statusesFor(kind) {

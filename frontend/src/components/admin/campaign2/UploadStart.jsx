@@ -76,7 +76,15 @@ const CRIT_TPL = [
   ["pet", "Pet age", "Age of each pet (3, 6 months …) — same order", ["3, 1", "2", "8 months"]],
 ];
 const critTpl = (crit) => CRIT_TPL.filter(([c]) => crit && crit[c]);
-const tplCols0 = (kind) => TPL_COLS.filter((c) => !(c[4] === "pay" && kind === "barter") && !(c[4] === "ship" && (kind === "paid" || kind === "visit")) && !(c[4] === "visit" && kind !== "visit"));
+// paid / visit: product nahi → Status / Reason ki help mein Delivery issue / Address confirmed nahi
+const NOPROD_TXT = {
+  Status: ["The exact step name (see Statuses). Blank = Applied. ★ statuses (Video overdue, Backout …) for creators already on the campaign", "Contract signed", "optional"],
+  Reason: ["For Rejected / Changes requested / Backout (optional for Video overdue) — why, or what to change", "Followers below the brand’s minimum", "for Rejected / Changes requested / Backout"],
+};
+const tplCols0 = (kind) =>
+  TPL_COLS.filter((c) => !(c[4] === "pay" && kind === "barter") && !(c[4] === "ship" && (kind === "paid" || kind === "visit")) && !(c[4] === "visit" && kind !== "visit")).map((c) =>
+    (kind === "paid" || kind === "visit") && NOPROD_TXT[c[0]] ? [c[0], ...NOPROD_TXT[c[0]], ...c.slice(4)] : c[0] === "Status" ? [c[0], "The exact step name (see Statuses). Blank = Applied. ★ statuses (Video overdue, Backout, Delivery issue …) for creators already on the campaign", ...c.slice(2)] : c
+  );
 const tplCols = (kind, crit) => {
   const base = tplCols0(kind);
   const at = base.findIndex((c) => c[0] === "City") + 1;
@@ -87,7 +95,7 @@ const tplRows = (kind, crit) => {
   const cols = tplCols(kind, crit);
   const cv = Object.fromEntries(critTpl(crit).map(([, l, , ex]) => [l, ex]));
   // paid / visit: product nahi → Delivery issue ki example row nahi
-  return [cols.map((c) => c[0]), ...TPL_EX.filter((r) => !((r.ship || ["Courier sent"].includes(r.Status)) && (kind === "paid" || kind === "visit")) && !(r.only && !r.only.includes(kind))).map((r, ri) => cols.map((c) => (cv[c[0]] ? (ri < 6 ? cv[c[0]][ri % cv[c[0]].length] : "") : (kind === "paid" || kind === "visit") && ["Address confirmed", "Courier sent", "Courier delivered"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : r[c[0]] || "")))];
+  return [cols.map((c) => c[0]), ...TPL_EX.filter((r) => !((r.ship || ["Courier sent"].includes(r.Status)) && (kind === "paid" || kind === "visit")) && !(r.only && !r.only.includes(kind))).map((r, ri) => cols.map((c) => (cv[c[0]] ? cv[c[0]][ri % cv[c[0]].length] /* criteria columns required hain — har example row mein bhara */ : (kind === "paid" || kind === "visit") && ["Address confirmed", "Courier sent", "Courier delivered"].includes(r.Status) && c[0] === "Status" ? "Contract signed" : (kind === "paid" || kind === "visit") && r.Status === "Video overdue" && c[0] === "Reason" ? (kind === "visit" ? "Visited 3 days ago, no video yet" : "Video due date passed, no video yet") : r[c[0]] || "")))];
 };
 
 const PAY_COLS = [["Fee (₹)", "fee"], ["Advance %", "advance_pct"], ["Pay days", "pay_days"], ["Terms", "pay_terms"], ["UPI ID", "upi"], ["Account no", "account_no"], ["IFSC", "ifsc"], ["Account holder", "account_name"]];
@@ -460,8 +468,23 @@ export default function UploadStart({ id, mode = "upload" }) {
             <p className="us-gsub">{KIND_LABEL[kind]} template · one creator per row · keep the first row as column names</p>
             <h3>📝 Step by step</h3>
             <p className="us-gtxt">
-              1. Download the {KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet. 2. One creator per row. 3. Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email. 4. Status = the step the creator is on (blank = Applied). 5. Some steps need one more column — a row without it is flagged, and one “Upload all anyway” button sends every such row without a message. 6. For creators already on the campaign the ★ statuses work too: {kind === "visit" ? "Visit booked (with Visit date), Visited, Missed visit, " : ""}Video overdue, Changes requested (Reason = what to change), {kind === "barter" ? "" : "Advance paid / Fully paid (UTR — only recorded, no money is sent), "}Rejected (Reason), Backout{kind === "paid" || kind === "visit" ? "" : ", Delivery issue"} (Reason). The template’s example rows show each one. 7. The brief’s criteria get their own required columns (only the ones this campaign asks for{crit ? `: ${[crit.gender && "Gender", crit.age && "Age", crit.marital && "Marital status", crit.categories && "Categories", crit.pet && "Pet name / type / breed / age"].filter(Boolean).join(", ") || "none"}` : ""}) {crit && crit.pet ? " — more than one pet goes comma-separated in the same cell (Bruno, Kitty)" : ""} — everything is saved on the creator’s account.{kind === "paid" || kind === "visit" ? "" : " 8. Delivered on = the day the parcel arrived (blank = today)."}
-              {kind !== "barter" ? " 6. Fee, Advance %, Pay days, UPI / Account no + IFSC columns set each creator’s payment as they land." : ""}
+              {(() => {
+                // steps ka number apne aap (pehle 8 ke baad phir "6" aata tha)
+                const noProd = kind === "paid" || kind === "visit";
+                const cl = crit ? [crit.gender && "Gender", crit.age && "Age", crit.marital && "Marital status", crit.categories && "Categories", crit.pet && "Pet name / type / breed / age"].filter(Boolean) : [];
+                const st = [
+                  `Download the ${KIND_LABEL[kind]} template below (Excel or CSV) — it has exactly the columns this campaign type needs — or copy it into a new Google Sheet.`,
+                  "One creator per row.",
+                  "Every row needs WhatsApp, Email or Instagram — best is WhatsApp + email.",
+                  "Status = the step the creator is on (blank = Applied).",
+                  "Some steps need one more column — a row without it is flagged, and one “Upload all anyway” button sends every such row without a message.",
+                  `For creators already on the campaign the ★ statuses work too: ${kind === "visit" ? "Visit booked (with Visit date), Visited, Missed visit, " : ""}Video overdue, Changes requested (Reason = what to change), ${kind === "barter" ? "" : "Advance paid / Fully paid (UTR — only recorded, no money is sent), "}Rejected (Reason), Backout${noProd ? "" : ", Delivery issue"} (Reason). The template’s example rows show each one.`,
+                  cl.length && `The brief’s criteria get their own required columns: ${cl.join(", ")}${crit.pet ? " — more than one pet goes comma-separated in the same cell (Bruno, Kitty)" : ""} — everything is saved on the creator’s account.`,
+                  !noProd && "Delivered on = the day the parcel arrived (blank = today).",
+                  kind !== "barter" && "Fee, Advance %, Pay days, UPI / Account no + IFSC columns set each creator’s payment as they land.",
+                ].filter(Boolean);
+                return st.map((t, n) => `${n + 1}. ${t}`).join(" ");
+              })()}
             </p>
             <div className="us-gbtns">
               <button type="button" className="ga-btn ga-btn--primary us-b" onClick={() => tplDownload("xlsx")}>
