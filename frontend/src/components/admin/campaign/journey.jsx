@@ -883,7 +883,7 @@ function CopyBtn({ text, what }) {
 }
 
 /* campaign ke andar har creator ki taarikhen: contract, parcel kab gaya / pahuncha, video kab aaya, kab post hua */
-function journeyDates(c) {
+function journeyDates(c, deliveredAt = null) {
   // har row mein wahi 7 khaane, wahi jagah — jo step abhi nahi hua wo khaali (sab rows ek line mein)
   const x = (c.kind === "p" && c.x) || {};
   const st = x.steps || {};
@@ -900,7 +900,8 @@ function journeyDates(c) {
     { k: "sign", icon: "📜", label: "Signed", at: con.signed_at || st.contract_signed || null },
     { k: "addr", icon: "📍", label: "Address", at: x.address_confirmed_at || st.address_confirmed || null },
     { k: "ship", icon: "🚚", label: "Parcel sent", at: ship.shipped_at || st.product_sent || null },
-    { k: "deliv", icon: "📦", label: "Delivered", at: ship.delivered_at || null },
+    // sheet creator ki delivered date (campaign_creator_extras) bhi — warna "not yet" dikhta tha
+    { k: "deliv", icon: "📦", label: "Delivered", at: ship.delivered_at || deliveredAt || null },
     vid
       ? { k: "vid", icon: "🎬", label: sub && sub.rounds > 1 ? `Video ·${sub.rounds}` : "Video", at: vid }
       : due
@@ -911,7 +912,7 @@ function journeyDates(c) {
   ];
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null, issue = null, overdue = null }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null, issue = null, overdue = null, delivered = null }) {
   const [showMatch, setShowMatch] = useState(false);
   const ms = matchState(match);
   const no = c.no ?? 0;
@@ -1104,7 +1105,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
 
       {/* campaign ki taarikhen — poori row ki chaudai mein ek patli timeline (creator column lamba na ho) */}
       <div className="jr-jdates" aria-label="Campaign dates">
-        {journeyDates(c).map((d) => (
+        {journeyDates(c, delivered).map((d) => (
           <span key={d.k} className={`jr-jd ${d.at ? "" : "is-empty"} ${d.tone ? `is-${d.tone}` : ""}`} title={d.at ? `${d.label} ${new Date(d.at).toLocaleString("en-IN")}` : `${d.label} — not yet`}>
             <span className="jr-jd__l">
               {d.icon} {d.label}

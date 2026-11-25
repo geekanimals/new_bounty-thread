@@ -27,7 +27,11 @@ export default function BulkUploadMatch() {
   }, [id]);
 
   const fields = fieldsFor(kind);
-  const grid = GRID_ORDER.map((k) => fields.find((f) => f[0] === k)).filter(Boolean);
+  // brief ke columns sirf jo criteria campaign mein hai (ya sheet mein pehle se match ho gaye)
+  const critKeys = { gender: "gender", age: "age", marital: "marital", categories: "categories", pet_name: "pet", pet_type: "pet", pet_breed: "pet", pet_age: "pet" };
+  const grid = GRID_ORDER.map((k) => fields.find((f) => f[0] === k))
+    .filter(Boolean)
+    .filter(([k]) => !critKeys[k] || (up && ((up.crit && up.crit[critKeys[k]]) || (up.map && up.map[k] != null))));
   const setCol = (k, v) =>
     setUp((u) => {
       const map = { ...u.map };

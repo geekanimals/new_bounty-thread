@@ -17,9 +17,11 @@ const petAge = (a) => {
   return String(a);
 };
 
-export default function CreatorExtras({ campaignId, row }) {
+// data = page ka api.campaign_creator_extras (reload ke saath taaza); na ho to khud laata hai
+export default function CreatorExtras({ campaignId, row, data = null }) {
   const on = !!campaignId && campaignId !== "sample" && !!row;
-  const x = useRpc("admin", "api.campaign_creator_extras", { p_campaign: campaignId }, { skip: !on, refreshMs: 120000 });
+  const own = useRpc("admin", "api.campaign_creator_extras", { p_campaign: campaignId }, { skip: !on || !!data, refreshMs: 120000 });
+  const x = data || own;
   if (!on || x.error || !x.data) return null;
   const crit = x.data.criteria || {};
   const e = (x.data.rows || {})[row.kind === "p" ? "p:" + row.pid : "i:" + row.iid] || {};

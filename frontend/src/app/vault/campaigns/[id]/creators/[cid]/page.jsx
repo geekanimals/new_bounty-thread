@@ -57,6 +57,7 @@ export default function WorkspaceCreator() {
   const pauses = useRpc("admin", "api.admin_msg_pauses", {}, { skip: !on });
   const bmatch = useRpc("admin", "api.campaign_brief_match", { p_campaign: id }, { skip: !on || !isP });
   const rsum = useRpc("admin", "api.campaign_rating_summary", { p_campaign: id }, { skip: !on });
+  const cexd = useRpc("admin", "api.campaign_creator_extras", { p_campaign: id }, { skip: !on, refreshMs: 120000 });
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   // 24 h window ke liye "abhi ka time" — har minute taaza
@@ -73,6 +74,7 @@ export default function WorkspaceCreator() {
 
   const reload = () => {
     hub.reload(true);
+    cexd.reload(true);
     drips.reload(true);
     return Promise.all([bt.reload(true), people.reload(true)]);
   };
@@ -412,6 +414,7 @@ export default function WorkspaceCreator() {
           }}
           match={isP ? (bmatch.data || {})[rid] : null}
           rating={(rsum.data || {})[cid] || null}
+          delivered={(((cexd.data || {}).rows || {})[cid.replace(/^([pi])-/, "$1:")] || {}).delivered_at || null}
           onReject={
             isP && ["applied", "eligible", "sent_to_brand"].includes(x.x?.stage)
               ? async () => {
@@ -430,7 +433,7 @@ export default function WorkspaceCreator() {
 
         <Backouts campaignId={id} only={x.kind === "p" ? { pid: x.pid } : { iid: x.iid }} row={x} onChanged={reload} />
         {/* 🐾 brief details (gender / age / pets …) + 📦 delivered date */}
-        <CreatorExtras campaignId={id} row={x} />
+        <CreatorExtras campaignId={id} row={x} data={cexd} />
         {/* ⏰ video ka intezaar (product / brief mila, video nahi) — overdue mark / clear */}
         <VideoOverdue
           campaignId={id}

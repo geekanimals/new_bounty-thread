@@ -24,7 +24,7 @@ const TPL_COLS = [
   ["Status", "The exact step name (see Statuses). Blank = Applied. Backout / Delivery issue for creators already on the campaign", "Address confirmed", "optional"],
   ["Visit date", "For Visit booked — the day they come (2026-12-05 or 05/12/2026)", "05/12/2026", "for Visit booked", "visit"],
   ["Slot", "Visit time / slot", "4 pm", "optional", "visit"],
-  ["Reason", "For Rejected / Changes requested / Backout / Delivery issue (optional for Video overdue) — why, what to change, or what went wrong (broken / damaged, wrong product or size, courier lost, not delivered)", "Courier lost at the hub", "for Backout / Delivery issue (optional for Video overdue)"],
+  ["Reason", "For Rejected / Changes requested / Backout / Delivery issue (optional for Video overdue) — why, what to change, or what went wrong (broken / damaged, wrong product or size, courier lost, not delivered)", "Courier lost at the hub", "for Rejected / Changes requested / Backout / Delivery issue"],
   ["Address", "Delivery address — for Address confirmed / Courier sent / Courier delivered", "Flat 4B, Lake View, Koregaon Park", "for those 3", "ship"],
   ["State", "State of the address", "Maharashtra", "for those 3", "ship"],
   ["PIN code", "6-digit PIN", "411001", "for those 3", "ship"],

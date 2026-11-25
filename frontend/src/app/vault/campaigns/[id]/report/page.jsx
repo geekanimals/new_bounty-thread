@@ -35,6 +35,10 @@ COLS.feed = COLS.reel.filter(([k]) => k !== "avg_watch_s");
 // har type ke ye columns hamesha dikhte hain; baaki tabhi jab kisi creator ka number ho (story ke Overview mein reach hota hi nahi)
 const CORE = { reel: ["views", "reach", "likes", "comments"], feed: ["views", "reach", "likes", "comments"], story: ["views", "interactions", "profile_visits"] };
 const colsFor = (kd, list) => COLS[kd].filter(([k]) => CORE[kd].includes(k) || list.some(({ p }) => p && p.stats && p.stats[k] != null));
+// ☑ report ke columns chuno — jo tick, wahi table mein aur wahi CSV mein (report ke apne fields)
+const DETAILS = [["profile_link", "Profile link"], ["on_geek", "On Geek OS"], ["followers", "Followers"], ["posted_on", "Posted on"], ["post_link", "Post link"], ["screenshot", "Insights screenshot"], ["source", "Numbers from"], ["status", "Status"]];
+const SRC_TXT = (st) => (st.source === "public" ? "public profile" : st.source === "screenshot" ? "screenshot" : st.source === "manual" ? "typed in" : st.source ? "Instagram insights" : "");
+const STAGE_TXT = (s) => String(s || "").replace(/_/g, " ");
 const FORM_LABEL = { views: "Views", reach: "Reach (Viewers / Accounts reached)", likes: "Likes ❤️", comments: "Comments 💬", reposts: "Reposts 🔁", shares: "Shares / sends ✈️", saves: "Saves 🔖", avg_watch_s: "Average watch time (seconds — 7s, 1m 5s)", skip_rate_pct: "Skip rate (%)", follows: "Follows", interactions: "Interactions", profile_visits: "Profile activity", replies: "Replies", link_clicks: "Link clicks", sticker_taps: "Sticker taps", followers_pct: "Viewed by followers (%)", forward: "Forward taps", back: "Back taps", next_story: "Next story", exited: "Exited" };
 const fmt = (k, v) => (v == null || v === "" ? "—" : k === "avg_watch_s" ? (v >= 60 ? `${Math.floor(v / 60)}m ${Math.round(v % 60)}s` : `${v}s`) : /_pct$/.test(k) ? `${v}%` : num(v));
 // "12,400" "12.4k" "1.2M" "7s" "1m 5s" "97.1%" → number (null = empty / unreadable)
@@ -61,6 +65,25 @@ export default function CampaignReport() {
   // all | reel-1 | story-2 | feed-1 | reviews — ?view=story-1 (Story screenshots page ka link) se wahi chip khule
   const [view, setView] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view")) || "all");
   const [askEl, ask] = useAsk();
+  // { reel: [keys], story: [...], feed: [...], details: [...] } — na ho to apne aap (CORE + jinka number hai); browser yaad rakhta hai
+  const pkKey = `geek_report_cols_${id}`;
+  const [pick, setPickRaw] = useState(() => {
+    try {
+      return (typeof window !== "undefined" && JSON.parse(window.localStorage.getItem(pkKey) || "null")) || {};
+    } catch {
+      return {};
+    }
+  });
+  const setPick = (fn) =>
+    setPickRaw((cur) => {
+      const nx = typeof fn === "function" ? fn(cur) : fn;
+      try {
+        window.localStorage.setItem(pkKey, JSON.stringify(nx));
+      } catch {
+        /* storage band — sirf is page ke liye */
+      }
+      return nx;
+    });
   const { data, error, loading, reload } = useRpc("admin", "api.campaign_analytics", { p_campaign: id }, { skip: !id || id === "sample" });
   const proofs = useProofNeeds(id);
   const needs = proofs.needs || {};
@@ -100,6 +123,19 @@ export default function CampaignReport() {
     kind === "all"
       ? ["reel", "story", "feed"].map((kd) => ({ kd, list: shown.filter(({ p }) => kindOf(p) === kd), total: allRows.filter(({ p }) => kindOf(p) === kd).length })).filter((x) => x.total > 0)
       : [{ kd: kind, list: shown, total: allRows.length }];
+
+  // ☑ tick wale columns — table aur CSV dono yahi use karte hain
+  const effCols = (kd, list) => (Array.isArray(pick[kd]) ? COLS[kd].filter(([k]) => pick[kd].includes(k)) : colsFor(kd, list));
+  const det = Array.isArray(pick.details) ? pick.details : DETAILS.map(([k]) => k);
+  const hasDet = (k) => det.includes(k);
+  const toggleCol = (kd, k, list) =>
+    setPick((cur) => {
+      const now = Array.isArray(cur[kd]) ? cur[kd] : colsFor(kd, list).map(([x]) => x);
+      return { ...cur, [kd]: now.includes(k) ? now.filter((x) => x !== k) : [...now, k] };
+    });
+  const toggleDet = (k) => setPick((cur) => ({ ...cur, details: det.includes(k) ? det.filter((x) => x !== k) : [...det, k] }));
+  const setAllCols = (kd, on) => setPick((cur) => ({ ...cur, [kd]: on ? COLS[kd].map(([k]) => k) : [] }));
+  const resetCols = () => setPick({});
 
   // ---- tiles (sirf asli numbers jodo, andaza nahi) ----
   const sumOf = (list, k) => {
@@ -271,7 +307,7 @@ export default function CampaignReport() {
           .forEach((p) => list.push({ r, p, n: ++n }));
       });
       if (!list.length) return;
-      const cols = COLS[kd];
+      const cols = effCols(kd, list);
       const tot = cols
         .filter(([k]) => !/_pct$|avg_watch_s/.test(k))
         .map(([k, l]) => {
@@ -279,12 +315,27 @@ export default function CampaignReport() {
           return [`${l} (total)`, sm.v ?? "", sm.n ? `from ${sm.n} of ${list.length}` : ""];
         });
       out.push([], [`${SECT[kd]} — ${list.length}`], ...tot, []);
-      out.push(["Instagram", "Name", "Profile link", "On Geek OS", "Followers", "Deliverable", "Post link", "Posted on", ...cols.map(([, l]) => l), "Insights screenshot", "Numbers from", "Status"]);
+      const D = (k, l) => (hasDet(k) ? [l] : []);
+      out.push(["Instagram", "Name", ...D("profile_link", "Profile link"), ...D("on_geek", "On Geek OS"), ...D("followers", "Followers"), "Deliverable", ...D("post_link", "Post link"), ...D("posted_on", "Posted on"), ...cols.map(([, l]) => l), ...D("screenshot", "Insights screenshot"), ...D("source", "Numbers from"), ...D("status", "Status")]);
       list.forEach(({ r, p, n }) => {
         const cr = r.creator || {},
           h = handleOf(r),
           st = p.stats || {};
-        out.push([h ? "@" + h : "", cr.name || "", h ? `https://instagram.com/${h}` : "", r.on_sheet || cr.followers == null ? "Not yet" : "Yes", cr.followers ?? "", `${KIND_LABEL[kd]} ${n}`, p.permalink || "", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : "", ...cols.map(([k]) => st[k] ?? ""), st.screenshot_url || p.screenshot_url || "", st.source === "public" ? "public profile" : st.source === "screenshot" ? "screenshot" : st.source === "manual" ? "typed in" : st.source ? "Instagram insights" : "", r.stage]);
+        const V = (k, v) => (hasDet(k) ? [v] : []);
+        out.push([
+          h ? "@" + h : "",
+          cr.name || "",
+          ...V("profile_link", h ? `https://instagram.com/${h}` : ""),
+          ...V("on_geek", r.on_sheet || cr.followers == null ? "Not yet" : "Yes"),
+          ...V("followers", cr.followers ?? ""),
+          `${KIND_LABEL[kd]} ${n}`,
+          ...V("post_link", p.permalink || ""),
+          ...V("posted_on", p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN") : ""),
+          ...cols.map(([k]) => st[k] ?? ""),
+          ...V("screenshot", st.screenshot_url || p.screenshot_url || ""),
+          ...V("source", SRC_TXT(st)),
+          ...V("status", r.stage),
+        ]);
       });
     });
     downloadFile(`${(c.name || "campaign").replace(/[^\w-]+/g, "_")}_report.csv`, out);
@@ -318,6 +369,43 @@ export default function CampaignReport() {
                 {c.label}
               </button>
             ))}
+          </div>
+        )}
+
+        {chip.k !== "reviews" && sections.length > 0 && (
+          <div className="rp-pick" aria-label="Choose columns">
+            <p className="rp-pick__t">
+              ☑ Choose columns — what you tick shows here and goes into the download{" "}
+              <button type="button" className="rp-pick__x" onClick={resetCols}>
+                Reset
+              </button>
+            </p>
+            {sections.map(({ kd, list }) => {
+              const on = effCols(kd, list).map(([k]) => k);
+              return (
+                <div key={kd} className="rp-pick__row">
+                  <span className="rp-pick__g">{kd === "reel" ? "🎬 Reels" : kd === "story" ? "📸 Stories" : "🖼️ Posts"}</span>
+                  {COLS[kd].map(([k, l]) => (
+                    <label key={k} className={`rp-tick ${on.includes(k) ? "is-on" : ""}`}>
+                      <input type="checkbox" checked={on.includes(k)} onChange={() => toggleCol(kd, k, list)} />
+                      {l}
+                    </label>
+                  ))}
+                  <button type="button" className="rp-pick__x" onClick={() => setAllCols(kd, on.length < COLS[kd].length)}>
+                    {on.length < COLS[kd].length ? "All" : "None"}
+                  </button>
+                </div>
+              );
+            })}
+            <div className="rp-pick__row">
+              <span className="rp-pick__g">🧾 Details</span>
+              {DETAILS.map(([k, l]) => (
+                <label key={k} className={`rp-tick ${hasDet(k) ? "is-on" : ""}`}>
+                  <input type="checkbox" checked={hasDet(k)} onChange={() => toggleDet(k)} />
+                  {l}
+                </label>
+              ))}
+            </div>
           </div>
         )}
 
@@ -408,7 +496,7 @@ export default function CampaignReport() {
               </div>
             )}
             {sections.map(({ kd, list, total }) => {
-              const cols = colsFor(kd, list);
+              const cols = effCols(kd, list);
               return (
                 <div key={kd} className="rp-sec">
                   {kind === "all" && (
@@ -421,18 +509,22 @@ export default function CampaignReport() {
                       <thead>
                         <tr>
                           <th>Creator</th>
+                          {hasDet("followers") && <th>Followers</th>}
                           <th>{KIND_LABEL[kd]}</th>
+                          {hasDet("posted_on") && <th>Posted on</th>}
                           {cols.map(([k, l]) => (
                             <th key={k}>{l}</th>
                           ))}
-                          <th>Insights</th>
+                          {hasDet("screenshot") && <th>Insights</th>}
+                          {hasDet("source") && <th>Numbers from</th>}
+                          {hasDet("status") && <th>Status</th>}
                           <th aria-label="Numbers" />
                         </tr>
                       </thead>
                       <tbody>
                         {!list.length && (
                           <tr>
-                            <td colSpan={cols.length + 4} className="rp-mute">
+                            <td colSpan={cols.length + 3 + ["followers", "posted_on", "screenshot", "source", "status"].filter(hasDet).length} className="rp-mute">
                               No one matches this filter.
                             </td>
                           </tr>
@@ -445,8 +537,14 @@ export default function CampaignReport() {
                             <tr key={key} className={p ? "" : "rp-miss"}>
                               <td>
                                 <b>{nameOf(r)}</b>
-                                {r.on_sheet && <small className="rp-sub">not on Geek OS yet</small>}
+                                {hasDet("profile_link") && handleOf(r) && (
+                                  <a className="rp-sub c2-link" href={`https://instagram.com/${handleOf(r)}`} target="_blank" rel="noopener noreferrer">
+                                    @{handleOf(r)} ↗
+                                  </a>
+                                )}
+                                {hasDet("on_geek") && r.on_sheet && <small className="rp-sub">not on Geek OS yet</small>}
                               </td>
+                              {hasDet("followers") && <td>{(r.creator || {}).followers != null ? num((r.creator || {}).followers) : "—"}</td>}
                               <td>
                                 {!p ? (
                                   <span className="rp-mute">{kd === "story" ? "Not in yet" : "Not posted yet"}</span>
@@ -458,9 +556,11 @@ export default function CampaignReport() {
                                   KIND_LABEL[kd]
                                 )}
                               </td>
+                              {hasDet("posted_on") && <td>{p && p.posted_at ? new Date(p.posted_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "—"}</td>}
                               {cols.map(([k]) => (
                                 <td key={k}>{p ? fmt(k, s[k]) : ""}</td>
                               ))}
+                              {hasDet("screenshot") && (
                               <td>
                                 {shot ? (
                                   <a href={abs(shot)} target="_blank" rel="noopener noreferrer" download title="Insights screenshot — open / download">
@@ -471,6 +571,9 @@ export default function CampaignReport() {
                                   <span className="rp-mute" title="No screenshot yet">—</span>
                                 )}
                               </td>
+                              )}
+                              {hasDet("source") && <td>{p ? SRC_TXT(s) || "—" : ""}</td>}
+                              {hasDet("status") && <td className="rp-st">{STAGE_TXT(r.stage)}</td>}
                               <td>
                                 {!p ? (
                                   kd === "story" ? (
@@ -502,6 +605,15 @@ export default function CampaignReport() {
       {askEl}
 
       <style>{`
+        .rp-pick { margin: -4px 0 16px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--ad-line-2); background: #fafbff; }
+        .rp-pick__t { margin: 0 0 8px; font-size: 12.5px; font-weight: 700; color: var(--ad-muted); }
+        .rp-pick__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+        .rp-pick__g { min-width: 84px; font-size: 12px; font-weight: 800; color: var(--ad-text); }
+        .rp-tick { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 12.5px; font-weight: 700; color: var(--ad-muted); cursor: pointer; user-select: none; }
+        .rp-tick input { width: 15px; height: 15px; accent-color: #6657e9; margin: 0; }
+        .rp-tick.is-on { border-color: #6657e9; background: #f1efff; color: #3b2fc4; }
+        .rp-pick__x { border: 0; background: none; padding: 0 4px; font-size: 12px; font-weight: 700; color: var(--ad-primary); cursor: pointer; }
+        .rp-st { text-transform: capitalize; font-size: 12.5px; }
         .rp-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 16px; }
         .rp-chip { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--ad-line-2); background: #fff; font-size: 13px; font-weight: 700; color: var(--ad-text); cursor: pointer; }
         .rp-chip:hover { border-color: #6657e9; }

@@ -786,6 +786,7 @@ export default function WorkspaceCreators() {
               backout={boOf[x.id] || null}
               issue={diOf[x.id] || null}
               overdue={lateOf(x)}
+              delivered={(((cex.data || {}).rows || {})[x.kind === "p" ? "p:" + x.pid : "i:" + x.iid] || {}).delivered_at || null}
               href={`/vault/campaigns/${c.id}/creators/${x.id}`}
               checked={sel.includes(x.id)}
               onCheck={() => toggle(x.id)}

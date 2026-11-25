@@ -417,7 +417,7 @@ export function rowNeeds(up, r, d, ex, kind) {
 export function rowHard(up, r, ex, kind) {
   if (!isSpecial(r.status)) return null;
   if (r.status === "delivery_issue" && noShip(kind)) return "This campaign has no product — Delivery issue doesn’t apply";
-  if (!ex) return `“${stLabel(r.status)}” is only for creators already on this campaign — add them first`;
+  if (!ex || (!ex.stage && !ex.invite_status)) return `“${stLabel(r.status)}” is only for creators already on this campaign — add them first`;
   if (r.status === "delivery_issue" && siteRank(ex) < stRank("courier_sent")) return "Delivery issue needs the product shipped first (Courier sent or later)";
   if (["visit_booked", "visited", "visit_missed"].includes(r.status) && kind !== "visit") return "Visit statuses are only for physical visit campaigns";
   if (["advance_paid", "fully_paid"].includes(r.status) && kind === "barter") return "This campaign has no payment";
