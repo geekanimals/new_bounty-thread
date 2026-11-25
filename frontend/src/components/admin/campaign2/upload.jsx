@@ -115,8 +115,8 @@ const SHIP_ST = ["address_confirmed", "courier_sent", "courier_delivered"];
 /* Backout / Delivery issue — journey ka step nahi: creator jis step par hai wahin rehta hai.
  * Sirf campaign mein pehle se maujood creator par; upload hote hi request / issue ban jaata hai (koi message nahi). */
 export const SPECIAL_ST = {
-  backout: ["backout", "Backout", "Creates a backout request — it waits for your approval in Backouts", "no message", "Reason (why they back out)"],
-  backout_return: ["backout", "Backout / return product", "Creates a backout request — approve it with the return address in Backouts & returns", "no message", "Reason (why they back out)"],
+  backout: ["backout", "Backout", "Creates a backout request — it waits for your approval in Backouts", "Request received (on the app)", "Reason (why they back out)"],
+  backout_return: ["backout", "Backout / return product", "Creates a backout request — approve it with the return address in Backouts & returns", "When you approve: return the product (3 reminders)", "Reason (why they back out)"],
   rejected: ["rejected", "Rejected / Not a fit", "Takes them off the campaign (screening / brand said no) — they get the “not selected” message", "Not selected (with your reason)", "Reason (why)"],
   changes_requested: ["changes_requested", "Changes requested", "Client wants changes in the submitted video — the creator is asked to re-submit", "Changes requested (with your note)", "Reason (what to change)"],
   visit_booked: ["visit_booked", "Visit booked", "Sets their visit date (+ slot)", "Visit booked", "Visit date (Slot optional)"],
@@ -124,8 +124,8 @@ export const SPECIAL_ST = {
   visit_missed: ["visit_missed", "Missed visit", "Didn’t come — book a new date later", "no message", ""],
   advance_paid: ["advance_paid", "Advance paid", "Records an advance you already paid outside (no money is sent from here)", "Payment received", "UTR (Paid amount optional — blank = the advance due)"],
   fully_paid: ["fully_paid", "Fully paid", "Records the full / remaining payment you already made (no money is sent from here)", "Payment received", "UTR (Paid amount optional — blank = everything left)"],
-  video_overdue: ["video_overdue", "Video overdue", "Marks the video as late (e.g. 3 days after the parcel arrived) — shows in Video overdue until the video comes in", "no message", "Reason (optional)"],
-  delivery_issue: ["delivery_issue", "Delivery issue", "Flags a logistics problem — stays in Delivery issues until resolved", "no message", "Reason (broken / wrong product / courier lost / not delivered)"],
+  video_overdue: ["video_overdue", "Video overdue", "Marks the video as late (e.g. 3 days after the parcel arrived) — shows in Video overdue until the video comes in", "Video overdue (3 reminders, on the app)", "Reason (optional)"],
+  delivery_issue: ["delivery_issue", "Delivery issue", "Flags a logistics problem — stays in Delivery issues until resolved", "Sorry — replacement on the way", "Reason (broken / wrong product / courier lost / not delivered)"],
 };
 export const SPECIAL_KEYS = ["backout", "delivery_issue", "video_overdue", "rejected", "changes_requested", "visit_booked", "visited", "visit_missed", "advance_paid", "fully_paid"];
 export const isSpecial = (k) => SPECIAL_KEYS.includes(k);
@@ -176,7 +176,9 @@ export function parseStatus(v) {
     .trim()
     .toLowerCase()
     .replace(/^\d+\s*[.)-]?\s*/, "")
-    .replace(/\s+/g, " ");
+    .replace(/[-_]+/g, " ") // "over-due", "back_out", "courier-delivered" → saada shabd
+    .replace(/\s+/g, " ")
+    .trim();
   const M = {
     registered: ["", "registered", "register", "applied", "invited", "invite", "new", "pending", "-", "—"],
     screened: ["screened", "eligible", "shortlisted"],
@@ -199,7 +201,7 @@ export function parseStatus(v) {
     visit_missed: ["missed visit", "visit missed", "missed", "no show", "no-show", "did not come", "didn't come"],
     advance_paid: ["advance paid", "advance done", "advance"],
     fully_paid: ["fully paid", "paid", "payment done", "full payment", "full paid", "paid in full", "payment complete"],
-    video_overdue: ["video overdue", "overdue", "video late", "late", "late video", "no video", "video pending", "pending video", "video not received", "video not sent", "video due"],
+    video_overdue: ["video overdue", "overdue", "over due", "video over due", "video late", "late", "late video", "no video", "video pending", "pending video", "video not received", "video not sent", "video due"],
     delivery_issue: ["delivery issue", "logistics issue", "issue", "exchange", "exchange product", "product exchange", "replacement", "replace", "broken", "wrong size", "wrong product", "wrong product delivered", "courier lost", "lost", "parcel lost", "damaged", "product damaged", "not delivered", "stuck in transit", "rto"],
   };
   for (const k in M) if (M[k].includes(t)) return k;
@@ -415,11 +417,21 @@ export function rowNeeds(up, r, d, ex, kind) {
   });
   return out;
 }
+// naya creator (campaign mein abhi nahi) bhi ye 3 status ke saath aa sakta hai: pehle bina message ke jod do, phir flag
+export const NEW_OK_FLAGS = ["backout", "delivery_issue", "video_overdue"];
+export const isNewOnCampaign = (ex) => !ex || (!ex.stage && !ex.invite_status);
+// naye creator ko kis step par jodna hai (flag lagne se pehle)
+export function newFlagBase(kind, flag, d) {
+  if (flag === "video_overdue") return noShip(kind) ? "video_brief_sent" : "courier_delivered";
+  if (flag === "delivery_issue") return "courier_delivered";
+  if (flag === "backout") return !noShip(kind) && (String(d.courier || d.tracking || d.address || "").trim() || "") ? "courier_delivered" : "approved";
+  return "registered";
+}
 // Backout / Delivery issue rows jo "upload anyway" se bhi nahi ja sakti (null = theek)
 export function rowHard(up, r, ex, kind) {
   if (!isSpecial(r.status)) return null;
   if (r.status === "delivery_issue" && noShip(kind)) return "This campaign has no product — Delivery issue doesn’t apply";
-  if (!ex || (!ex.stage && !ex.invite_status)) return `“${stLabel(r.status)}” is only for creators already on this campaign — add them first`;
+  if (isNewOnCampaign(ex)) return NEW_OK_FLAGS.includes(r.status) ? null : `“${stLabel(r.status)}” is only for creators already on this campaign — add them first`;
   if (r.status === "delivery_issue" && siteRank(ex) < stRank("courier_sent")) return "Delivery issue needs the product shipped first (Courier sent or later)";
   if (["visit_booked", "visited", "visit_missed"].includes(r.status) && kind !== "visit") return "Visit statuses are only for physical visit campaigns";
   if (["advance_paid", "fully_paid"].includes(r.status) && kind === "barter") return "This campaign has no payment";

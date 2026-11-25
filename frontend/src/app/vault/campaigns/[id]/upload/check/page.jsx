@@ -7,7 +7,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import WorkspaceHead from "@/components/admin/WorkspaceHead";
 import { Note, useToast, inr } from "@/components/admin/campaign2/kit";
 import { rpc, invoke, errText } from "@/lib/supabase";
-import { UploadCard, MsgOff, loadUpload, saveUpload, rowData, rowBlock, rowHard, isSpecial, critFields, isPhoneLike, sheetLine, statusesFor, stRank, stLabel, stMsg, dispStatus, useUploadKind } from "@/components/admin/campaign2/upload";
+import { UploadCard, MsgOff, loadUpload, saveUpload, rowData, rowBlock, rowHard, isSpecial, NEW_OK_FLAGS, isNewOnCampaign, newFlagBase, serverStatus, critFields, isPhoneLike, sheetLine, statusesFor, stRank, stLabel, stMsg, dispStatus, useUploadKind } from "@/components/admin/campaign2/upload";
 
 /*
  * Bulk upload · step 3 — purane bkCheck / bulkHtml / bkUpload jaisa:
@@ -362,9 +362,19 @@ export default function BulkUploadCheck() {
       if (isSpecial(r.status) && !include(i) && !why[i]) why[i] = block[i] || "Skipped by you";
     });
     const keepIdx = rows0.map((d, i) => i).filter((i) => !why[i] && !isSpecial(up.rows[i].status) && !(P[i] && (P[i].duplicate || (P[i].already && !rows0[i]._merged))));
-    const rows = keepIdx.map((i) => rows0[i]);
-    const loud = keepIdx.filter((i) => !silentOf(i)).map((i) => rows0[i]);
-    const quiet = keepIdx.filter((i) => silentOf(i)).map((i) => rows0[i]);
+    // naya creator + Backout / Delivery issue / Video overdue → pehle bina message ke us step par jodo, phir flag (api.bulk_flag_rows)
+    const newFlagIdx = flagIdx.filter((i) => NEW_OK_FLAGS.includes(up.rows[i].status) && isNewOnCampaign(ex[i]) && !(P[i] && P[i].duplicate));
+    const newFlagRows = newFlagIdx.map((i) => {
+      const { flag, raw, reason, visit_on, slot, amount, utr, paid_on, ...d } = rows0[i];
+      const st = newFlagBase(kind, up.rows[i].status, d);
+      return { ...d, status: serverStatus(kind, st), approved: stRank(st) >= 4 };
+    });
+    const rows = [...keepIdx.map((i) => rows0[i]), ...newFlagRows];
+    // inko bhi unke step ka message jata hai (invite → app) — sirf "no message" chuna ho to chup-chaap
+    const nfLoud = newFlagRows.filter((r, k) => !silentOf(newFlagIdx[k]));
+    const nfQuiet = newFlagRows.filter((r, k) => silentOf(newFlagIdx[k]));
+    const loud = [...keepIdx.filter((i) => !silentOf(i)).map((i) => rows0[i]), ...nfLoud];
+    const quiet = [...keepIdx.filter((i) => silentOf(i)).map((i) => rows0[i]), ...nfQuiet];
     const notUp = up.rows
       .map((r, i) => {
         if (!why[i]) return null;
@@ -471,6 +481,7 @@ export default function BulkUploadCheck() {
     await doExtras();
     if (extraNote) notes.push(extraNote);
     if (quiet.length) notes.push(`🔕 ${quiet.length} creator${quiet.length > 1 ? "s" : ""} added without any message (WhatsApp / email) — as you chose`);
+    if (newFlagRows.length) notes.push(`➕ ${newFlagRows.length} new creator${newFlagRows.length > 1 ? "s" : ""} with Backout / Delivery issue / Video overdue added to the campaign first, then marked`);
     if (notUp.length && d.batch_id) await rpc("admin", "api.bulk_log_skipped", { p_campaign: id, p_batch: d.batch_id, p_rows: notUp });
     const codes = rows.filter((x) => x.coupon && x.handle).map((x) => ({ handle: String(x.handle).replace(/^@/, ""), code: x.coupon }));
     if (codes.length) {
