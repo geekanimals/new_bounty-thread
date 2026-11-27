@@ -66,6 +66,12 @@ export default function ShareCampaign({ id }) {
                   {copied ? "Copied ✓" : "Copy"}
                 </button>
               </div>
+              {info.via_link && (
+                <p className="shc-stat">
+                  📈 Applied through this link: <b>{info.via_link.applied || 0}</b>
+                  {info.via_link.from_ads ? <> · from Instagram / Facebook ads: <b>{info.via_link.from_ads}</b></> : null}
+                </p>
+              )}
               <div className="shc-acts">
                 <a className="ga-btn ga-btn--ghost ga-btn--sm" href={url} target="_blank" rel="noopener noreferrer">
                   ↗ Open as a guest
@@ -89,6 +95,7 @@ export default function ShareCampaign({ id }) {
         .shc-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
         .shc-warn { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: #fff7e8; font-size: 12px; line-height: 1.4; color: #7a4b00; }
         .shc-err { margin-top: 10px; font-size: 12px; color: #d4493f; }
+        .shc-stat { margin-top: 10px; font-size: 12px; color: var(--ad-ink); }
         .shc-mute { margin-top: 10px; font-size: 12px; color: var(--ad-muted); }
       `}</style>
     </span>

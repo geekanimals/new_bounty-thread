@@ -348,10 +348,75 @@ export function gateRoute(c, mode, pathname = "") {
   if (!c.loggedIn) return "/creator/login";
   if (mode === "member") return null;
   if (isActionPath(pathname)) return null;
+  const sm = /^\/creator\/discover\/([0-9a-f-]{36})/i.exec(String(pathname || ""));
+  if (sm && isStayOn(sm[1])) return null;
   if (needsIgStep(c)) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
   if (needsOnboarding(c) && !/^\/creator\/media-kit/.test(pathname)) return "/creator/onboarding/content";
   return null;
 }
+/* ---- Share / ad link se aaya creator: login ke turant baad wahi campaign + apply, baaki steps wahin ---- */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Guest ne Apply dabaya tha → campaign id (abhi apply hona baaki) | null */
+export function pendingApply() {
+  const id = ls.get(K.apply);
+  return id && UUID_RE.test(id) ? id : null;
+}
+export function clearPendingApply() {
+  ls.del(K.apply);
+}
+/** Is tab mein ye campaign page kholna hai (onboarding / Instagram screens beech mein nahi) */
+export function markStayOn(id) {
+  try {
+    window.sessionStorage.setItem("bx_stay_" + id, "1");
+  } catch {
+    /* ignore */
+  }
+}
+export function isStayOn(id) {
+  try {
+    return !!window.sessionStorage.getItem("bx_stay_" + id);
+  } catch {
+    return false;
+  }
+}
+/** Ad / share link ka source (?src= / utm_*) — pehli baar wala yaad rakho, 30 din */
+const SRC_KEY = "geek_src";
+export function captureSource() {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const v = {};
+    ["src", "utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach((k) => {
+      const x = (q.get(k) || "").trim().slice(0, 80);
+      if (x) v[k] = x;
+    });
+    if (q.get("fbclid")) v.fbclid = true;
+    if (!Object.keys(v).length) {
+      const ref = document.referrer || "";
+      if (/instagram\.com|facebook\.com|fb\.com|threads\.net/i.test(ref)) v.referrer = ref.replace(/^https?:\/\//, "").split("/")[0];
+    }
+    if (!Object.keys(v).length) return;
+    const old = JSON.parse(ls.get(SRC_KEY) || "null");
+    if (old && old.at && Date.now() - old.at < 30 * 86400000) return;
+    ls.set(SRC_KEY, JSON.stringify({ ...v, landing: window.location.pathname, at: Date.now() }));
+  } catch {
+    /* ignore */
+  }
+}
+/** Apply ho gaya → source database mein (api.note_my_source); fail ho to chup */
+export async function noteSource(campaignId) {
+  let v = null;
+  try {
+    v = JSON.parse(ls.get(SRC_KEY) || "null");
+  } catch {
+    v = null;
+  }
+  try {
+    await api("note_my_source", { p_campaign: campaignId, p_src: v || { src: "direct" } });
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Login ke turant baad kahan (purana bootOS) */
 /** Link wala page yaad rakho (login ke baad wahi khulega) — sirf /creator/... ke andar, 1 din tak */
 export function rememberAfterLogin(path) {
@@ -390,6 +455,12 @@ export function afterLoginRoute(c = state) {
   if (wanted && isActionPath(wanted)) {
     holdAfterLogin(wanted);
     return wanted;
+  }
+  // Share / ad link se Apply dabaya tha → pehle wahi campaign (wahan apne aap apply), onboarding baad mein
+  const pend = pendingApply();
+  if (pend && !c.inviteGo) {
+    markStayOn(pend);
+    return `/creator/discover/${pend}`;
   }
   if (needsIgStep(c)) return c.kidSeen ? "/creator/onboarding/instagram" : "/creator/onboarding";
   if (needsOnboarding(c)) return "/creator/onboarding/content";

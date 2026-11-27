@@ -8,7 +8,7 @@ import Logo from "@/components/creator/Logo";
 import GuestNav from "@/components/creator/GuestNav";
 import { RumiTip } from "@/components/creator/OnboardShell";
 import { TYPE_LABEL, journeyFor, deadlineFrom } from "@/components/creator/data";
-import { useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, rememberApply, safeLink } from "@/services/creator";
+import { useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, rememberApply, safeLink, captureSource } from "@/services/creator";
 import { Gift, Film, Calendar, ShieldCheck, Sparkle, Lock, ChevronDown } from "@/components/ui/Icons";
 
 
@@ -25,6 +25,10 @@ export default function GuestBrief() {
   // mobile: upar wala Apply box screen se bahar jaye tab neeche chipka Apply bar dikhe
   const applyRef = useRef(null);
   const [bar, setBar] = useState(false);
+  // ad / share link ka source (?src=meta_ads / utm_*) yaad rakho — apply ke baad database mein
+  useEffect(() => {
+    captureSource();
+  }, []);
   useEffect(() => {
     const el = applyRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;

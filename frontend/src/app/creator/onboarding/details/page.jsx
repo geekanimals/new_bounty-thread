@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import OnboardShell from "@/components/creator/OnboardShell";
-import { useCreator, updateMeta, saveSection, markOnbDone, displayName } from "@/services/creator";
+import { useCreator, updateMeta, saveSection, markOnbDone, displayName, pendingApply } from "@/services/creator";
 
 /** /creator/onboarding/details — Setup 4 (Instagram nahi): handle, naam, city, followers */
 export default function SetupDetails() {
@@ -25,7 +25,8 @@ export default function SetupDetails() {
   }, [c]);
   const done = () => {
     markOnbDone();
-    router.push(/explore=1/.test(window.location.search) ? "/creator/discover" : "/creator/home");
+    const pend = pendingApply();
+    router.push(pend ? `/creator/discover/${pend}` : /explore=1/.test(window.location.search) ? "/creator/discover" : "/creator/home");
   };
 
   const set = (k, v) => {

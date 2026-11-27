@@ -4,12 +4,12 @@ import BriefBlocks from "@/components/creator/BriefBlocks";
 import ApplySteps from "@/components/creator/ApplySteps";
 import { STEP_NAME } from "@/lib/steps";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import BountyShell, { ConnectInstagramSheet } from "@/components/creator/BountyShell";
 import { RumiTip } from "@/components/creator/OnboardShell";
-import { useSession, useJoinGate, useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, applyTo, myApplyProfiles, codeFill, safeLink, errText } from "@/services/creator";
+import { useSession, useJoinGate, useOpenCampaigns, useCovers, coverOf, typeKey, kindOf, compLine, compSub, delivLine, whoList, fdate, applyTo, myApplyProfiles, codeFill, safeLink, errText, pendingApply, clearPendingApply, markStayOn, noteSource } from "@/services/creator";
 import { TYPE_LABEL, journeyFor, deadlineFrom, getSidekick } from "@/components/creator/data";
 import { ArrowLeft, Gift, Film, Calendar, ShieldCheck, Megaphone, Lock, FileText, ChevronDown } from "@/components/ui/Icons";
 
@@ -44,6 +44,57 @@ export default function CampaignBrief() {
 
   const sk = getSidekick(s.sidekick);
   useEffect(() => setWhy(null), [id]);
+  // ---------- Apply ----------
+  // Apply first, complete later: sabko apply karne do. Profile mein kuch MISSING ho to application "on hold" +
+  // steps (ApplySteps). Sirf asli mismatch (data hai par brief se bahar) par backend mana karta hai → sach batao.
+  const doApply = async (profile) => {
+    setBusy(true);
+    setErr("");
+    setSending(1);
+    const t0 = Date.now();
+    const tick = setInterval(() => setSending((n) => Math.min(n + 1, 3)), 650);
+    const r = await applyTo(x.campaign_id, profile);
+    // "Submitting…" ek pal dikhe (bahut tez ho to bhi)
+    const wait = 1900 - (Date.now() - t0);
+    if (wait > 0) await new Promise((ok) => setTimeout(ok, wait));
+    clearInterval(tick);
+    setSending(0);
+    setBusy(false);
+    if (r.notEligible) return setWhy(r.notEligible);
+    if (r.error) return setErr(r.error);
+    try {
+      window.sessionStorage.setItem(`bx_hold_${x.campaign_id}`, "1");
+    } catch {
+      /* ignore */
+    }
+    setPick(null);
+    setAppliedAs(profile || "");
+    noteSource(x.campaign_id);
+    reload();
+  };
+  const startApply = async () => {
+    setBusy(true);
+    setErr("");
+    const profs = await myApplyProfiles();
+    setBusy(false);
+    // ek se zyada profile → chuno; ek hi ho to wahi
+    if (profs.length > 1) return setPick({ profiles: profs, value: profs[0].handle });
+    return doApply(profs[0] ? profs[0].handle : null);
+  };
+  // Share / ad link se aaya: login ke baad yahin aaya → apne aap apply (ek baar). Baaki steps (Instagram, profile) neeche ApplySteps mein.
+  const autoDone = useRef(false);
+  const hasStage = !!(x && x.my_stage);
+  useEffect(() => {
+    if (!x || autoDone.current) return;
+    const pend = pendingApply();
+    if (!pend || (pend !== String(id) && pend !== String(x.campaign_id))) return;
+    autoDone.current = true;
+    clearPendingApply();
+    markStayOn(String(id));
+    if (hasStage) return; // pehle se applied
+    setTimeout(() => startApply(), 0); // ek hi baar (autoDone) — reload se x badle to bhi na ruke
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [x, id, hasStage]);
   // on hold tha → ab sab poora (Instagram connect / profile bhara) → ek baar 🎉
   const elOk = !!(x && (x.my_stage || appliedAs !== null) && x.eligibility && x.eligibility.eligible === true);
   useEffect(() => {
@@ -101,42 +152,6 @@ export default function CampaignBrief() {
   const deadline = t.content_days ? `${t.content_days} days after ${deadlineFrom(k)}` : x.ends_on ? `Till ${fdate(x.ends_on)}` : "Shown in your agreement";
   const usage = t.ad_rights_months ? `${t.ad_rights_months} month${t.ad_rights_months > 1 ? "s" : ""}` : "None";
 
-  // ---------- Apply ----------
-  // Apply first, complete later: sabko apply karne do. Profile mein kuch MISSING ho to application "on hold" +
-  // steps (ApplySteps). Sirf asli mismatch (data hai par brief se bahar) par backend mana karta hai → sach batao.
-  const doApply = async (profile) => {
-    setBusy(true);
-    setErr("");
-    setSending(1);
-    const t0 = Date.now();
-    const tick = setInterval(() => setSending((n) => Math.min(n + 1, 3)), 650);
-    const r = await applyTo(x.campaign_id, profile);
-    // "Submitting…" ek pal dikhe (bahut tez ho to bhi)
-    const wait = 1900 - (Date.now() - t0);
-    if (wait > 0) await new Promise((ok) => setTimeout(ok, wait));
-    clearInterval(tick);
-    setSending(0);
-    setBusy(false);
-    if (r.notEligible) return setWhy(r.notEligible);
-    if (r.error) return setErr(r.error);
-    try {
-      window.sessionStorage.setItem(`bx_hold_${x.campaign_id}`, "1");
-    } catch {
-      /* ignore */
-    }
-    setPick(null);
-    setAppliedAs(profile || "");
-    reload();
-  };
-  const startApply = async () => {
-    setBusy(true);
-    setErr("");
-    const profs = await myApplyProfiles();
-    setBusy(false);
-    // ek se zyada profile → chuno; ek hi ho to wahi
-    if (profs.length > 1) return setPick({ profiles: profs, value: profs[0].handle });
-    return doApply(profs[0] ? profs[0].handle : null);
-  };
 
   const notOk = why ? (why.criteria || []).filter((c) => !c.ok) : [];
   // sirf jo profile mein BHARA hi nahi hai uske liye seedha us field par le jaane wala button (85 followers jaisi asli kami par nahi)
@@ -310,16 +325,23 @@ export default function CampaignBrief() {
                   <b>😕 Oops! You&apos;re not eligible for this campaign.</b>
                 </p>
                 <ul>
-                  {notOk
-                    .filter((c) => !fixOf(c, x.campaign_id || id))
-                    .map((c) => (
+                  {notOk.map((c) => {
+                    // jo field missing hai → bagal mein use bharne ka button (Add your … / Connect Instagram); baaki par kuch nahi
+                    const fx = fixOf(c, x.campaign_id || id);
+                    return (
                       <li key={c.key || c.need}>
                         <span className="cb-why__t">
                           ✗ <b>{c.need}</b>
                           <small>{c.have}</small>
                         </span>
+                        {fx && (
+                          <Link href={fx.href} className="cb-fix">
+                            {fx.label} →
+                          </Link>
+                        )}
                       </li>
-                    ))}
+                    );
+                  })}
                 </ul>
                 <p>
                   <Link href="/creator/discover">Find campaigns that fit you →</Link>

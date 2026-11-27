@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OnboardShell, { RumiTip } from "@/components/creator/OnboardShell";
-import { useCreator, getCreator, saveSection, reloadProfile, ackTerms, termsOf, termsPatch, ratesOf, markOnbDone, needsManualDetails, saveRate } from "@/services/creator";
+import { useCreator, getCreator, saveSection, reloadProfile, ackTerms, termsOf, termsPatch, ratesOf, markOnbDone, needsManualDetails, saveRate, pendingApply } from "@/services/creator";
 import { COLLAB_TYPES, getSidekick } from "@/components/creator/data";
 
 const PRODUCT_VALUES = ["Any", "₹500+", "₹1,000+", "₹2,000+", "₹5,000+"];
@@ -43,7 +43,9 @@ export default function SetupTerms() {
   const go = (explore) => {
     if (needsManualDetails(getCreator())) return router.push("/creator/onboarding/details");
     markOnbDone();
-    router.push(explore ? "/creator/discover" : "/creator/home");
+    // Share / ad link wala campaign abhi baaki hai → Skip par bhi wahi campaign
+    const pend = pendingApply();
+    router.push(pend ? `/creator/discover/${pend}` : explore ? "/creator/discover" : "/creator/home");
   };
 
   // Purane bxoSave jaisa: tick zaroori → ackTerms → commercial_preference (terms + min product value)
