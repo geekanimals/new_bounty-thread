@@ -912,15 +912,43 @@ function journeyDates(c, deliveredAt = null) {
   ];
 }
 
-export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null, issue = null, overdue = null, delivered = null }) {
+export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onChat, open, busy, stats, match, unread = 0, rating = null, backout = null, issue = null, overdue = null, delivered = null, datesOpen, thin = false, thinOpen = false, thinVer = 0 }) {
   const [showMatch, setShowMatch] = useState(false);
+  // dates wali patti: datesOpen na diya ho to hamesha (purana); diya ho to page ka "sab" + is row ka apna ▴/▾
+  const [dOv, setDOv] = useState({ g: null, v: true });
+  const foldable = datesOpen !== undefined;
+  const showDates = !foldable ? true : dOv.g === datesOpen ? dOv.v : datesOpen;
+  const flipDates = () => setDOv({ g: datesOpen, v: !showDates });
+  // patli patti (creators page): photo · naam · @handle · number — tap = poori row; page ka "Open / Close all" bhi
+  const [tOv, setTOv] = useState({ ver: -1, open: false });
+  const full = !thin || (tOv.ver === thinVer ? tOv.open : thinOpen);
+  const flipThin = () => setTOv({ ver: thinVer, open: !full });
+  if (thin && !full) {
+    const igh = igOf(c);
+    return (
+      <div className={`jr jr--thin ${onCheck ? "" : "jr--nocheck"}`} onClick={flipThin} role="button" aria-expanded="false" title="Tap to open">
+        {onCheck && <input type="checkbox" className="jr-check" checked={!!checked} onChange={onCheck} onClick={(e) => e.stopPropagation()} aria-label={`Select ${c.name}`} />}
+        <IgImg className="jr-av jr-av--img jr-av--sm" handle={/^@/.test(c.name) ? c.name : c.handle} src={c.pic} fallback={<span className="jr-av jr-av--sm">{initials(c.name.replace(/^@/, ""))[0]}</span>} />
+        <b className="jr-thin__n">{c.name}</b>
+        <span className="jr-thin__h">{igh ? "@" + igh : "No Instagram"}</span>
+        <span className="jr-thin__p">{c.phone ? fullPhone(c) : "No WhatsApp"}</span>
+        <span className="jr-thin__go" aria-hidden="true">▾</span>
+        <style>{JR_CSS}</style>
+      </div>
+    );
+  }
   const ms = matchState(match);
   const no = c.no ?? 0;
   const atBrand = (c.kind === "p" ? c.x?.stage : c.i?.status) === "sent_to_brand";
   const ig = igOf(c);
   const last = stats && stats.last && stats.last.at ? stats.last : null;
   return (
-    <div className={`jr ${open ? "is-open" : ""} ${onCheck ? "" : "jr--nocheck"}`}>
+    <div className={`jr ${open ? "is-open" : ""} ${onCheck ? "" : "jr--nocheck"} ${thin ? "jr--opened" : ""}`}>
+      {thin && (
+        <button type="button" className="jr-thinclose" onClick={flipThin} aria-label={`Close ${c.name}`} title="Close">
+          ▴
+        </button>
+      )}
       {onCheck && <input type="checkbox" className="jr-check" checked={!!checked} onChange={onCheck} aria-label={`Select ${c.name}`} />}
       {href ? (
         <Link href={href} className="jr-avlink" aria-label={`Open ${c.name}'s full details`} title="Open full details">
@@ -1104,7 +1132,17 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
       </div>
 
       {/* campaign ki taarikhen — poori row ki chaudai mein ek patli timeline (creator column lamba na ho) */}
+      {foldable && !showDates ? (
+        <button type="button" className="jr-jfold is-closed" onClick={flipDates} aria-expanded="false">
+          ▾ Show dates
+        </button>
+      ) : (
       <div className="jr-jdates" aria-label="Campaign dates">
+        {foldable && (
+          <button type="button" className="jr-jfold" onClick={flipDates} aria-expanded="true" title="Hide dates">
+            ▴
+          </button>
+        )}
         {journeyDates(c, delivered).map((d) => (
           <span key={d.k} className={`jr-jd ${d.at ? "" : "is-empty"} ${d.tone ? `is-${d.tone}` : ""}`} title={d.at ? `${d.label} ${new Date(d.at).toLocaleString("en-IN")}` : `${d.label} — not yet`}>
             <span className="jr-jd__l">
@@ -1114,6 +1152,7 @@ export function CreatorRow({ c, href, checked, onCheck, onAction, onReject, onCh
           </span>
         ))}
       </div>
+      )}
       {ms && showMatch && (
         <div className="jr-matchrow">
           <MatchDetails m={match} />
@@ -1147,6 +1186,23 @@ const JR_CSS = `
   .jr-dates span { white-space: nowrap; }
   .jr > .jr-jdates { grid-column: 3 / -1; }
   .jr.jr--nocheck > .jr-jdates { grid-column: 2 / -1; }
+  .jr--thin { display: flex !important; align-items: center; gap: 12px; padding: 8px 14px !important; min-height: 0 !important; cursor: pointer; }
+  .jr--thin:hover { background: #fafaff; }
+  .jr--thin .jr-check { margin: 0; }
+  .jr-av--sm { width: 30px !important; height: 30px !important; min-width: 30px; font-size: 12px; border-radius: 50%; }
+  .jr-thin__n { min-width: 0; max-width: 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: #1b1d3a; }
+  .jr-thin__h { color: #5a4fd6; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28%; }
+  .jr-thin__p { color: #4b4f6e; font-size: 13px; white-space: nowrap; }
+  .jr-thin__go { margin-left: auto; color: #7a7ea6; font-size: 14px; }
+  .jr--opened { position: relative; }
+  .jr-thinclose { position: absolute; top: 6px; right: 8px; z-index: 2; width: 26px; height: 22px; border: 0; border-radius: 8px; background: #f1f1fb; color: #5b5f86; font-size: 12px; cursor: pointer; }
+  .jr-thinclose:hover { background: #e6e6fb; }
+  .jr > .jr-jfold { grid-column: 3 / -1; }
+  .jr.jr--nocheck > .jr-jfold { grid-column: 2 / -1; }
+  .jr-jfold { justify-self: start; padding: 2px 8px; border: 0; border-radius: 8px; background: #f3f4fb; color: #5b5f86; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+  .jr-jfold:hover { background: #e9eafc; }
+  .jr-jdates { position: relative; }
+  .jr-jdates > .jr-jfold { position: absolute; right: 0; top: -14px; padding: 0 7px; line-height: 18px; }
   .jr-jdates { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: -2px; padding-top: 8px; border-top: 1px dashed #e7e9f2; }
   .jr-jd { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 5px 8px; border-radius: 8px; background: #f3f4fa; }
   .jr-jd__l { font-size: 10px; font-weight: 700; color: #6b7391; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1212,6 +1268,7 @@ const JR_CSS = `
     .jr-act { flex-direction: column; }
     .jr-av { width: 32px; height: 32px; font-size: 15px; }
     .jr > .jr-jdates, .jr.jr--nocheck > .jr-jdates { grid-column: 1 / -1; }
+    .jr > .jr-jfold, .jr.jr--nocheck > .jr-jfold { grid-column: 1 / -1; }
     .jr-jdates { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
   }
 `;

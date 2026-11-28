@@ -198,6 +198,10 @@ export default function WorkspaceCreators() {
   const [sel, setSel] = useState([]);
   const [busy, setBusy] = useState("");
   const [bulkN, setBulkN] = useState(null); // { done, total } — bulk approve/reject chal raha ho to
+  // collapse / expand — har baar sab band aata hai (journey · filters); creators patli patti, tap = poori row
+  const [fold, setFoldSt] = useState({ j: true, f: true, l: false, all: false, ver: 0 });
+  const setFold = (k, v) => setFoldSt((o) => ({ ...o, [k]: v }));
+  const setAllRows = (v) => setFoldSt((o) => ({ ...o, all: v, ver: o.ver + 1 }));
   useEffect(() => {
     rejectionReasons().catch(() => {}); // reject box turant khule
   }, []);
@@ -594,7 +598,7 @@ export default function WorkspaceCreators() {
       <WorkspaceHead id={id} campaign={camp} />
 
       <section className="ga-card wcr-card">
-        <div className="wcr-head">
+        <div className="wcr-head wcr-head--fold" onClick={() => setFold("j", !fold.j)} role="button" aria-expanded={!fold.j}>
           <div>
             <h2 className="ga-h2">Creator journey</h2>
             <p className="wcr-sub">Every creator by the step they are on — tap a box to filter.</p>
@@ -608,15 +612,19 @@ export default function WorkspaceCreators() {
               </p>
             )}
           </div>
-          <div className="wcr-head__act">
+          <div className="wcr-head__act" onClick={(e) => e.stopPropagation()}>
             <Link href={`/vault/campaigns/${c.id}/upload`} className="wcr-link">
               📄 Bulk sheet
             </Link>
             <Link href={`/vault/campaigns/${c.id}/find`} className="ga-btn ga-btn--primary wcr-find">
               🎯 Find matching creators
             </Link>
+            <button type="button" className="wcr-fold" onClick={() => setFold("j", !fold.j)} aria-expanded={!fold.j}>
+              {fold.j ? "▾ Expand" : "▴ Collapse"}
+            </button>
           </div>
         </div>
+        {!fold.j && (
         <div className="wcr-boxes">
           {BX.map((b, i) => (
             <button key={b.l} type="button" className={`wcr-box wcr-box--${b.t || "all"} ${box === i ? "is-on" : ""} ${counts[i] ? "" : "is-zero"}`} onClick={() => (setBox(i), setFit("Brief match: all"))} aria-pressed={box === i} title={b.s ? `${b.l} — ${b.s}` : b.l}>
@@ -648,10 +656,11 @@ export default function WorkspaceCreators() {
             </button>
           ))}
         </div>
+        )}
       </section>
 
-      <Backouts campaignId={id} onChanged={() => (bos.reload(true), reload())} />
-      <DeliveryIssues campaignId={id} onChanged={() => dis.reload(true)} />
+      <Backouts campaignId={id} foldable onChanged={() => (bos.reload(true), reload())} />
+      <DeliveryIssues campaignId={id} foldable onChanged={() => dis.reload(true)} />
 
       {kind === "visit" && (
         <p className="wcr-visitlink">
@@ -668,7 +677,21 @@ export default function WorkspaceCreators() {
           })()}
         </h2>
         <p className="wcr-sub">Tap a creator to open every step, chat and action.</p>
+        <div className="wcr-folds">
+          <button type="button" className={`wcr-fold ${fold.f ? "" : "is-on"}`} onClick={() => setFold("f", !fold.f)} aria-expanded={!fold.f}>
+            {fold.f ? "▾ Filters, search & actions" : "▴ Hide filters, search & actions"}
+          </button>
+          <button type="button" className="wcr-fold" onClick={() => setFold("l", !fold.l)} aria-expanded={!fold.l}>
+            {fold.l ? `▾ Show creators (${rows.length})` : "▴ Hide creators"}
+          </button>
+          {!fold.l && (
+            <button type="button" className="wcr-fold" onClick={() => setAllRows(!fold.all)}>
+              {fold.all ? "▴ Close all creators" : "▾ Open all creators"}
+            </button>
+          )}
+        </div>
 
+        {!fold.f && (<>
         {/* Saare filter, sort aur screening ek hi jagah */}
         <div className="wcr-fpanel">
           {(() => {
@@ -802,6 +825,7 @@ export default function WorkspaceCreators() {
             📄 Add from a sheet link
           </Link>
         </div>
+        </>)}
         {waOpen && (
           <WaPanel
             campaignId={id}
@@ -864,8 +888,9 @@ export default function WorkspaceCreators() {
           </div>
         )}
 
+        {!fold.l && (
         <div className={`wcr-rows${sel.length ? " wcr-rows--pad" : ""}`}>
-          {rows.length > 0 && <CreatorHead />}
+          {rows.length > 0 && fold.all && <CreatorHead />}
           {rows.map((x) => (
             <CreatorRow
               key={x.id}
@@ -885,6 +910,9 @@ export default function WorkspaceCreators() {
               stats={(mstats.data || {})[keyOf(x.id)]}
               unread={(U[keyOf(x.id)] || {}).n || 0}
               match={x.pid ? (bmatch.data || {})[x.pid] : null}
+              thin
+              thinOpen={fold.all}
+              thinVer={fold.ver}
             />
           ))}
           {!rows.length && (
@@ -906,6 +934,7 @@ export default function WorkspaceCreators() {
             </p>
           )}
         </div>
+        )}
       </section>
       {askEl}
       {toast && <div className="ga-toast">{toast}</div>}
@@ -1008,6 +1037,13 @@ export default function WorkspaceCreators() {
         .wcr-sel.is-set { border-color: #8b7ff5 !important; background-color: #f1efff; color: #4b3fd6; }
         .wcr-txt--no { color: #d23c3c; }
         .wcr-rows--pad { padding-bottom: 96px; }
+        .wcr-fold { height: 32px; padding: 0 12px; border: 1px solid #e3e5f1; border-radius: 10px; background: #fff; color: #4b4f7a; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .wcr-fold:hover { background: #f4f4fd; border-color: #cfd2ef; }
+        .wcr-fold.is-on { background: #f1f0ff; border-color: #cfcaf7; color: #4a3fd1; }
+        .wcr-head--fold { cursor: pointer; }
+        .wcr-head--fold > div:first-child::after { content: "▾ tap to open"; display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 700; color: #6b6f99; }
+        .wcr-head--fold[aria-expanded="true"] > div:first-child::after { content: "▴ tap to close"; }
+        .wcr-folds { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .wcr-tip { font-size: 13px; font-weight: 600; color: #8a86a6; }
         .wcr-act { position: fixed; left: calc(50% + 122px); bottom: 24px; transform: translateX(-50%); z-index: 60; display: flex; flex-wrap: nowrap; align-items: center; gap: 14px; margin: 0; max-width: calc(100vw - 300px); padding: 10px 10px 10px 18px; border-radius: 18px; background: #17152b; color: #fff; box-shadow: 0 18px 44px rgba(20, 16, 60, .35); animation: wcrUp .18s ease-out; }
         @keyframes wcrUp { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }

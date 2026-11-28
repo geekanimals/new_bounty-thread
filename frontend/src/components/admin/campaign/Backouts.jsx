@@ -27,7 +27,8 @@ const STEP_TXT = {
 };
 const dt = (v) => (v ? fmtDate(v, true) : "—");
 
-export default function Backouts({ campaignId, only = null, row = null, onChanged }) {
+export default function Backouts({ campaignId, only = null, row = null, onChanged, foldable = false }) {
+  const [foldOpen, setFoldOpen] = useState(false); // campaign page: band aata hai, header tap = khule
   const on = !!campaignId && campaignId !== "sample";
   const bo = useRpc("admin", "api.campaign_backouts", { p_campaign: campaignId }, { skip: !on, refreshMs: 60000 });
   const [askEl, ask] = useAsk();
@@ -152,7 +153,7 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
 
   return (
     <section className={`ga-card bk ${only ? "bk--one" : ""}`}>
-      <div className="bk-head">
+      <div className={`bk-head${foldable ? " is-fold" : ""}`} onClick={foldable ? () => setFoldOpen((o) => !o) : undefined} role={foldable ? "button" : undefined} aria-expanded={foldable ? foldOpen : undefined}>
         <div>
           <h2 className="ga-h2">🚪 {product ? (only ? "Backout / return" : "Backouts & returns") : only ? "Backout" : "Backouts"}</h2>
           {!only && (
@@ -173,6 +174,8 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
           </div>
         )}
       </div>
+      {(!foldable || foldOpen) && (
+        <>
 
       {!only && product && (
         <p className="bk-addr">
@@ -287,7 +290,9 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
 
       {msg && <p className={`bk-msg ${msg.startsWith("⚠") ? "is-bad" : ""}`}>{msg}</p>}
       {askEl}
-      <style>{`
+        </>
+      )}
+     <style>{`
         .bk { padding: 18px 20px; margin-top: 14px; }
         .bk-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
         .bk-sub { margin-top: 4px; font-size: 12.5px; color: var(--ad-muted); }
@@ -315,6 +320,10 @@ export default function Backouts({ campaignId, only = null, row = null, onChange
         .bk--one .bk-new { margin-top: 8px; }
         .bk-msg { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: #1d7a45; }
         .bk-msg.is-bad { color: var(--ad-red); }
+      
+        .bk-head.is-fold { cursor: pointer; position: relative; padding-right: 34px; }
+        .bk-head.is-fold::after { content: "▾"; position: absolute; right: 6px; top: 4px; font-size: 16px; color: #6b6f99; }
+        .bk-head.is-fold[aria-expanded="true"]::after { content: "▴"; }
       `}</style>
     </section>
   );

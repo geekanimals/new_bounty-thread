@@ -13,7 +13,8 @@ import { fmtDate } from "@/components/admin/campaign/live";
  */
 const dt = (v) => (v ? fmtDate(v, true) : "—");
 
-export default function DeliveryIssues({ campaignId, only = null, shipped = false, onChanged }) {
+export default function DeliveryIssues({ campaignId, only = null, shipped = false, onChanged, foldable = false }) {
+  const [foldOpen, setFoldOpen] = useState(false); // campaign page: band aata hai, header tap = khule
   const on = !!campaignId && campaignId !== "sample";
   const di = useRpc("admin", "api.campaign_delivery_issues", { p_campaign: campaignId }, { skip: !on, refreshMs: 60000 });
   const [askEl, ask] = useAsk();
@@ -90,11 +91,13 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
 
   return (
     <section className={`ga-card di ${only ? "di--one" : ""}`}>
-      <div className="di-head">
+      <div className={`di-head${foldable ? " is-fold" : ""}`} onClick={foldable ? () => setFoldOpen((o) => !o) : undefined} role={foldable ? "button" : undefined} aria-expanded={foldable ? foldOpen : undefined}>
         <h2 className="ga-h2">⚠ Delivery issues</h2>
         {!only && d.open > 0 && <span className="di-chip is-bad">{d.open} open</span>}
         {!only && d.exchanging > 0 && <span className="di-chip is-info">{d.exchanging} exchange on the way</span>}
       </div>
+      {(!foldable || foldOpen) && (
+        <>
       {!only && <p className="di-sub">Damaged / wrong product, lost courier, not delivered. Adding an issue sends no message. Press “Replacement” only for creators who get a new product — then they are told, and again when you add the tracking.</p>}
       {rows.length > 0 && (
         <ul className="di-list">
@@ -159,7 +162,9 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
       </div>
       {msg && <p className={`di-msg ${msg.startsWith("⚠") ? "is-bad" : ""}`}>{msg}</p>}
       {askEl}
-      <style>{`
+        </>
+      )}
+     <style>{`
         .di { padding: 18px 20px; margin-top: 14px; }
         .di-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .di-sub { margin-top: 4px; font-size: 12.5px; color: var(--ad-muted); }
@@ -180,6 +185,10 @@ export default function DeliveryIssues({ campaignId, only = null, shipped = fals
         .di-txt { border: 0; background: none; padding: 0; font-size: 12.5px; font-weight: 700; color: var(--ad-primary); cursor: pointer; }
         .di-msg { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: #1d7a45; }
         .di-msg.is-bad { color: var(--ad-red); }
+      
+        .di-head.is-fold { cursor: pointer; position: relative; padding-right: 34px; }
+        .di-head.is-fold::after { content: "▾"; position: absolute; right: 6px; top: 4px; font-size: 16px; color: #6b6f99; }
+        .di-head.is-fold[aria-expanded="true"]::after { content: "▴"; }
       `}</style>
     </section>
   );
